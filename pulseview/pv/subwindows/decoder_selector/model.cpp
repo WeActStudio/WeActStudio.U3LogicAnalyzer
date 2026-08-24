@@ -53,65 +53,59 @@ DecoderCollectionModel::DecoderCollectionModel(QObject* parent) :
 	// sub-item size, or else we can't query sub-item data
 	item_data.emplace_back();
 	item_data.emplace_back();
-	// shared_ptr<DecoderCollectionItem> group_item_all =
-	// 	make_shared<DecoderCollectionItem>(item_data, root_);
-	// root_->appendSubItem(group_item_all);
+	shared_ptr<DecoderCollectionItem> group_item_all =
+		make_shared<DecoderCollectionItem>(item_data, root_);
+	root_->appendSubItem(group_item_all);
 
 	for (GSList* li = (GSList*)srd_decoder_list(); li; li = li->next) {
 		const srd_decoder *const d = (srd_decoder*)li->data;
 		assert(d);
 
-		QString id = QString::fromUtf8(d->id);
-		QString name = QString::fromUtf8(d->name);
-		QString long_name = QString::fromUtf8(d->longname);
+		const QString id = QString::fromUtf8(d->id);
+		const QString name = QString::fromUtf8(d->name);
+		const QString long_name = QString::fromUtf8(d->longname);
 
 		// Add decoder to the "all decoders" group
 		item_data.clear();
 		item_data.emplace_back(name);
 		item_data.emplace_back(long_name);
 		item_data.emplace_back(id);
-		// shared_ptr<DecoderCollectionItem> decoder_item_all =
-		// 	make_shared<DecoderCollectionItem>(item_data, group_item_all);
 		shared_ptr<DecoderCollectionItem> decoder_item_all =
-			make_shared<DecoderCollectionItem>(item_data, root_);
-		// group_item_all->appendSubItem(decoder_item_all);
-		// if (strcmp(d->name, "UART") == 0 || strcmp(d->name, "SPI") == 0 || strcmp(d->name, "I²C") == 0 || strcmp(d->name, "USB PD") == 0){
-			// root_->pushFrontSubItem(decoder_item_all);
-		// }
-		// else
-		root_->appendSubItem(decoder_item_all);
+			make_shared<DecoderCollectionItem>(item_data, group_item_all);
+		group_item_all->appendSubItem(decoder_item_all);
+
 		// Add decoder to all relevant groups using the tag information
 #if DECODERS_HAVE_TAGS
-		// for (GSList* ti = (GSList*)d->tags; ti; ti = ti->next) {
-		// 	const QString tag = tr((char*)ti->data);
-		// 	const QVariant tag_var = QVariant(tag);
+		for (GSList* ti = (GSList*)d->tags; ti; ti = ti->next) {
+			const QString tag = tr((char*)ti->data);
+			const QVariant tag_var = QVariant(tag);
 
-		// 	// Find tag group and create it if it doesn't exist yet
-		// 	shared_ptr<DecoderCollectionItem> group_item =
-		// 		root_->findSubItem(tag_var, 0);
+			// Find tag group and create it if it doesn't exist yet
+			shared_ptr<DecoderCollectionItem> group_item =
+				root_->findSubItem(tag_var, 0);
 
-		// 	if (!group_item) {
-		// 		item_data.clear();
-		// 		item_data.emplace_back(tag);
-		// 		// Add dummy entries to make the row count the same as the
-		// 		// sub-item size, or else we can't query sub-item data
-		// 		item_data.emplace_back();
-		// 		item_data.emplace_back();
-		// 		group_item = make_shared<DecoderCollectionItem>(item_data, root_);
-		// 		root_->appendSubItem(group_item);
-		// 	}
+			if (!group_item) {
+				item_data.clear();
+				item_data.emplace_back(tag);
+				// Add dummy entries to make the row count the same as the
+				// sub-item size, or else we can't query sub-item data
+				item_data.emplace_back();
+				item_data.emplace_back();
+				group_item = make_shared<DecoderCollectionItem>(item_data, root_);
+				root_->appendSubItem(group_item);
+			}
 
-		// 	// Create decoder item
-		// 	item_data.clear();
-		// 	item_data.emplace_back(name);
-		// 	item_data.emplace_back(long_name);
-		// 	item_data.emplace_back(id);
-		// 	shared_ptr<DecoderCollectionItem> decoder_item =
-		// 		make_shared<DecoderCollectionItem>(item_data, group_item);
+			// Create decoder item
+			item_data.clear();
+			item_data.emplace_back(name);
+			item_data.emplace_back(long_name);
+			item_data.emplace_back(id);
+			shared_ptr<DecoderCollectionItem> decoder_item =
+				make_shared<DecoderCollectionItem>(item_data, group_item);
 
-		// 	// Add decoder to tag group
-		// 	group_item->appendSubItem(decoder_item);
-		// }
+			// Add decoder to tag group
+			group_item->appendSubItem(decoder_item);
+		}
 #endif
 	}
 }
@@ -142,7 +136,7 @@ QVariant DecoderCollectionModel::data(const QModelIndex& index, int role) const
 Qt::ItemFlags DecoderCollectionModel::flags(const QModelIndex& index) const
 {
 	if (!index.isValid())
-		return nullptr;
+		return Qt::NoItemFlags;
 
 	return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
 }

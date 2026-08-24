@@ -45,6 +45,11 @@ unsigned int Logic::num_channels() const
 	return num_channels_;
 }
 
+void Logic::set_num_channels(unsigned int num_channels)
+{
+	num_channels_ = num_channels;
+}
+
 void Logic::push_segment(shared_ptr<LogicSegment> &segment)
 {
 	segments_.push_back(segment);

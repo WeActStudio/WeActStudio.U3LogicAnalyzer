@@ -134,6 +134,8 @@ public:
 	srd_decoder_inst* create_decoder_inst(srd_session *session);
 	void invalidate_decoder_inst();
 
+	srd_decoder_inst* get_decoder_inst() const;
+
 	vector<Row*> get_rows();
 	Row* get_row_by_id(size_t id);
 

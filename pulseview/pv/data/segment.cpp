@@ -55,12 +55,23 @@ Segment::Segment(uint32_t segment_id, uint64_t samplerate, unsigned int unit_siz
 	// without exceeding MaxChunkSize
 	chunk_size_ = min(MaxChunkSize, (MaxChunkSize / unit_size_) * unit_size_);
 
-	static_zero_chunk_ = new uint8_t[chunk_size_ + 7];
-	memset(static_zero_chunk_, 0, chunk_size_ + 7);
-	static_one_chunk_ = new uint8_t[chunk_size_ + 7];
-	memset(static_one_chunk_, 0xFF, chunk_size_ + 7);
+	try {
+		static_zero_chunk_ = new uint8_t[chunk_size_ + 7];
+		memset(static_zero_chunk_, 0, chunk_size_ + 7);
+		static_one_chunk_ = new uint8_t[chunk_size_ + 7];
+		memset(static_one_chunk_, 0xFF, chunk_size_ + 7);
 
-	current_chunk_ = new uint8_t[chunk_size_ + 7];  /* FIXME +7 is workaround for #1284 */
+		current_chunk_ = new uint8_t[chunk_size_ + 7];  /* FIXME +7 is workaround for #1284 */
+	} catch (bad_alloc&) {
+		qDebug() << "Segment constructor: memory allocation failed";
+		delete[] static_zero_chunk_;
+		static_zero_chunk_ = nullptr;
+		delete[] static_one_chunk_;
+		static_one_chunk_ = nullptr;
+		// current_chunk_ not yet assigned if new threw before reaching it
+		bad_memory_ = true;
+		throw;  // Re-throw: object construction failed, caller must handle
+	}
 	data_chunks_.push_back(current_chunk_);
 	chunk_types_.push_back(ChunkType::NORMAL);
 	used_samples_ = 0;
@@ -248,7 +259,13 @@ void Segment::free_unused_memory()
 		chunk_types_.back() = type;
 
 		if (type == ChunkType::NORMAL) {
-			uint8_t* resized_chunk = new uint8_t[used_size + 7];  /* FIXME +7 is workaround for #1284 */
+			uint8_t* resized_chunk;
+			try {
+				resized_chunk = new uint8_t[used_size + 7];  /* FIXME +7 is workaround for #1284 */
+			} catch (bad_alloc&) {
+				qDebug() << "free_unused_memory: resize allocation failed, keeping original chunk";
+				return;  // Keep original chunk, just skip shrinking
+			}
 			memcpy(resized_chunk, current_chunk_, used_size);
 
 			delete[] current_chunk_;
@@ -294,7 +311,15 @@ void Segment::append_single_sample(void *data)
 			data_chunks_.back() = nullptr;
 		}
 
-		current_chunk_ = new uint8_t[chunk_size_ + 7];  /* FIXME +7 is workaround for #1284 */
+		try {
+			current_chunk_ = new uint8_t[chunk_size_ + 7];  /* FIXME +7 is workaround for #1284 */
+		} catch (bad_alloc&) {
+			qDebug() << "append_single_sample: chunk allocation failed";
+			current_chunk_ = nullptr;
+			bad_memory_ = true;
+			Q_EMIT memoryError();
+			return;
+		}
 		data_chunks_.push_back(current_chunk_);
 		chunk_types_.push_back(ChunkType::NORMAL);
 		used_samples_ = 0;
@@ -350,29 +375,12 @@ void Segment::append_samples(void* data, uint64_t samples)
 			}
 
 			try {
-				// If we're out of memory, allocating a chunk will throw
-				// std::bad_alloc. To give the application some usable memory
-				// to work with in case chunk allocation fails, we allocate
-				// extra memory and throw it away if it all succeeded.
-				// This way, memory allocation will fail early enough to let
-				// PV remain alive. Otherwise, PV will crash in a random
-				// memory-allocating part of the application.
 				current_chunk_ = new uint8_t[chunk_size_ + 7];  /* FIXME +7 is workaround for #1284 */
-
-				const int dummy_size = 2 * chunk_size_;
-				auto dummy_chunk = new uint8_t[dummy_size];
-				if (dummy_chunk){
-					delete[] dummy_chunk;
-				}
-
-			}
-			catch (bad_alloc&) {
-				qDebug() << "Bad allocation!";
-				if (current_chunk_){
-					delete[] current_chunk_;  // The new may have succeeded
-					current_chunk_ = nullptr;
-				}
-				throw;
+			} catch (bad_alloc&) {
+				qDebug() << "append_samples: chunk allocation failed";
+				current_chunk_ = nullptr;
+				bad_memory_ = true;
+				Q_EMIT memoryError();
 				return;
 			}
 
@@ -540,25 +548,26 @@ uint64_t Segment::get_iterator_valid_length(SegmentDataIterator* it)
 
 void Segment::set_channel_numner(uint16_t channel_num)
 {
-	if (channel_num == 0)
-		channel_num = 8;
-
 	channel_num_ = channel_num;
-	unit_size_temp = (channel_num_ < 8) ? (8 / channel_num_) : 1;
-
-	if (data_zoom == NULL && channel_num_ < 8) {
-		const uint64_t zoom_size = chunk_size_ * unit_size_temp;
-		if (zoom_size > 0)
-			data_zoom = new uint8_t[zoom_size];
-	}
-	if (data_zoom == NULL && channel_num_ < 8) {
-		qDebug() << __FILE__ << " :" << __LINE__ << ":MALLOC MEMORY FAILE";
+	unit_size_temp = (8.0 / channel_num_);
+	if (data_zoom == NULL) {
+		data_zoom = new(std::nothrow) uint8_t[chunk_size_ * unit_size_temp];
+		if (data_zoom == NULL) {
+			qDebug() << __FILE__ << " :" << __LINE__ << ":MALLOC MEMORY FAILED";
+			// data_zoom is auxiliary buffer, not critical
+		}
 	}
 }
 
 void Segment::set_unit_size(uint16_t unit_size)
 {
 	unit_size_ = unit_size;
+}
+
+void Segment::mark_bad_memory()
+{
+	bad_memory_ = true;
+	Q_EMIT memoryError();
 }
 
 uint64_t Segment::get_chunk_size() const

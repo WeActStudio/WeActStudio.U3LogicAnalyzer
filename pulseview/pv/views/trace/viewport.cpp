@@ -335,7 +335,7 @@ void Viewport::mouseDoubleClickEvent(QMouseEvent *event)
 	// else if (event->buttons() & Qt::RightButton)
 	// 	view_.zoom(-2.0, event->x());
 	bezier_start_ = QPointF(0,0);
-	mouse_marker_pressed(event);
+	add_rule_flag(event);
 }
 
 void Viewport::wheelEvent(QWheelEvent *event)
@@ -380,13 +380,15 @@ void Viewport::wheelEvent(QWheelEvent *event)
 	} else {
 		view_.renew_measure();
 	}
+
+	event->accept();
 }
 
 void Viewport::on_setting_changed(const QString &key, const QVariant &value)
 {
 	if (key == GlobalSettings::Key_View_AllowVerticalDragging)
 		allow_vertical_dragging_ = value.toBool();
-	allow_vertical_dragging_ = false;
+	// allow_vertical_dragging_ = false;
 }
 
 void Viewport::SetMeasurePoint(QPointF q1, QPointF q2, QPointF q3)

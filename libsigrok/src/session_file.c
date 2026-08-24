@@ -310,7 +310,7 @@ SR_API int sr_session_load(struct sr_context *ctx, const char *filename,
 							g_variant_new_int32(total_channels));
 					for (k = 0; k < total_channels; k++) {
 						g_snprintf(channelname, sizeof(channelname),
-								"%d", k);
+								"D%d", k);
 						sr_channel_new(sdi, k, SR_CHANNEL_LOGIC,
 								FALSE, channelname);
 					}
@@ -325,7 +325,7 @@ SR_API int sr_session_load(struct sr_context *ctx, const char *filename,
 							g_variant_new_int32(total_analog));
 					for (k = total_channels; k < (total_channels + total_analog); k++) {
 						g_snprintf(channelname, sizeof(channelname),
-								"%d", k);
+								"A%d", k - total_channels);
 						sr_channel_new(sdi, k, SR_CHANNEL_ANALOG,
 								FALSE, channelname);
 					}

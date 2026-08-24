@@ -157,7 +157,7 @@ void LogicSignal::restore_settings(std::map<QString, QVariant> settings)
 	if (entry != settings.end()) {
 		const int old_height = signal_height_;
 		signal_height_ = settings["trace_height"].toInt();
-		if (signal_height_ >= 20 && signal_height_ <= 50){
+		if (signal_height_ >= 5 && signal_height_ <= 50){
 			restore_signal_height_ = signal_height_;
 		}
 		else{
@@ -458,8 +458,9 @@ shared_ptr<pv::data::LogicSegment> LogicSignal::get_logic_segment_to_paint() con
 	shared_ptr<pv::data::LogicSegment> segment;
 
 	auto logic_data = base_->logic_data();
-    if (!logic_data)
+    if (!logic_data) {
         return segment;
+    }
 
 	const deque< shared_ptr<pv::data::LogicSegment> > &segments =
 		base_->logic_data()->logic_segments();
@@ -483,42 +484,81 @@ shared_ptr<pv::data::LogicSegment> LogicSignal::get_logic_segment_to_paint() con
 
 void LogicSignal::init_trigger_actions(QWidget *parent)
 {
-	trigger_none_ = new QAction(*get_icon(":/icons/trigger-none.svg"),
+	GlobalSettings settings;
+	const char *path;
+
+	if(settings.current_theme_is_dark())
+	{
+		path = ":/icons/trigger-none.svg";
+	}
+	else
+		path = ":/icons/trigger-none-normal.svg";
+	trigger_none_ = new QAction(*get_icon(path),
 		tr("No trigger"), parent);
 	trigger_action_map_.insert(std::make_pair(trigger_none_, "none"));
 	trigger_selected_map_.insert(std::make_pair("none", false));
 	trigger_none_->setCheckable(true);
 	connect(trigger_none_, SIGNAL(triggered()), this, SLOT(on_trigger()));
 
-	trigger_rising_ = new QAction(*get_icon(":/icons/trigger-rising.svg"),
+	if(settings.current_theme_is_dark())
+	{
+		path = ":/icons/trigger-rising.svg";
+	}
+	else
+		path = ":/icons/trigger-rising-normal.svg";
+	trigger_rising_ = new QAction(*get_icon(path),
 		tr("Trigger on rising edge"), parent);
 	trigger_action_map_.insert(std::make_pair(trigger_rising_, "raising"));
 	trigger_selected_map_.insert(std::make_pair("raising", false));
 	trigger_rising_->setCheckable(true);
 	connect(trigger_rising_, SIGNAL(triggered()), this, SLOT(on_trigger()));
 
-	trigger_high_ = new QAction(*get_icon(":/icons/trigger-high.svg"),
+	if(settings.current_theme_is_dark())
+	{
+		path = ":/icons/trigger-high.svg";
+	}
+	else
+		path = ":/icons/trigger-high-normal.svg";
+	trigger_high_ = new QAction(*get_icon(path),
 		tr("Trigger on high level"), parent);
 	trigger_action_map_.insert(std::make_pair(trigger_high_, "high"));
 	trigger_selected_map_.insert(std::make_pair("high", false));
 	trigger_high_->setCheckable(true);
 	connect(trigger_high_, SIGNAL(triggered()), this, SLOT(on_trigger()));
 
-	trigger_falling_ = new QAction(*get_icon(":/icons/trigger-falling.svg"),
+	if(settings.current_theme_is_dark())
+	{
+		path = ":/icons/trigger-falling.svg";
+	}
+	else
+		path = ":/icons/trigger-falling-normal.svg";
+	trigger_falling_ = new QAction(*get_icon(path),
 		tr("Trigger on falling edge"), parent);
 	trigger_action_map_.insert(std::make_pair(trigger_falling_, "falling"));
 	trigger_selected_map_.insert(std::make_pair("falling", false));
 	trigger_falling_->setCheckable(true);
 	connect(trigger_falling_, SIGNAL(triggered()), this, SLOT(on_trigger()));
 
-	trigger_low_ = new QAction(*get_icon(":/icons/trigger-low.svg"),
+	if(settings.current_theme_is_dark())
+	{
+		path = ":/icons/trigger-low.svg";
+	}
+	else
+		path = ":/icons/trigger-low-normal.svg";
+	trigger_low_ = new QAction(*get_icon(path),
 		tr("Trigger on low level"), parent);
 	trigger_action_map_.insert(std::make_pair(trigger_low_, "low"));
 	trigger_selected_map_.insert(std::make_pair("low", false));
 	trigger_low_->setCheckable(true);
 	connect(trigger_low_, SIGNAL(triggered()), this, SLOT(on_trigger()));
 
-	trigger_change_ = new QAction(*get_icon(":/icons/trigger-change.svg"),
+	if(settings.current_theme_is_dark())
+	{
+		path = ":/icons/trigger-change.svg";
+	}
+	else
+		path = ":/icons/trigger-change-normal.svg";
+	trigger_change_ = new QAction(*get_icon(path),
 		tr("Trigger on rising or falling edge"), parent);
 	trigger_action_map_.insert(std::make_pair(trigger_change_, "change"));
 	trigger_selected_map_.insert(std::make_pair("change", false));
@@ -605,7 +645,7 @@ void LogicSignal::populate_popup_form(QWidget *parent, QFormLayout *form)
 	Signal::populate_popup_form(parent, form);
 
 	signal_height_sb_ = new QSpinBox(parent);
-	signal_height_sb_->setRange(20, 50);
+	signal_height_sb_->setRange(5, 50);
 	signal_height_sb_->setSingleStep(5);
 	signal_height_sb_->setSuffix(tr(" pixels"));
 	signal_height_sb_->setValue(signal_height_);
@@ -735,7 +775,7 @@ void LogicSignal::on_trigger()
 
 void LogicSignal::on_signal_height_changed(int height)
 {
-	const int min_height = 20;
+	const int min_height = 5;
 	const int max_height = 50;
 	signal_height_ = std::max(std::min(height, max_height), min_height);
 

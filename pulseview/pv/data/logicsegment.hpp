@@ -47,13 +47,6 @@ struct LongPulses;
 
 namespace pv {
 namespace data {
-#define FIND_RANGE_LEVEL_1 4000
-#define FIND_RANGE_LEVEL_2 8000
-#define FIND_RANGE_LEVEL_3 20000
-#define GET_FIND_RANGE(value) \
-    ((value) < SR_MHZ(125) ? FIND_RANGE_LEVEL_1 : \
-     (value) < SR_MHZ(500) ? FIND_RANGE_LEVEL_2 : \
-     FIND_RANGE_LEVEL_3)
 class Logic;
 
 class LogicSegment : public Segment, public enable_shared_from_this<Segment>
@@ -78,7 +71,8 @@ private:
 
 public:
 	LogicSegment(pv::data::Logic& owner, uint32_t segment_id,
-		unsigned int unit_size, uint64_t samplerate);
+		unsigned int unit_size, uint64_t samplerate,
+		uint64_t max_samples = 0);
 
 	virtual ~LogicSegment();
 
@@ -109,6 +103,16 @@ public:
 	void get_samples(int64_t start_sample, int64_t end_sample, uint8_t* dest) const;
 
 	/**
+	 * Check if a range of samples has no transitions (all samples identical).
+	 * Uses mip-map level 0 for fast O(range/16) checking.
+	 * @param[in] start Start sample index.
+	 * @param[in] count Number of samples to check.
+	 * @return true if all samples in the range are identical (no transitions),
+	 *         false if any transition exists or mip-map data unavailable.
+	 */
+	bool is_range_constant(uint64_t start, uint64_t count) const;
+
+	/**
 	 * Parses a logic data segment to generate a list of transitions
 	 * in a time interval to a given level of detail.
 	 * @param[out] edges The vector to place the edges into.
@@ -125,14 +129,17 @@ public:
 	void get_surrounding_edges(vector<EdgePair> &dest,
 		uint64_t origin_sample, float min_length, int sig_index);
 
-Q_SIGNALS:
-	void notifyError();
+	bool find_nearest_edge_right(uint64_t origin_sample, int sig_index,
+		EdgePair &result);
+
+	bool find_nearest_edge_left(uint64_t origin_sample, int sig_index,
+		EdgePair &result);
 
 private:
 	uint64_t unpack_sample(const uint8_t *ptr) const;
 	void pack_sample(uint8_t *ptr, uint64_t value);
 
-	void reallocate_mipmap_level(MipMapLevel &m);
+	bool reallocate_mipmap_level(MipMapLevel &m);
 	bool wch_reallocate_mipmap_level(MipMapLevel &m, uint16_t level);
 	void append_payload_to_mipmap();
 	void append_payload_to_mipmap_decode();
@@ -161,8 +168,6 @@ private:
 	friend struct LogicSegmentTest::Pulses;
 	friend struct LogicSegmentTest::LongPulses;
 	uint64_t samplerate_;
-public:
-    bool bad_memory_;
 };
 
 } // namespace data

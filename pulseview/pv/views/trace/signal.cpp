@@ -53,7 +53,7 @@ const char *const ChannelNames[] = {
 	"TX",
 	"RX",
 	"SDA",
-	"SCL"
+	"SCL",
 	"SCLK",
 	"MOSI",
 	"MISO",
@@ -208,6 +208,7 @@ void Signal::on_disable()
 void Signal::on_enabled_changed(bool enabled)
 {
 	(void)enabled;
+
 	if (owner_)
 		owner_->extents_changed(true, true);
 }

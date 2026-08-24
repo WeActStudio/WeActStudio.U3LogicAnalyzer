@@ -87,10 +87,12 @@ public:
 };
 
 Settings::Settings(DeviceManager &device_manager, QWidget *parent) :
-	QDialog(parent, nullptr),
+	QDialog(parent),
 	device_manager_(device_manager)
 {
 	resize(600, 400);
+
+	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
 	// Create log view
 	log_view_ = create_log_view();
@@ -223,7 +225,7 @@ QWidget *Settings::get_general_settings_form(QWidget *parent) const
 	QComboBox *language_cb = new QComboBox();
 	Application* a = qobject_cast<Application*>(QApplication::instance());
 
-	QString current_language = settings.value(GlobalSettings::Key_General_Language).toString();
+	QString current_language = settings.value(GlobalSettings::Key_General_Language, "en").toString();
 	for (const QString& language : a->get_languages()) {
 		const QLocale locale = QLocale(language);
 		const QString desc = locale.languageToString(locale.language());
@@ -234,8 +236,13 @@ QWidget *Settings::get_general_settings_form(QWidget *parent) const
 			language_cb->setCurrentIndex(index);
 		}
 	}
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	connect(language_cb, SIGNAL(currentTextChanged(const QString&)),
+		this, SLOT(on_general_language_changed(const QString&)));
+#else
 	connect(language_cb, SIGNAL(currentIndexChanged(const QString&)),
 		this, SLOT(on_general_language_changed(const QString&)));
+#endif
 	general_layout->addRow(tr("User interface language"), language_cb);
 
 	// Theme combobox
@@ -264,7 +271,7 @@ QWidget *Settings::get_general_settings_form(QWidget *parent) const
 	if (current_style.isEmpty())
 		style_cb->setCurrentIndex(0);
 	else
-		style_cb->setCurrentIndex(style_cb->findText(current_style, nullptr));
+		style_cb->setCurrentIndex(style_cb->findText(current_style));
 
 	connect(style_cb, SIGNAL(currentIndexChanged(int)),
 		this, SLOT(on_general_style_changed(int)));
@@ -279,9 +286,9 @@ QWidget *Settings::get_general_settings_form(QWidget *parent) const
 		SLOT(on_general_save_with_setup_changed(int)));
 	general_layout->addRow(tr("Save session &setup along with .sr file"), cb);
 
-	cb = create_checkbox(GlobalSettings::Key_General_StartAllSessions,
-		SLOT(on_general_start_all_sessions_changed(int)));
-	general_layout->addRow(tr("Start acquisition for all open sessions when clicking 'Run'"), cb);
+	// cb = create_checkbox(GlobalSettings::Key_General_StartAllSessions,
+	// 	SLOT(on_general_start_all_sessions_changed(int)));
+	// general_layout->addRow(tr("Start acquisition for all open sessions when clicking 'Run'"), cb);
 
 
 	return form;
@@ -473,14 +480,14 @@ QWidget *Settings::get_about_page(QWidget *parent) const
 	for (QString &entry : a->get_fw_path_list())
 		s.append(QString("<tr><td colspan=\"2\">%1</td></tr>").arg(entry));
 
-// #ifdef ENABLE_DECODE
-// 	s.append("<tr><td colspan=\"2\"></td></tr>");
-// 	s.append("<tr><td colspan=\"2\"><b>" +
-// 		tr("Protocol decoder search paths:") + "</b></td></tr>");
-// 	for (QString &entry : a->get_pd_path_list())
-// 		s.append(QString("<tr><td colspan=\"2\">%1</td></tr>").arg(entry));
-// 	s.append(tr("<tr><td colspan=\"2\">(Note: Set environment variable SIGROKDECODE_DIR to add a custom directory)</td></tr>"));
-// #endif
+#ifdef ENABLE_DECODE
+	s.append("<tr><td colspan=\"2\"></td></tr>");
+	s.append("<tr><td colspan=\"2\"><b>" +
+		tr("Protocol decoder search paths:") + "</b></td></tr>");
+	for (QString &entry : a->get_pd_path_list())
+		s.append(QString("<tr><td colspan=\"2\">%1</td></tr>").arg(entry));
+	s.append(tr("<tr><td colspan=\"2\">(Note: Set environment variable SIGROKDECODE_DIR to add a custom directory)</td></tr>"));
+#endif
 
 	s.append("<tr><td colspan=\"2\"></td></tr>");
 	s.append("<tr><td colspan=\"2\"><b>" +
@@ -656,17 +663,23 @@ void Settings::on_general_theme_changed(int value)
 	QMessageBox msg(this);
 	msg.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
 	msg.setIcon(QMessageBox::Question);
+	auto flags = msg.windowFlags();
+	msg.setWindowFlags(flags & ~Qt::WindowContextHelpButtonHint);
+
+	QFont font = msg.font();
+	font.setPointSize(font.pointSize() + 2);
+	msg.setFont(font);
 
 	if (settings.current_theme_is_dark()) {
 		msg.setText(tr("You selected a dark theme.\n" \
 			"Should I set the user-adjustable colors to better suit your choice?\n\n" \
-			"Please keep in mind that PulseView may need a restart to display correctly."));
+			"Please keep in mind that the application may need a restart to display correctly."));
 		if (msg.exec() == QMessageBox::Yes)
 			settings.set_dark_theme_default_colors();
 	} else {
 		msg.setText(tr("You selected a bright theme.\n" \
 			"Should I set the user-adjustable colors to better suit your choice?\n\n" \
-			"Please keep in mind that PulseView may need a restart to display correctly."));
+			"Please keep in mind that the application may need a restart to display correctly."));
 		if (msg.exec() == QMessageBox::Yes)
 			settings.set_bright_theme_default_colors();
 	}

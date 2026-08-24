@@ -49,6 +49,13 @@ enum class WchDeviceType {
 	CH32H417
 };
 
+static const char* const DeviceModelNames[] =
+{
+    "Unknown",
+    "CH569",
+    "CH32H417",
+};
+
 WchDeviceType get_wch_device_type(const QString& vendorName);
 WchDeviceType get_wch_device_type_by_driver(const string& driverName);
 bool is_wch_device(const QString& vendorName);

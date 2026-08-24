@@ -248,6 +248,11 @@ srd_decoder_inst* Decoder::create_decoder_inst(srd_session *session)
 	return decoder_inst_;
 }
 
+srd_decoder_inst* Decoder::get_decoder_inst() const
+{
+	return decoder_inst_;
+}
+
 void Decoder::invalidate_decoder_inst()
 {
 	decoder_inst_ = nullptr;

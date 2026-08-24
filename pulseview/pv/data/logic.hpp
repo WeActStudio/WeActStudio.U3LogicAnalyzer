@@ -44,6 +44,7 @@ public:
 	Logic(unsigned int num_channels);
 
 	unsigned int num_channels() const;
+	void set_num_channels(unsigned int num_channels);
 
 	void push_segment(shared_ptr<LogicSegment> &segment);
 
@@ -76,7 +77,7 @@ private Q_SLOTS:
 
 private:
 	double samplerate_;
-	const unsigned int num_channels_;
+	unsigned int num_channels_;
 	deque< shared_ptr<LogicSegment> > segments_;
 };
 

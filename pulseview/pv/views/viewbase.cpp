@@ -38,8 +38,8 @@ namespace views {
 const char* ViewTypeNames[ViewTypeCount] = {
 	"Trace View",
 #ifdef ENABLE_DECODE
-	"二进制解码器视图",
-	"表格解码器视图"
+	"Binary Decoder Output View",
+	"Tabular Decoder Output View"
 #endif
 };
 

@@ -55,19 +55,14 @@ namespace views {
 namespace tabular_decoder {
 
 const char* SaveTypeNames[SaveTypeCount] = {
-	// "CSV, commas escaped",
-	// "CSV, fields quoted"
-	"CSV, 逗号已转义",
-	"CSV, 字段已加引号"
+	QT_TR_NOOP("CSV, commas escaped"),
+	QT_TR_NOOP("CSV, fields quoted"),
 };
 
 const char* ViewModeNames[ViewModeCount] = {
-	// QT_TR_NOOP("Show all"),
-    // QT_TR_NOOP("Show all and focus on newest"),
-    // QT_TR_NOOP("Show visible in main view")
-	"全部显示",
-	"全部显示并锁定最新内容",
-	"只显示当前主窗口内数据的解码"
+	QT_TR_NOOP("Show all"),
+    QT_TR_NOOP("Show all and focus on newest"),
+    QT_TR_NOOP("Show visible in main view")
 };
 
 

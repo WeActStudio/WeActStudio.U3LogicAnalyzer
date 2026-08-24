@@ -148,7 +148,7 @@ struct dev_context {
 	uint64_t num_frames;
 	uint64_t sent_samples;
 	uint8_t sample_width;      /* 8bit or 16bit */
-	uint8_t num_channels;      /* 8 or 16 channels */
+	int32_t num_channels;      /* 8 or 16 channels */
 	enum voltage_level voltage_level;
 	uint16_t threshold_value_1;  /* DAC阈值原始值 (0-1024) */
 

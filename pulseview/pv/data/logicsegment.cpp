@@ -58,7 +58,8 @@ const float LogicSegment::LogMipMapScaleFactor = logf(MipMapScaleFactor);
 const uint64_t LogicSegment::MipMapDataUnit = 8 * 1024; // bytes
 
 LogicSegment::LogicSegment(pv::data::Logic& owner, uint32_t segment_id,
-	unsigned int unit_size,	uint64_t samplerate) :
+	unsigned int unit_size,	uint64_t samplerate,
+	uint64_t max_samples) :
 	Segment(segment_id, samplerate, unit_size),
 	owner_(owner),
 	last_append_sample_(0),
@@ -69,23 +70,49 @@ LogicSegment::LogicSegment(pv::data::Logic& owner, uint32_t segment_id,
 	memset(mipmapAppendLength_, 0, sizeof(mipmapAppendLength_));
 	memset(mip_map_, 0, sizeof(mip_map_));
 	bad_memory_ = false;
-	
-	for (unsigned int i = 0; i < ScaleStepCount;i++) {
-		if (i == 0) 
-			mip_map_[i].data = malloc(MB(500));
-		else
-			mip_map_[i].data = malloc(MB(100));
-		if (mip_map_[i].data != nullptr) {
-			if (i == 0){
-				mipmapAppendLength_[i] = MB(500);
-				mip_map_[i].data_length = MB(500);
-			}else{
-				mip_map_[i].data_length = MB(100);
-				mipmapAppendLength_[i] = MB(100);
+
+	if (max_samples > 0) {
+		uint64_t level_samples = max_samples / MipMapScaleFactor;
+		for (unsigned int i = 0; i < ScaleStepCount; i++) {
+			uint64_t needed_bytes = ((level_samples + MipMapDataUnit - 1) /
+				MipMapDataUnit) * MipMapDataUnit * unit_size_;
+
+			if (needed_bytes == 0) {
+				level_samples /= MipMapScaleFactor;
+				continue;
 			}
-		} else{
-			qDebug() << "malloc failed!";
-		}	
+
+			mip_map_[i].data = malloc(needed_bytes);
+			if (mip_map_[i].data != nullptr) {
+				mip_map_[i].data_length = needed_bytes;
+				mipmapAppendLength_[i] = needed_bytes;
+			} else {
+				qDebug() << "malloc failed for mipmap level" << i
+					<< "requested" << needed_bytes << "bytes";
+			}
+
+			level_samples /= MipMapScaleFactor;
+			if (level_samples == 0)
+				break;
+		}
+	} else {
+		for (unsigned int i = 0; i < ScaleStepCount; i++) {
+			if (i == 0)
+				mip_map_[i].data = malloc(MB(500));
+			else
+				mip_map_[i].data = malloc(MB(100));
+			if (mip_map_[i].data != nullptr) {
+				if (i == 0) {
+					mipmapAppendLength_[i] = MB(500);
+					mip_map_[i].data_length = MB(500);
+				} else {
+					mip_map_[i].data_length = MB(100);
+					mipmapAppendLength_[i] = MB(100);
+				}
+			} else {
+				qDebug() << "malloc failed!";
+			}
+		}
 	}
 }
 
@@ -376,7 +403,6 @@ void LogicSegment::append_payload(void *data, uint64_t data_size)
 {
 	assert(unit_size_ > 0);
 	assert((data_size % unit_size_) == 0);
-	static uint64_t current_sample = 0;
 	lock_guard<recursive_mutex> lock(mutex_);
 
 	uint64_t prev_sample_count = sample_count_;
@@ -395,7 +421,7 @@ void LogicSegment::append_payload(void *data, uint64_t data_size)
 		}catch(...){
 			qDebug () << "bad allocation catch";
 			bad_memory_ = true;
-			notifyError();
+			Q_EMIT memoryError();
 			return;
 		}
 	}else{
@@ -403,7 +429,6 @@ void LogicSegment::append_payload(void *data, uint64_t data_size)
 	}
 	// Generate the first mip-map from the data
 	append_payload_to_mipmap();
-	current_sample += sample_count;
 	if (sample_count > 1)
 		owner_.notify_samples_added(SharedPtrToSegment(shared_from_this()),
 			prev_sample_count + 1, prev_sample_count + 1 + sample_count);
@@ -416,7 +441,6 @@ void LogicSegment::append_payload_decode(void *data, uint64_t data_size)
 {
 	assert(unit_size_ > 0);
 	assert((data_size % unit_size_) == 0);
-	static uint64_t current_sample = 0;
 
 	const uint64_t prev_sample_count = sample_count_;
 	const uint64_t sample_count = data_size / unit_size_;
@@ -427,7 +451,7 @@ void LogicSegment::append_payload_decode(void *data, uint64_t data_size)
 		}catch(...){
 			qDebug() << __FILE__ << " :" << __LINE__ << ":bad allocation catch";
 			bad_memory_ = true;
-			notifyError();
+			Q_EMIT memoryError();
 			return;
 		}
 	}else{
@@ -435,7 +459,6 @@ void LogicSegment::append_payload_decode(void *data, uint64_t data_size)
 	}
 	// Generate the first mip-map from the data
 	append_payload_to_mipmap_decode();
-	current_sample += sample_count;
 	if (sample_count > 1)
 		owner_.notify_samples_added(SharedPtrToSegment(shared_from_this()),
 			prev_sample_count + 1, prev_sample_count + 1 + sample_count);
@@ -482,6 +505,87 @@ void LogicSegment::get_samples(int64_t start_sample,
 	lock_guard<recursive_mutex> lock(mutex_);
 
 	get_raw_samples(start_sample, (end_sample - start_sample), dest);
+}
+
+bool LogicSegment::is_range_constant(uint64_t start, uint64_t count) const
+{
+	if (count == 0)
+		return true;
+
+	// Must have mip-map level 0 data
+	if (!mip_map_[0].data)
+		return false;
+
+	lock_guard<recursive_mutex> lock(mutex_);
+
+	const uint64_t scale = MipMapScaleFactor;  // 16
+	const unsigned int usize = unit_size_;
+
+	// Mip-map level 0: every 'scale' samples produce one downsample entry.
+	// Each entry is usize bytes. Entry is 0 iff no transition in that block.
+	// Entry index = sample_index / scale
+
+	const uint8_t* ds_data = (const uint8_t*)mip_map_[0].data;
+	const uint64_t ds_length = mip_map_[0].data_length;
+
+	// Range of fully-aligned mip-map blocks
+	uint64_t first_full_block = ((start + scale - 1) / scale) * scale;  // ceil to block boundary
+	uint64_t last_full_block = ((start + count) / scale) * scale;        // floor to block boundary
+
+	// Check mip-map level 0 for fully-aligned blocks
+	if (first_full_block < last_full_block) {
+		uint64_t ds_first = first_full_block / scale;
+		uint64_t ds_last = last_full_block / scale;
+
+		for (uint64_t ds = ds_first; ds < ds_last; ds++) {
+			uint64_t off = ds * usize;
+			if (off + usize > ds_length)
+				return false;  // Beyond mip-map range, conservative
+			for (unsigned int b = 0; b < usize; b++) {
+				if (ds_data[off + b] != 0)
+					return false;  // Transition found
+			}
+		}
+	}
+
+	// Check head partial block: samples [start, first_full_block)
+	// These are < scale samples before the first aligned block.
+	// Compare first sample with the last sample in this partial range.
+	if (start < first_full_block && first_full_block <= start + count) {
+		uint64_t head_end = first_full_block;
+		if (head_end > start + count)
+			head_end = start + count;
+
+		// Read first and last sample of head range, compare
+		uint8_t first_buf[8] = {0}, last_buf[8] = {0};
+		if (head_end - start > 1) {
+			get_raw_samples(start, 1, first_buf);
+			get_raw_samples(head_end - 1, 1, last_buf);
+			for (unsigned int b = 0; b < usize; b++) {
+				if (first_buf[b] != last_buf[b])
+					return false;
+			}
+		}
+	}
+
+	// Check tail partial block: samples [last_full_block, start+count)
+	if (last_full_block < start + count && last_full_block > start) {
+		uint64_t tail_start = last_full_block;
+		uint64_t tail_end = start + count;
+
+		// Read first and last sample of tail range, compare
+		uint8_t first_buf[8] = {0}, last_buf[8] = {0};
+		if (tail_end - tail_start > 1) {
+			get_raw_samples(tail_start, 1, first_buf);
+			get_raw_samples(tail_end - 1, 1, last_buf);
+			for (unsigned int b = 0; b < usize; b++) {
+				if (first_buf[b] != last_buf[b])
+					return false;
+			}
+		}
+	}
+
+	return true;
 }
 
 void LogicSegment::get_subsampled_edges(
@@ -653,66 +757,172 @@ void LogicSegment::get_subsampled_edges(
 	}
 }
 
+bool LogicSegment::find_nearest_edge_right(uint64_t origin_sample, int sig_index,
+	EdgePair &result)
+{
+	if (origin_sample >= sample_count_.load())
+		return false;
+
+	lock_guard<recursive_mutex> lock(mutex_);
+
+	const uint64_t sig_mask = 1ULL << sig_index;
+	const bool origin_level = (get_unpacked_sample(origin_sample) & sig_mask) != 0;
+
+	unsigned int level = 0;
+	uint64_t offset = origin_sample >> ((level + 1) * MipMapScalePower);
+
+	while (true) {
+		if (!mip_map_[level].data) {
+			for (uint64_t i = origin_sample + 1; i < sample_count_; i++) {
+				const bool sample = (get_unpacked_sample(i) & sig_mask) != 0;
+				if (sample != origin_level) {
+					result = EdgePair(i, sample);
+					return true;
+				}
+			}
+			return false;
+		}
+
+		if (offset >= mip_map_[level].length)
+			return false;
+
+		if ((get_subsample(level, offset) & sig_mask) != 0) {
+			if (level > 0) {
+				level--;
+				offset = offset * MipMapScaleFactor;
+				if (offset >= mip_map_[level].length)
+					offset = mip_map_[level].length > 0 ?
+						mip_map_[level].length - 1 : 0;
+				continue;
+			} else {
+				const uint64_t block_start = offset * MipMapScaleFactor;
+				const uint64_t block_end = min(block_start + MipMapScaleFactor,
+					sample_count_.load());
+				for (uint64_t i = max(block_start, origin_sample + 1);
+						i < block_end; i++) {
+					const bool sample = (get_unpacked_sample(i) & sig_mask) != 0;
+					if (sample != origin_level) {
+						result = EdgePair(i, sample);
+						return true;
+					}
+				}
+				offset++;
+				if (offset % MipMapScaleFactor == 0 &&
+					level + 1 < ScaleStepCount &&
+					mip_map_[level + 1].data) {
+					level++;
+					offset = offset >> MipMapScalePower;
+				}
+				continue;
+			}
+		} else {
+			offset++;
+			if (offset % MipMapScaleFactor == 0 &&
+				level + 1 < ScaleStepCount &&
+				mip_map_[level + 1].data) {
+				level++;
+				offset = offset >> MipMapScalePower;
+			}
+		}
+	}
+
+	return false;
+}
+
+bool LogicSegment::find_nearest_edge_left(uint64_t origin_sample, int sig_index,
+	EdgePair &result)
+{
+	if (origin_sample == 0 || origin_sample >= sample_count_.load())
+		return false;
+
+	lock_guard<recursive_mutex> lock(mutex_);
+
+	const uint64_t sig_mask = 1ULL << sig_index;
+	const bool origin_level = (get_unpacked_sample(origin_sample) & sig_mask) != 0;
+
+	unsigned int level = 0;
+	uint64_t offset = origin_sample >> ((level + 1) * MipMapScalePower);
+
+	while (true) {
+		if (!mip_map_[level].data) {
+			for (int64_t i = (int64_t)origin_sample - 1; i >= 0; i--) {
+				const bool sample = (get_unpacked_sample((uint64_t)i) & sig_mask) != 0;
+				if (sample != origin_level) {
+					result = EdgePair((uint64_t)i + 1, origin_level);
+					return true;
+				}
+			}
+			return false;
+		}
+
+		if (mip_map_[level].length == 0)
+			return false;
+		if (offset >= mip_map_[level].length)
+			offset = mip_map_[level].length - 1;
+
+		if ((get_subsample(level, offset) & sig_mask) != 0) {
+			if (level > 0) {
+				level--;
+				offset = offset * MipMapScaleFactor + MipMapScaleFactor - 1;
+				if (offset >= mip_map_[level].length)
+					offset = mip_map_[level].length > 0 ?
+						mip_map_[level].length - 1 : 0;
+				continue;
+			} else {
+				const uint64_t block_start = offset * MipMapScaleFactor;
+				const uint64_t block_end = min(block_start + MipMapScaleFactor,
+					sample_count_.load());
+				const uint64_t scan_upper = min(block_end, origin_sample);
+				for (int64_t i = (int64_t)scan_upper - 1;
+						i >= (int64_t)block_start; i--) {
+					if (i < 0) break;
+					const bool sample = (get_unpacked_sample((uint64_t)i) & sig_mask) != 0;
+					if (sample != origin_level) {
+						result = EdgePair((uint64_t)i + 1, origin_level);
+						return true;
+					}
+				}
+				if (offset == 0)
+					return false;
+				offset--;
+				if ((offset + 1) % MipMapScaleFactor == 0 &&
+					level + 1 < ScaleStepCount &&
+					mip_map_[level + 1].data) {
+					level++;
+					offset = offset >> MipMapScalePower;
+				}
+				continue;
+			}
+		} else {
+			if (offset == 0)
+				return false;
+			offset--;
+			if ((offset + 1) % MipMapScaleFactor == 0 &&
+				level + 1 < ScaleStepCount &&
+				mip_map_[level + 1].data) {
+				level++;
+				offset = offset >> MipMapScalePower;
+			}
+		}
+	}
+
+	return false;
+}
+
 void LogicSegment::get_surrounding_edges(vector<EdgePair> &dest,
 	uint64_t origin_sample, float min_length, int sig_index)
 {
-	if (origin_sample >= sample_count_){
+	if (origin_sample >= sample_count_.load()){
 		return;
 	}
 
-	uint64_t initial_range = GET_FIND_RANGE(samplerate_);
+	EdgePair edge;
 
-	uint64_t max_time_samples = samplerate_ / 10;
-	uint64_t max_range = std::min({sample_count_ / 2, max_time_samples, (uint64_t)50000000});
+	if (find_nearest_edge_left(origin_sample, sig_index, edge))
+		dest.push_back(edge);
 
-	vector<EdgePair>* edges = new vector<EdgePair>;
-	bool found_left = false;
-	bool found_right = false;
-	EdgePair left_edge, right_edge;
-
-	for (uint64_t range_sample = initial_range;
-	     range_sample <= max_range && (!found_left || !found_right);
-	     range_sample *= 2) {
-
-		uint64_t start_sample, end_sample;
-		if ((float)origin_sample - (float)range_sample < 0.0f)
-			start_sample = 0;
-		else
-			start_sample = origin_sample - range_sample;
-
-		if (origin_sample + range_sample > sample_count_)
-			end_sample = sample_count_;
-		else
-			end_sample = origin_sample + range_sample;
-
-		if (!found_left) {
-			edges->clear();
-			get_subsampled_edges(*edges, start_sample, origin_sample, min_length, sig_index, false);
-			if (edges->size() > 2) {
-				edges->pop_back();
-				left_edge = edges->back();
-				found_left = true;
-			}
-		}
-
-		if (!found_right) {
-			edges->clear();
-			get_subsampled_edges(*edges, origin_sample, end_sample, min_length, sig_index, true);
-			if (edges->size() > 0) {
-				right_edge = edges->front();
-				found_right = true;
-			}
-		}
-	}
-
-	delete edges;
-
-	if (found_left) {
-		dest.push_back(left_edge);
-	}
-	if (found_right) {
-		dest.push_back(right_edge);
-	}
+	if (find_nearest_edge_right(origin_sample, sig_index, edge))
+		dest.push_back(edge);
 }
 
 bool LogicSegment::wch_reallocate_mipmap_level(MipMapLevel &m, uint16_t level)
@@ -734,16 +944,17 @@ bool LogicSegment::wch_reallocate_mipmap_level(MipMapLevel &m, uint16_t level)
 		Depth *= 2;
 	
 	uint64_t new_data_length = ((m.length + MipMapDataUnit - 1) /
-		MipMapDataUnit) * MipMapDataUnit;
+		MipMapDataUnit) * MipMapDataUnit * unit_size_;
 
 	if (new_data_length > m.data_length) {
 		if (new_data_length > mipmapAppendLength){
-			Length = Depth * new_data_length * unit_size_ * sizeof(uint16_t);
+			Length = Depth * new_data_length;
 			qDebug() << "wch_reallocate_mipmap_level";
-			while (!(pData = realloc(m.data, Length))){
+			void* old_data = m.data;
+			while (!(pData = realloc(old_data, Length))){
 				Depth--;
 				if (Depth <= 0) break;
-				Length = Depth * new_data_length * unit_size_ * sizeof(uint16_t);
+				Length = Depth * new_data_length;
 			}
 			if (pData && Depth > 0){
 				m.data = pData;
@@ -751,9 +962,9 @@ bool LogicSegment::wch_reallocate_mipmap_level(MipMapLevel &m, uint16_t level)
 				mipmapAppendLength_[level] = mipmapAppendLength;
 			}
 			if(pData == nullptr){
-				qDebug() << __FILE__ << " :" << __LINE__ << ":realloc failed";	
-				notifyError();	
-				return false;	
+				qDebug() << __FILE__ << " :" << __LINE__ << ":realloc failed";
+				Q_EMIT memoryError();
+				return false;
 			}
 		}
 		m.data_length = new_data_length;
@@ -761,20 +972,24 @@ bool LogicSegment::wch_reallocate_mipmap_level(MipMapLevel &m, uint16_t level)
 	return true;
 }
 
-void LogicSegment::reallocate_mipmap_level(MipMapLevel &m)
+bool LogicSegment::reallocate_mipmap_level(MipMapLevel &m)
 {
 	lock_guard<recursive_mutex> lock(mutex_);
 
 	uint64_t new_data_length = ((m.length + MipMapDataUnit - 1) /
-		MipMapDataUnit) * MipMapDataUnit;
+		MipMapDataUnit) * MipMapDataUnit * unit_size_;
 
 	if (new_data_length > m.data_length) {
-		m.data_length = new_data_length;
-
 		// Padding is added to allow for the uint64_t write word
-		m.data = realloc(m.data, new_data_length * unit_size_ *
-			sizeof(uint64_t));
+		void* new_data = realloc(m.data, new_data_length * sizeof(uint64_t));
+		if (!new_data) {
+			qDebug() << "reallocate_mipmap_level: realloc failed";
+			return false;
+		}
+		m.data = new_data;
+		m.data_length = new_data_length;
 	}
+	return true;
 }
 
 bool channel_switch_4(uint8_t* pSoure, uint64_t lBufferSize, uint8_t* pDest)
@@ -807,6 +1022,9 @@ bool channel_switch_2(uint8_t* pSoure, uint64_t lBufferSize, uint8_t* pDest)
 
 void LogicSegment::append_payload_to_mipmap()
 {
+	if (bad_memory_)
+		return;
+
 	MipMapLevel &m0 = mip_map_[0];
 	uint64_t prev_length;
 	uint8_t *dest_ptr;
@@ -823,8 +1041,11 @@ void LogicSegment::append_payload_to_mipmap()
 		return;
 
 	res = wch_reallocate_mipmap_level(m0, 0);
-	if (res == false)
+	if (res == false) {
+		m0.length = prev_length;
+		// Mip-map is non-critical, skip but continue appending data
 		return;
+	}
 
 	dest_ptr = (uint8_t*)m0.data + prev_length * unit_size_;
 
@@ -890,8 +1111,10 @@ void LogicSegment::append_payload_to_mipmap()
 			break;
 
 		res = wch_reallocate_mipmap_level(m, level);
-		if (res == false)
+		if (res == false) {
+			m.length = prev_length;
 			return;
+		}
 		// Subsample the lower level
 		const uint8_t* src_ptr = (uint8_t*)ml.data +
 			unit_size_ * prev_length * MipMapScaleFactor;
@@ -915,6 +1138,9 @@ void LogicSegment::append_payload_to_mipmap()
 
 void LogicSegment::append_payload_to_mipmap_decode()
 {
+	if (bad_memory_)
+		return;
+
 	MipMapLevel &m0 = mip_map_[0];
 	uint64_t prev_length;
 	uint8_t *dest_ptr;
@@ -931,8 +1157,11 @@ void LogicSegment::append_payload_to_mipmap_decode()
 		return;
 
 	res = wch_reallocate_mipmap_level(m0, 0);
-	if (res == false)
+	if (res == false) {
+		m0.length = prev_length;
+		// Mip-map is non-critical, skip but continue appending data
 		return;
+	}
 
 	dest_ptr = (uint8_t*)m0.data + prev_length * unit_size_;
 
@@ -977,8 +1206,11 @@ void LogicSegment::append_payload_to_mipmap_decode()
 			break;
 
 		res = wch_reallocate_mipmap_level(m, level);
-		if (res == false)
+		if (res == false) {
+			m.length = prev_length;
+			// Mip-map is non-critical, skip but continue appending data
 			return;
+		}
 		// Subsample the lower level
 		const uint8_t* src_ptr = (uint8_t*)ml.data +
 			unit_size_ * prev_length * MipMapScaleFactor;
@@ -1015,7 +1247,8 @@ uint64_t LogicSegment::get_unpacked_sample(uint64_t index) const
 uint64_t LogicSegment::get_subsample(int level, uint64_t offset) const
 {
 	assert(level >= 0);
-	assert(mip_map_[level].data);
+	if (!mip_map_[level].data)
+		return 0;
 	return unpack_sample((uint8_t*)mip_map_[level].data +
 		unit_size_ * offset);
 }

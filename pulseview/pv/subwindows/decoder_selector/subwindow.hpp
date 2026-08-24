@@ -45,7 +45,7 @@ public:
 		shared_ptr<DecoderCollectionItem> parent = nullptr);
 
 	void appendSubItem(shared_ptr<DecoderCollectionItem> item);
-	void pushFrontSubItem(shared_ptr<DecoderCollectionItem> item);
+
 	shared_ptr<DecoderCollectionItem> subItem(int row) const;
 	shared_ptr<DecoderCollectionItem> parent() const;
 	shared_ptr<DecoderCollectionItem> findSubItem(const QVariant& value, int column);
@@ -91,15 +91,6 @@ class QCustomSortFilterProxyModel : public QSortFilterProxyModel
 {
 protected:
 	bool filterAcceptsRow(int source_row, const QModelIndex& source_parent) const;
-	bool lessThan(const QModelIndex &left, const QModelIndex &right) const override {
-		const char* str = left.data().toString().toStdString().c_str();
-		const char* str_1 = right.data().toString().toStdString().c_str();
-		if (strcmp(str, "UART") == 0 || strcmp(str, "SPI") == 0 || strcmp(str, "I²C") == 0 || strcmp(str, "USB PD") == 0 || 
-			strcmp(str_1, "UART") == 0 || strcmp(str_1, "SPI") == 0 || strcmp(str_1, "I²C") == 0 || strcmp(str_1, "USB PD") == 0 ){
-			return false;
-		}
-        return QSortFilterProxyModel::lessThan(left, right);
-    }
 };
 
 class QCustomTreeView : public QTreeView
@@ -136,11 +127,10 @@ public:
 	 * ("uart", "spi", etc.)
 	 */
 	vector<const srd_decoder*> get_decoders_providing(const char* output) const;
-	void add_default_decoder(QStringList decoder_list);
 
 Q_SIGNALS:
 	void new_decoders_selected(vector<const srd_decoder*> decoders);
-	void renew_last_decoder_name(QString name);
+
 public Q_SLOTS:
 	void on_item_changed(const QModelIndex& index);
 	void on_item_activated(const QModelIndex& index);

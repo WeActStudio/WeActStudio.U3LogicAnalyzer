@@ -88,7 +88,7 @@ QString GlobalSettings::default_style_;
 QPalette GlobalSettings::default_palette_;
 
 GlobalSettings::GlobalSettings() :
-	QSettings()
+	QSettings(QApplication::applicationDirPath()+"/config.ini", QSettings::IniFormat)
 {
 	beginGroup("Settings");
 }
@@ -105,8 +105,16 @@ void GlobalSettings::save_internal_defaults()
 void GlobalSettings::set_defaults_where_needed()
 {
 	if (!contains(Key_General_Language)) {
-		// Default to Chinese
-		setValue(Key_General_Language, "zh_cn");
+		QString langTag = QLocale().uiLanguages().first(); // "es-MX", "zh-CN", "de-DE"
+		QStringList parts = langTag.split('-');
+		QString lang;
+		if (parts.size() >=2 && parts[1].length() ==2) {
+			// 语言‑地区，丢弃脚本段
+			lang = parts[0] + "_" + parts[1];
+		} else {
+			lang = parts[0];
+		}
+		setValue(Key_General_Language, lang);
 		apply_language();
 	}
 
@@ -229,6 +237,7 @@ void GlobalSettings::apply_theme()
 		qApp->setStyle(style);
 
 	is_dark_theme_ = false;
+
 	if (value(Key_General_Theme).toInt() == 1) {
 		QPalette dark_palette;
 		// dark_palette.setColor(QPalette::Window, QColor(53, 53, 53));
@@ -239,32 +248,33 @@ void GlobalSettings::apply_theme()
 		dark_palette.setColor(QPalette::Highlight, QColor(42, 130, 218));
 		qApp->setPalette(dark_palette);
 		is_dark_theme_ = true;
-	} else if (value(Key_General_Theme).toInt() == 0) {
-		QPalette dark_palette;
-		dark_palette.setColor(QPalette::Window, QColor(53, 53, 53));
-		dark_palette.setColor(QPalette::WindowText, Qt::white);
-		dark_palette.setColor(QPalette::Disabled, QPalette::WindowText, QColor(127, 127, 127));
-		dark_palette.setColor(QPalette::Base, QColor(42, 42, 42));
-		dark_palette.setColor(QPalette::AlternateBase, QColor(66, 66, 66));
-		dark_palette.setColor(QPalette::ToolTipBase, Qt::white);
-		dark_palette.setColor(QPalette::ToolTipText, QColor(53, 53, 53));
-		dark_palette.setColor(QPalette::Text, Qt::white);
-		dark_palette.setColor(QPalette::Disabled, QPalette::Text, QColor(127, 127, 127));
-		dark_palette.setColor(QPalette::Dark, QColor(35, 35, 35));
-
-		dark_palette.setColor(QPalette::Shadow, QColor(20, 20, 20));
-		dark_palette.setColor(QPalette::Button, QColor(53, 53, 53));
-		dark_palette.setColor(QPalette::ButtonText, Qt::white);
-		dark_palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(127, 127, 127));
-		dark_palette.setColor(QPalette::BrightText, Qt::red);
-		dark_palette.setColor(QPalette::Link, QColor(42, 130, 218));
-		dark_palette.setColor(QPalette::Highlight, QColor(42, 130, 218));
-		dark_palette.setColor(QPalette::Disabled, QPalette::Highlight, QColor(80, 80, 80));
-		dark_palette.setColor(QPalette::HighlightedText, Qt::white);
-		dark_palette.setColor(QPalette::Disabled, QPalette::HighlightedText, QColor(127, 127, 127));
-		qApp->setPalette(dark_palette);
-		is_dark_theme_ = true;
 	}
+	// else if (value(Key_General_Theme).toInt() == 0) {
+	// 	QPalette dark_palette;
+	// 	dark_palette.setColor(QPalette::Window, QColor(53, 53, 53));
+	// 	dark_palette.setColor(QPalette::WindowText, Qt::white);
+	// 	dark_palette.setColor(QPalette::Disabled, QPalette::WindowText, QColor(127, 127, 127));
+	// 	dark_palette.setColor(QPalette::Base, QColor(42, 42, 42));
+	// 	dark_palette.setColor(QPalette::AlternateBase, QColor(66, 66, 66));
+	// 	dark_palette.setColor(QPalette::ToolTipBase, Qt::white);
+	// 	dark_palette.setColor(QPalette::ToolTipText, QColor(53, 53, 53));
+	// 	dark_palette.setColor(QPalette::Text, Qt::white);
+	// 	dark_palette.setColor(QPalette::Disabled, QPalette::Text, QColor(127, 127, 127));
+	// 	dark_palette.setColor(QPalette::Dark, QColor(35, 35, 35));
+
+	// 	dark_palette.setColor(QPalette::Shadow, QColor(20, 20, 20));
+	// 	dark_palette.setColor(QPalette::Button, QColor(53, 53, 53));
+	// 	dark_palette.setColor(QPalette::ButtonText, Qt::white);
+	// 	dark_palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(127, 127, 127));
+	// 	dark_palette.setColor(QPalette::BrightText, Qt::red);
+	// 	dark_palette.setColor(QPalette::Link, QColor(42, 130, 218));
+	// 	dark_palette.setColor(QPalette::Highlight, QColor(42, 130, 218));
+	// 	dark_palette.setColor(QPalette::Disabled, QPalette::Highlight, QColor(80, 80, 80));
+	// 	dark_palette.setColor(QPalette::HighlightedText, Qt::white);
+	// 	dark_palette.setColor(QPalette::Disabled, QPalette::HighlightedText, QColor(127, 127, 127));
+	// 	qApp->setPalette(dark_palette);
+	// 	is_dark_theme_ = true;
+	// }
 
 	QPixmapCache::clear();
 }
@@ -337,7 +347,11 @@ void GlobalSettings::store_gvariant(QSettings &settings, GVariant *v)
 		g_variant_get_size(v));
 
 	settings.setValue("value", var_data);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	settings.setValue("type", (const char *)var_type_str);
+#else
 	settings.setValue("type", var_type_str);
+#endif
 
 	g_free(var_type_str);
 }

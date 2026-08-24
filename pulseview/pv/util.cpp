@@ -44,9 +44,9 @@ namespace pv {
 namespace util {
 
 WchDeviceType get_wch_device_type(const QString& vendorName) {
-	if (vendorName == "USB3.0(CH569)")
+	if (vendorName == "CH569")
 		return WchDeviceType::CH569;
-	if (vendorName == "USB3.0(CH32H417)")
+	if (vendorName == "CH32H417")
 		return WchDeviceType::CH32H417;
 	return WchDeviceType::None;
 }

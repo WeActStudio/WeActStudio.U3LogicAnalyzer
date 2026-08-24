@@ -175,6 +175,7 @@ if [ $IS_WINDOWS -eq 1 ]; then
     # Deploy DLLs and create run.bat in build dir
     echo ""
     echo "  Deploying DLLs..."
+    PVDIR="$BUILD_DIR/logicanalyzer_build"
     for dll in libsigrok.dll libsigrokcxx.dll libsigrokdecode.dll; do
         cp "$PREFIX/bin/$dll" "$PVDIR/" 2>/dev/null || true
         cp "$BUILD_DIR/libsigrok_build/$dll" "$PVDIR/" 2>/dev/null || true
@@ -221,9 +222,11 @@ if [ $PACKAGE -eq 1 ]; then
     mkdir -p "$DIST_DIR"
 
     if [ $IS_WINDOWS -eq 1 ]; then
+    	# 1. Copy exe
         cp "$BUILD_DIR/logicanalyzer_build/LogicAnalyzer.exe" "$DIST_DIR/"
         echo "  LogicAnalyzer.exe"
 
+	# 2. Copy our DLLs
         for dll in libsigrok.dll libsigrokcxx.dll libsigrokdecode.dll; do
             cp "$PREFIX/bin/$dll" "$DIST_DIR/" 2>/dev/null || \
             cp "$BUILD_DIR/libsigrok_build/$dll" "$DIST_DIR/" 2>/dev/null || \
@@ -231,6 +234,7 @@ if [ $PACKAGE -eq 1 ]; then
             [ -f "$DIST_DIR/$dll" ] && echo "  $dll"
         done
 
+	# 3. Copy system DLLs
         echo "  System DLLs..."
         for dll in \
             libglib-2.0-0.dll libglibmm-2.4-1.dll libgobject-2.0-0.dll \
@@ -243,6 +247,7 @@ if [ $PACKAGE -eq 1 ]; then
             cp "/mingw64/bin/$dll" "$DIST_DIR/" 2>/dev/null || true
         done
 
+	# 4. Copy Python standard library (needed for protocol decoders)
         echo "  Python standard library..."
         PYTHON_SRC="/mingw64/lib/python3.14"
         if [ -d "$PYTHON_SRC" ]; then
@@ -272,13 +277,15 @@ if [ $PACKAGE -eq 1 ]; then
             echo "    $(find "$DIST_DIR/python-portable" -type f | wc -l) files"
         fi
 
+	# 5. Copy protocol decoders
+    	echo "  Protocol decoders..."
         DECODERS_SRC="$PREFIX/share/libsigrokdecode/decoders"
         if [ -d "$DECODERS_SRC" ]; then
-            echo "  Protocol decoders..."
             cp -r "$DECODERS_SRC" "$DIST_DIR/decoders"
             echo "    $(ls "$DIST_DIR/decoders" | wc -l) decoders"
         fi
 
+	# 6. Create run.bat
         cat > "$DIST_DIR/run.bat" << 'EOF'
 @echo off
 cd /d "%~dp0"

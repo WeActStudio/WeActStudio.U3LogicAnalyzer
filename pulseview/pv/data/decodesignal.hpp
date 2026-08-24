@@ -293,6 +293,8 @@ private:
 	uint8_t* decode_chunk_;
 	uint8_t* decode_chunk_tmp_;
 	uint8_t* data_chunk_send_;
+	uint8_t* src_buffer_;
+	int src_buffer_unit_size_;
 	int current_state_;
 	bool allow_skip_ = true;
 

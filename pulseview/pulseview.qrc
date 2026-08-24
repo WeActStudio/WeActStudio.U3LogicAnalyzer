@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
+	<file>icons/add-decoder.svg</file>
 	<file>icons/add-decoder.png</file>
 	<file>icons/add-math-signal.svg</file>
 	<file>icons/application-exit.png</file>
@@ -30,16 +31,22 @@
 	<file>icons/status-red.svg</file>
 	<file>icons/show-cursors.png</file>
 	<file>icons/trigger-change.svg</file>
+	<file>icons/trigger-change-normal.svg</file>
 	<file>icons/trigger-falling.svg</file>
+	<file>icons/trigger-falling-normal.svg</file>
 	<file>icons/trigger-high.svg</file>
+	<file>icons/trigger-high-normal.svg</file>
 	<file>icons/trigger-low.svg</file>
+	<file>icons/trigger-low-normal.svg</file>
 	<file>icons/trigger-marker-change.svg</file>
 	<file>icons/trigger-marker-falling.svg</file>
 	<file>icons/trigger-marker-high.svg</file>
 	<file>icons/trigger-marker-low.svg</file>
 	<file>icons/trigger-marker-rising.svg</file>
 	<file>icons/trigger-none.svg</file>
+	<file>icons/trigger-none-normal.svg</file>
 	<file>icons/trigger-rising.svg</file>
+	<file>icons/trigger-rising-normal.svg</file>
 	<file>icons/view-displaymode-last_complete_segment.svg</file>
 	<file>icons/view-displaymode-last_segment.svg</file>
 	<file>icons/view-displaymode-single_segment.svg</file>
@@ -53,6 +60,10 @@
 	<file>icons/Single.png</file>
 	<file>icons/Repeat.png</file>
 	<file>icons/Help.png</file>
+	<file>icons/Demo.png</file>
+	<file>icons/File.png</file>
+	<file>icons/USB20.png</file>
+	<file>icons/USB30.png</file>
     </qresource>
 
     <qresource prefix="/">

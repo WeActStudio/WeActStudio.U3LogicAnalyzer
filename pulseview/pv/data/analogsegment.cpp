@@ -24,6 +24,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <new>
+#include <QDebug>
 
 #include <algorithm>
 
@@ -39,6 +41,7 @@ using std::min;
 using std::min_element;
 using std::pair;
 using std::unique_ptr;
+using std::bad_alloc;
 
 namespace pv {
 namespace data {
@@ -74,16 +77,30 @@ void AnalogSegment::append_interleaved_samples(const float *data,
 
 	uint64_t prev_sample_count = sample_count_;
 
+	if (bad_memory_)
+		return;
+
 	// Deinterleave the samples and add them
-	unique_ptr<float[]> deint_data(new float[sample_count]);
+	unique_ptr<float[]> deint_data;
+	try {
+		deint_data.reset(new float[sample_count]);
+	} catch (bad_alloc&) {
+		qDebug() << "append_interleaved_samples: deinterleave allocation failed";
+		bad_memory_ = true;
+		Q_EMIT memoryError();
+		return;
+	}
 	float *deint_data_ptr = deint_data.get();
-	for (uint32_t i = 0; i < sample_count; i++) {
+	for (size_t i = 0; i < sample_count; i++) {
 		*deint_data_ptr = (float)(*data);
 		deint_data_ptr++;
 		data += stride;
 	}
 
 	append_samples(deint_data.get(), sample_count);
+
+	if (bad_memory_)
+		return;
 
 	// Generate the first mip-map from the data
 	append_payload_to_envelope_levels();
@@ -157,15 +174,22 @@ void AnalogSegment::get_envelope_section(EnvelopeSection &s,
 		s.length * sizeof(EnvelopeSample));
 }
 
-void AnalogSegment::reallocate_envelope(Envelope &e)
+bool AnalogSegment::reallocate_envelope(Envelope &e)
 {
 	const uint64_t new_data_length = ((e.length + EnvelopeDataUnit - 1) /
 		EnvelopeDataUnit) * EnvelopeDataUnit;
 	if (new_data_length > e.data_length) {
-		e.data_length = new_data_length;
-		e.samples = (EnvelopeSample*)realloc(e.samples,
+		EnvelopeSample* new_samples = (EnvelopeSample*)realloc(e.samples,
 			new_data_length * sizeof(EnvelopeSample));
+		if (!new_samples) {
+			qDebug() << "reallocate_envelope: realloc failed";
+			// Envelope is non-critical, data will still be appended
+			return false;
+		}
+		e.samples = new_samples;
+		e.data_length = new_data_length;
 	}
+	return true;
 }
 
 void AnalogSegment::append_payload_to_envelope_levels()

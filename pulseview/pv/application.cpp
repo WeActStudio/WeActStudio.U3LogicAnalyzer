@@ -87,8 +87,9 @@ const QStringList Application::get_languages() const
 
 const QString Application::get_language_editors(const QString& language) const
 {
-	if (language == "de") return "Sören Apel, Uwe Hermann";
-	if (language == "es_mx") return "Carlos Diaz";
+	if (language == "de_DE") return "Sören Apel, Uwe Hermann";
+	if (language == "es_MX") return "Carlos Diaz, Ulices Avila Hernandez";
+	if (language == "zh_CN") return "ZtyPro, WeAct Studio";
 
 	return QString();
 }
@@ -103,6 +104,7 @@ void Application::switch_language(const QString& language)
 	removeTranslator(&app_translator_);
 	removeTranslator(&qt_translator_);
 	removeTranslator(&qtbase_translator_);
+	qDebug() << "Switching to language" << language;
 
 	if ((language != "C") && (language != "en")) {
 		// Application translations
@@ -113,7 +115,11 @@ void Application::switch_language(const QString& language)
 			qWarning() << "Translation resource" << resource << "not found";
 
 		// Qt translations
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+		QString tr_path(QLibraryInfo::path(QLibraryInfo::TranslationsPath));
+#else
 		QString tr_path(QLibraryInfo::location(QLibraryInfo::TranslationsPath));
+#endif
 
 		if (qt_translator_.load("qt_" + language, tr_path))
 			installTranslator(&qt_translator_);
@@ -129,10 +135,39 @@ void Application::switch_language(const QString& language)
 				tr_path << ", Qt translations package is probably missing";
 	}
 
-	// Force LanguageChange event to all widgets for immediate retranslation
-	QEvent lang_event(QEvent::LanguageChange);
-	for (QWidget *widget : topLevelWidgets())
-		QApplication::sendEvent(widget, &lang_event);
+	if (!topLevelWidgets().empty()) {
+		// Force all windows to update
+		for (QWidget *widget : topLevelWidgets())
+			widget->update();
+
+		QWidget* parentWnd = nullptr;
+		const QWidgetList topWindows = qApp->topLevelWidgets();
+
+		// 倒序遍历，拿到最后一个可见、不是QMessageBox的顶层窗口
+		for (auto it = topWindows.rbegin(); it != topWindows.rend(); ++it)
+		{
+			QWidget* w = *it;
+			if (w->isVisible() && !qobject_cast<QMessageBox*>(w))
+			{
+				parentWnd = w;
+				break;
+			}
+		}
+		QMessageBox msg(parentWnd);
+		msg.setText(tr("Some parts of the application may still " \
+				"use the previous language. Re-opening the affected windows or " \
+				"restarting the application will remedy this."));
+		msg.setStandardButtons(QMessageBox::Ok);
+		msg.setIcon(QMessageBox::Information);
+		auto flags = msg.windowFlags();
+		msg.setWindowFlags(flags & ~Qt::WindowContextHelpButtonHint);
+		
+		QFont font = msg.font();
+		font.setPointSize(font.pointSize() + 2);
+		msg.setFont(font);
+
+		msg.exec();
+	}
 }
 
 void Application::on_setting_changed(const QString &key, const QVariant &value)
@@ -145,7 +180,7 @@ void Application::collect_version_info(pv::DeviceManager &device_manager)
 {
 	// Library versions and features
 	QString version_str;
-	version_info_.emplace_back("LogicAnalyzer", "1.1 base on pulseview 0.5.0-git-7e5c839");
+	version_info_.emplace_back("LogicAnalyzer", "0.4 base on pulseview 0.5.0-git-7e5c839");
 	if (hd_version_ == 0){
 		version_str = "null-null";
 	}else{
@@ -157,7 +192,7 @@ void Application::collect_version_info(pv::DeviceManager &device_manager)
 		version_str += ".";
 		version_str += QString::number((hd_version_ >> 8)&0xff);
 	}
-	version_info_.emplace_back("CH569-FPGA", version_str);
+	version_info_.emplace_back("CH32H417 Logic Analyzer", version_str);
 	version_info_.emplace_back("Qt", qVersion());
 	version_info_.emplace_back("glibmm", PV_GLIBMM_VERSION);
 	version_info_.emplace_back("Boost", BOOST_LIB_VERSION);

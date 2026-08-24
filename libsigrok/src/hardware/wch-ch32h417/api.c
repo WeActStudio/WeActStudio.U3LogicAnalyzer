@@ -25,7 +25,7 @@
 /* 支持的设备列表 */
 static const struct ch32h417_profile supported_devices[] = {
 	/* CH32H417逻辑分析仪 */
-	{USB_VENDOR_ID, USB_PRODUCT_ID, "USB3.0(CH32H417)", "CH32H417 Logic Analyzer",
+	{USB_VENDOR_ID, USB_PRODUCT_ID, "CH32H417", "CH32H417 Logic Analyzer",
 	 DEV_CAPS_16BIT_LOGIC | DEV_CAPS_ADC},
 
 	ALL_ZERO};
@@ -307,25 +307,27 @@ static int dev_open(struct sr_dev_inst *sdi)
 {
 	struct dev_context *devc;
 	void *handle;
+	gboolean already_open;
 
 	devc = sdi->priv;
+	already_open = (devc->device_handle != NULL && devc->device_handle != CH375_INVALID_HANDLE);
 
-	if (devc->device_handle != NULL && devc->device_handle != CH375_INVALID_HANDLE)
+	if (already_open)
 	{
 		sr_info("Device already open at index %d", devc->device_index);
-		return SR_OK;
 	}
-
-	handle = ch375_open_device(devc->device_index);
-	if (handle == CH375_INVALID_HANDLE)
+	else
 	{
-		sr_err("Failed to open device at index %d", devc->device_index);
-		return SR_ERR;
+		handle = ch375_open_device(devc->device_index);
+		if (handle == CH375_INVALID_HANDLE)
+		{
+			sr_err("Failed to open device at index %d", devc->device_index);
+			return SR_ERR;
+		}
+
+		devc->device_handle = handle;
+		ch375_init_comm_params(devc);
 	}
-
-	devc->device_handle = handle;
-
-	ch375_init_comm_params(devc);
 
 	if (devc->mode == MODE_LOGIC_ANALYZER)
 	{
@@ -410,7 +412,7 @@ static int config_get(uint32_t key, GVariant **data,
 		*data = g_variant_new_uint64(devc->capture_ratio);
 		break;
 	case SR_CONF_NUM_LOGIC_CHANNELS:
-		*data = g_variant_new_uint64(devc->num_channels);
+		*data = g_variant_new_int32(devc->num_channels);
 		break;
 	case SR_CONF_PATTERN_MODE:
 		*data = g_variant_new_string(mode_names[devc->mode]);
@@ -475,13 +477,13 @@ static int config_set(uint32_t key, GVariant *data,
 		break;
 	case SR_CONF_NUM_LOGIC_CHANNELS:
 	{
-		uint64_t num = g_variant_get_uint64(data);
+		int32_t num = g_variant_get_int32(data);
 		if (num != 8 && num != 16)
 		{
-			sr_err("Invalid channel count: %" PRIu64 " (must be 8 or 16)", num);
+			sr_err("Invalid channel count: %" PRId32 " (must be 8 or 16)", num);
 			return SR_ERR_ARG;
 		}
-		devc->num_channels = (uint8_t)num;
+		devc->num_channels = num;
 		devc->sample_width = (num == 16) ? SAMPLE_WIDTH_16BIT : SAMPLE_WIDTH_8BIT;
 		sr_info("Channel count set to %d", devc->num_channels);
 

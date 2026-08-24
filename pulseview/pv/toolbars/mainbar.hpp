@@ -31,7 +31,9 @@
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QLabel>
 #include <QMenu>
+#include <QPixmap>
 #include <QToolBar>
 #include <QToolButton>
 #include <pv/popups/channels.hpp>
@@ -204,6 +206,7 @@ private Q_SLOTS:
 	void on_threshold_value_raw_changed(uint16_t value);  // DAC原始值设置
 	void on_ch32h417_device_event(unsigned long eventStatus);
 	void on_channel_selection_changed();  // 通道选择变化处理，用于更新通道高度
+	void update_device_status_icon();  // 更新设备状态图标
 public Q_SLOTS:
 	void on_add_decoder_clicked();
 	
@@ -218,6 +221,7 @@ Q_SIGNALS:
 	void divice_detached();
 	void device_attached();
 	void run_stop_button_clicked();
+	void settings_triggered();
 	void ch32h417_device_event_signal(unsigned long eventStatus);
 
 private:
@@ -237,6 +241,7 @@ private:
 	QToolButton *model_change_button_;
 	QToolButton *new_view_button_, *open_button_, *save_button_;
 	QToolButton *help_button_;
+	QToolButton *device_status_icon_;
 
 	pv::widgets::DeviceToolButton device_selector_;
 
@@ -281,6 +286,8 @@ public:
 	void get_setting_default();
 	void set_setting_default();
 	void renew_setting_default();
+	void save_setup(QSettings &settings) const;
+	void restore_setup(QSettings &settings);
 	void renew_default_bank_threshold();
 	void show_hardware_version();
 	QDialog channel_dlg;

@@ -24,7 +24,6 @@
 
 #include <boost/optional.hpp>
 
-#include <QMouseEvent>
 #include <QPoint>
 #include <QTimer>
 #include <QTouchEvent>
@@ -64,7 +63,7 @@ class Viewport : public ViewWidget, public GlobalSettingsInterface
 	Q_OBJECT
 
 Q_SIGNALS:
-	void mouse_marker_pressed(QMouseEvent *);
+	add_rule_flag(QMouseEvent *);
 
 public:
 	explicit Viewport(View &parent);

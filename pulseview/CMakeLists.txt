@@ -118,7 +118,7 @@ endif()
 
 set(QT_LIBRARIES Qt5::Gui Qt5::Widgets Qt5::Svg)
 
-set(BOOSTCOMPS filesystem serialization)
+set(BOOSTCOMPS filesystem serialization system)
 if(ENABLE_TESTS)
 	list(APPEND BOOSTCOMPS unit_test_framework)
 endif()

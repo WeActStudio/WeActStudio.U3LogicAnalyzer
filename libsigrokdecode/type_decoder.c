@@ -721,6 +721,10 @@ static PyObject *get_current_pinvalues(const struct srd_decoder_inst *di)
 		if (di->dec_channelmap[i] == -1) {
 			/* Value of unused channel is 0xff, instead of 0 or 1. */
 			PyTuple_SetItem(py_pinvalues, i, PyLong_FromUnsignedLong(0xff));
+		} else if (di->constant_channel_mask & (1ULL << i)) {
+			/* Constant channel: use pre-computed value */
+			uint8_t v = (di->constant_channel_values & (1ULL << i)) ? 1 : 0;
+			PyTuple_SetItem(py_pinvalues, i, PyLong_FromUnsignedLong(v));
 		} else {
 			sample_pos = di->inbuf + ((di->abs_cur_samplenum - di->abs_start_samplenum) * di->data_unitsize);
 			byte_offset = di->dec_channelmap[i] / 8;
@@ -1084,6 +1088,8 @@ static PyObject *Decoder_wait(PyObject *self, PyObject *args)
 		di->abs_end_samplenum = 0;
 		di->inbuf = NULL;
 		di->inbuflen = 0;
+		di->constant_channel_mask = 0;
+		di->constant_channel_values = 0;
 
 		/* Signal the main thread that we handled all samples. */
 		g_cond_signal(&di->handled_all_samples_cond);

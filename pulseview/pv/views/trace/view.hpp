@@ -80,6 +80,8 @@ class CustomScrollArea : public QAbstractScrollArea
 public:
 	CustomScrollArea(QWidget *parent = nullptr);
 	bool viewportEvent(QEvent *event);
+protected:
+	void scrollContentsBy(int dx, int dy) override;
 };
 
 class View : public ViewBase, public TraceTreeItemOwner, public GlobalSettingsInterface
@@ -596,6 +598,7 @@ private:
 
 	unsigned int sticky_events_;
 	QTimer lazy_event_handler_;
+	QTimer measure_timer_;
 
 	// This is true when the defaults couldn't be set due to insufficient info
 	bool scroll_needs_defaults_;

@@ -39,11 +39,6 @@ void DecoderCollectionItem::appendSubItem(shared_ptr<DecoderCollectionItem> item
 	subItems_.push_back(item);
 }
 
-void DecoderCollectionItem::pushFrontSubItem(shared_ptr<DecoderCollectionItem> item)
-{
-	subItems_.insert(subItems_.begin(), item);
-}
-
 shared_ptr<DecoderCollectionItem> DecoderCollectionItem::subItem(int row) const
 {
 	try {

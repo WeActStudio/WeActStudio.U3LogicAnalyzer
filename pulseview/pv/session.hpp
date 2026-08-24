@@ -234,10 +234,10 @@ public:
 
 	MetadataObjManager* metadata_obj_manager();
 
+	void update_signals();
+
 private:
 	void set_capture_state(capture_state state);
-
-	void update_signals();
 
 	shared_ptr<data::SignalBase> signalbase_from_channel(
 		shared_ptr<sigrok::Channel> channel) const;

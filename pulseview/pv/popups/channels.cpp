@@ -646,6 +646,8 @@ void Channels::channelSelect(uint16_t index)
 
 	updating_channels_ = false;
 
+	session_.update_signals();
+
 	channel_selection_changed();
 	}
 
@@ -835,6 +837,11 @@ void Channels::on_mode_changed(int index)
 
 	updating_channels_ = false;
 
+	// 模式切换后通道启用/禁用状态变化，需要更新view中的signalbase列表
+	// (restore_setup可能已将disabled通道从view中remove_signalbase，
+	//  切换模式后需通过update_signals将重新enabled的通道添加回view)
+	session_.update_signals();
+
 	mode_changed(index);
 }
 
@@ -862,6 +869,8 @@ void Channels::on_adc_channel_changed(int index)
 		updating_channels_ = false;
 	}
 
+	// ADC通道切换后需要更新view中的signalbase列表
+	session_.update_signals();
 	adc_channel_changed(index);
 	qDebug() << "ADC channel changed to:" << index + 1;
 }
@@ -919,6 +928,7 @@ void Channels::checkbox_toggled(bool state)
 			}
 
 			updating_channels_ = false;
+			session_.update_signals();
 			return;
 		}
 	}
@@ -938,20 +948,21 @@ void Channels::checkbox_toggled(bool state)
 
 	if (is_valid) {
 		check_box_mapper_.map();
-		session_.signals_changed();
 		auto it = checkbox_signal_map_.find(checkBox);
 		if (it != checkbox_signal_map_.end()) {
 			auto sig = it->second;
 			assert(sig);
 			sig->set_enabled(state);
 		}
+		session_.update_signals();
+		session_.signals_changed();
 	} else {
 		if (state && device_mode_ != DeviceMode::OTHER) {
 			QMessageBox msg(this);
 			msg.setIcon(QMessageBox::Information);
 			msg.setWindowTitle(tr("Information"));
 			msg.setText(tr("The current mode does not support opening this channel."));
-			msg.addButton(tr("确定"), QMessageBox::AcceptRole);
+			msg.addButton(tr("Confirm"), QMessageBox::AcceptRole);
 			msg.exec();
 			checkBox->setChecked(false);
 		}

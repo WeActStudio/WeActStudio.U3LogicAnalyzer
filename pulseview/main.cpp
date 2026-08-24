@@ -41,6 +41,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QMessageBox>
 #include <QSettings>
 #include <QTextStream>
@@ -204,10 +205,17 @@ int main(int argc, char *argv[])
 	Srf::init();
 #endif
 
+	// Enable high DPI scaling before creating QApplication
+	QApplication::setAttribute(Qt::AA_EnableHighDpiScaling, true);
+	QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps, true);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
+		Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+#endif
+
 	Application a(argc, argv);
 	QFont currentFont = a.font();
 	currentFont.setFamily("Microsoft YaHei");
-	currentFont.setPointSize(9);
 	a.setFont(currentFont);
 
 #ifdef ANDROID
@@ -381,9 +389,9 @@ int main(int argc, char *argv[])
 		if (!pv::MainWindow::checkSystemRequirements()) {
         	return 0;
     	}
-		// pv::DeviceManager device_manager(context, driver, do_scan);
+		pv::DeviceManager device_manager(context, driver, false);
 
-		// a.collect_version_info(device_manager);
+		a.collect_version_info(device_manager);
 		if (show_version) {
 			a.print_version_info();
 		} else {
@@ -393,14 +401,17 @@ int main(int argc, char *argv[])
 			w.show();
 
 #ifdef _WIN32
-			// Enable dark title bar on Windows 10/11
-			HWND hwnd = (HWND)w.winId();
-			BOOL useDark = TRUE;
-			DwmSetWindowAttribute(hwnd, 20,  // DWMWA_USE_IMMERSIVE_DARK_MODE
-				&useDark, sizeof(useDark));
-			// Extend frame 1px into client area to hide the white border line
-			MARGINS margins = {0, 0, 0, 1};
-			DwmExtendFrameIntoClientArea(hwnd, &margins);
+			if (settings.current_theme_is_dark()){
+				// Enable dark title bar on Windows 10/11
+				HWND hwnd = (HWND)w.winId();
+				BOOL useDark = TRUE;
+				HRESULT hr = DwmSetWindowAttribute(hwnd, 20, &useDark, sizeof(useDark));
+				if(SUCCEEDED(hr))
+				{
+					MARGINS margins = {0,0,0,1};
+					DwmExtendFrameIntoClientArea(hwnd, &margins);
+				}
+			}
 #endif
 			// if (restore_sessions){
 			// 	w.restore_sessions();

@@ -5,7 +5,7 @@
     <name>Application</name>
     <message>
         <source>Some parts of the application may still use the previous language. Re-opening the affected windows or restarting the application will remedy this.</source>
-        <translation type="vanished">应用程序的某些部分可能仍然使用以前的语言。重新打开受影响的窗口或重新启动应用程序将解决此问题。</translation>
+        <translation>应用程序的某些部分可能仍然使用以前的语言。重新打开受影响的窗口或重新启动应用程序将解决此问题。</translation>
     </message>
 </context>
 <context>
@@ -303,6 +303,14 @@ Do you want to save the session?</source>
 <context>
     <name>pv::MainWindow</name>
     <message>
+        <source>Binary Decoder Output View</source>
+        <translation>二进制解码器</translation>
+    </message>
+    <message>
+        <source>Tabular Decoder Output View</source>
+        <translation>表格解码器</translation>
+    </message>
+    <message>
         <location filename="../pv/mainwindow.cpp" line="76"/>
         <source>LogicAnalyzer</source>
         <translation>LogicAnalyzer</translation>
@@ -310,8 +318,8 @@ Do you want to save the session?</source>
     <message>
         <source>Current available memory size is less than 4GB and will affect usage effect. 
 Do you want to continue to use?</source>
-        <translation type="vanished">当前可用内存不足4GB，将可能会影响使用，
-        是否继续使用?</translation>
+        <translation>当前可用内存不足4GB，将可能会影响使用，
+是否继续使用?</translation>
     </message>
     <message>
         <location filename="../pv/mainwindow.cpp" line="336"/>
@@ -394,19 +402,14 @@ Do you want to save the session?</source>
         <translation type="vanished">提示</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="107"/>
-        <source>确定</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location filename="../pv/mainwindow.cpp" line="108"/>
         <location filename="../pv/mainwindow.cpp" line="1082"/>
-        <source>取消</source>
-        <translation type="unfinished"></translation>
+        <source>Cancel</source>
+        <translation>取消</translation>
     </message>
     <message>
         <source>Warning</source>
-        <translation type="vanished">警告</translation>
+        <translation>警告</translation>
     </message>
     <message>
         <source>Don&apos;t Save</source>
@@ -420,12 +423,6 @@ Do you want to save the session?</source>
     <message>
         <source>WCH PulseView</source>
         <translation type="vanished">WCH PulseView</translation>
-    </message>
-    <message>
-        <location filename="../pv/mainwindow.cpp" line="102"/>
-        <source>当前可用内存小于4GB，会影响使用效果。
-是否继续使用？</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../pv/mainwindow.cpp" line="105"/>
@@ -455,14 +452,8 @@ Do you want to save the session?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1075"/>
-        <source>&lt;h3&gt;Unsaved Capture Data&lt;/h3&gt;</source>
-        <translation>&lt;h3&gt;有未保存的采集数据&lt;/h3&gt;</translation>
-    </message>
-    <message>
-        <location filename="../pv/mainwindow.cpp" line="1076"/>
-        <source>Data will be permanently lost on exit.</source>
-        <translation>退出后数据将永久丢失。</translation>
+        <source>&lt;h3&gt;Unsaved Capture Data&lt;/h3&gt;&lt;p&gt;Data will be permanently lost on exit.&lt;/p&gt;</source>
+        <translation>&lt;h3&gt;有未保存的采集数据&lt;/h3&gt;&lt;p&gt;退出后数据将永久丢失。&lt;/p&gt;</translation>
     </message>
     <message>
         <location filename="../pv/mainwindow.cpp" line="1081"/>
@@ -497,10 +488,6 @@ Do you want to save the session?</source>
     <message>
         <source>Save</source>
         <translation type="vanished">保存</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="vanished">取消</translation>
     </message>
 </context>
 <context>
@@ -827,81 +814,81 @@ Do you want to save the session?</source>
 <context>
     <name>pv::dialogs::IAPDialog</name>
     <message>
-        <location filename="../pv/dialogs/iapdialog.cpp" line="90"/>
-        <source>固件升级</source>
-        <translation type="unfinished"></translation>
+        <location filename="../pv/toolbars/mainbar.cpp" line="290"/>
+        <source>FW Update</source>
+        <translation>固件升级</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="97"/>
-        <source>固件文件:</source>
-        <translation type="unfinished"></translation>
+        <source>FW File:</source>
+        <translation>固件文件:</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="99"/>
-        <source>选择BIN或HEX格式固件文件</source>
-        <translation type="unfinished"></translation>
+        <source>Select firmware file in BIN or HEX format</source>
+        <translation>选择BIN或HEX格式固件文件</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="101"/>
-        <source>浏览...</source>
-        <translation type="unfinished"></translation>
+        <source>Browse</source>
+        <translation>浏览</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="110"/>
-        <source>就绪</source>
-        <translation type="unfinished"></translation>
+        <source>Ready</source>
+        <translation>就绪</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="115"/>
-        <source>升级日志:</source>
-        <translation type="unfinished"></translation>
+        <source>Update Log:</source>
+        <translation>更新日志:</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="124"/>
-        <source>开始升级</source>
-        <translation type="unfinished"></translation>
+        <source>Start</source>
+        <translation>开始</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="126"/>
         <location filename="../pv/dialogs/iapdialog.cpp" line="185"/>
-        <source>取消</source>
-        <translation type="unfinished"></translation>
+        <source>Cancel</source>
+        <translation>取消</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="152"/>
-        <source>选择固件文件</source>
-        <translation type="unfinished"></translation>
+        <source>Select firmware file</source>
+        <translation>选择固件文件</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="154"/>
-        <source>固件文件 (*.bin *.hex);;所有文件 (*.*)</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware File (*.bin *.hex);;All Files (*.*)</source>
+        <translation>固件文件 (*.bin *.hex);;所有文件 (*.*)</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="168"/>
         <location filename="../pv/dialogs/iapdialog.cpp" line="173"/>
-        <source>错误</source>
-        <translation type="unfinished"></translation>
+        <source>Error</source>
+        <translation>错误</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="168"/>
-        <source>请选择固件文件</source>
-        <translation type="unfinished"></translation>
+        <source>Please select a firmware file</source>
+        <translation>请选择固件文件</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="173"/>
-        <source>固件文件不存在</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware file does not exist</source>
+        <translation>固件文件不存在</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="187"/>
-        <source>开始固件升级...</source>
-        <translation type="unfinished"></translation>
+        <source>Start firmware update...</source>
+        <translation>开始固件更新...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="188"/>
-        <source>设备索引: %1</source>
-        <translation type="unfinished"></translation>
+        <source>Device index: %1</source>
+        <translation>设备索引: %1</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="189"/>
@@ -910,55 +897,57 @@ Do you want to save the session?</source>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="211"/>
-        <source>正在取消升级...</source>
-        <translation type="unfinished"></translation>
+        <source>Canceling firmware update...</source>
+        <translation>正在取消升级...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="233"/>
-        <source>关闭</source>
-        <translation type="unfinished"></translation>
+        <source>Close</source>
+        <translation>关闭</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="239"/>
-        <source>升级成功</source>
-        <translation type="unfinished"></translation>
+        <source>Update Success</source>
+        <translation>升级成功</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="240"/>
-        <source>固件升级成功！</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update Success!</source>
+        <translation>固件升级成功！</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="241"/>
-        <source>成功</source>
-        <translation type="unfinished"></translation>
+        <source>Success</source>
+        <translation>成功</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="241"/>
-        <source>固件升级成功！
-设备将重新启动。</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update Success!
+Device will restart.</source>
+        <translation>固件升级成功！
+设备将重新启动。</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="243"/>
-        <source>升级失败</source>
-        <translation type="unfinished"></translation>
+        <source>Update Failed</source>
+        <translation>升级失败</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="244"/>
-        <source>固件升级失败！</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update Failed!</source>
+        <translation>固件升级失败！</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="245"/>
-        <source>失败</source>
-        <translation type="unfinished"></translation>
+        <source>Fail</source>
+        <translation>失败</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="245"/>
-        <source>固件升级失败！
-请检查设备连接和固件文件。</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update Failed!
+Please check the device connection and firmware file.</source>
+        <translation>固件升级失败！
+请检查设备连接和固件文件。</translation>
     </message>
 </context>
 <context>
@@ -1449,7 +1438,7 @@ Do you want to save the session?</source>
     </message>
     <message>
         <source>Protocol decoder search paths:</source>
-        <translation type="vanished">协议解码器搜索路径：</translation>
+        <translation>协议解码器搜索路径：</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="487"/>
@@ -1506,20 +1495,20 @@ Do you want to save the session?</source>
         <source>You selected a dark theme.
 Should I set the user-adjustable colors to better suit your choice?
 
-Please keep in mind that PulseView may need a restart to display correctly.</source>
+Please keep in mind that the application may need a restart to display correctly.</source>
         <translation>您选择了一个深色主题。
 是否相应地调整特定的颜色，以更好地协调？
-PulseView可能需要重新启动才能正确显示。</translation>
+应用程序可能需要重新启动才能正确显示。</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="667"/>
         <source>You selected a bright theme.
 Should I set the user-adjustable colors to better suit your choice?
 
-Please keep in mind that PulseView may need a restart to display correctly.</source>
+Please keep in mind that the application may need a restart to display correctly.</source>
         <translation>您选择了一个明亮主题。
 是否相应地调整特定的颜色，以更好地协调？
-PulseView可能需要重新启动才能正确显示。</translation>
+应用程序可能需要重新启动才能正确显示。</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="838"/>
@@ -1789,8 +1778,8 @@ PulseView可能需要重新启动才能正确显示。</translation>
     </message>
     <message>
         <location filename="../pv/popups/channels.cpp" line="954"/>
-        <source>确定</source>
-        <translation type="unfinished"></translation>
+        <source>Confirm</source>
+        <translation>确定</translation>
     </message>
     <message>
         <location filename="../pv/popups/channels.cpp" line="278"/>
@@ -1860,7 +1849,7 @@ PulseView可能需要重新启动才能正确显示。</translation>
     <message>
         <location filename="../pv/subwindows/decoder_selector/model.cpp" line="43"/>
         <source>Name</source>
-        <translation></translation>
+        <translation>名称</translation>
     </message>
     <message>
         <location filename="../pv/subwindows/decoder_selector/model.cpp" line="44"/>
@@ -1957,6 +1946,14 @@ PulseView可能需要重新启动才能正确显示。</translation>
         <translation type="vanished">新建视图</translation>
     </message>
     <message>
+        <source>Warning</source>
+        <translation>警告</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>设置</translation>
+    </message>
+    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="204"/>
         <source>&amp;Open...</source>
         <translation>打开... ( &amp;O )</translation>
@@ -2020,10 +2017,6 @@ PulseView可能需要重新启动才能正确显示。</translation>
         <location filename="../pv/toolbars/mainbar.cpp" line="1861"/>
         <source>Start</source>
         <translation>开始</translation>
-    </message>
-    <message>
-        <source>Single</source>
-        <translation type="vanished">单次</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="367"/>
@@ -2093,17 +2086,17 @@ PulseView可能需要重新启动才能正确显示。</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="278"/>
-        <source>single</source>
+        <source>Single</source>
         <translation>单次</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="279"/>
-        <source>repeat</source>
+        <source>Repeat</source>
         <translation>重复</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="288"/>
-        <source>version info</source>
+        <source>Version Info</source>
         <translation>版本信息</translation>
     </message>
     <message>
@@ -2112,7 +2105,7 @@ PulseView可能需要重新启动才能正确显示。</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="290"/>
-        <source>Update</source>
+        <source>FW Update</source>
         <translation>固件升级</translation>
     </message>
     <message>
@@ -2228,39 +2221,48 @@ PulseView可能需要重新启动才能正确显示。</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2123"/>
-        <source>版本信息</source>
-        <translation type="unfinished"></translation>
+        <source>Version Info</source>
+        <translation>版本信息</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Software Version:&lt;/b&gt; %1&lt;br/&gt;</source>
+        <translation>&lt;b&gt;软件版本：&lt;/b&gt; %1&lt;br/&gt;</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Firmware Version:&lt;/b&gt; %1&lt;br/&gt;</source>
+        <translation>&lt;b&gt;固件版本：&lt;/b&gt; %1&lt;br/&gt;</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2141"/>
-        <source>当前设备不支持固件升级。
-请连接CH32H417设备后重试。</source>
-        <translation type="unfinished"></translation>
+        <source>The current device does not support firmware upgrade.
+Please connect the CH32H417 device and try again.</source>
+        <translation>当前设备不支持固件升级。
+请连接CH32H417设备后重试。</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2150"/>
-        <source>选择固件文件</source>
-        <translation type="unfinished"></translation>
+        <source>Select firmware file</source>
+        <translation>选择固件文件</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2152"/>
-        <source>固件文件 (*.bin *.BIN *.hex *.HEX);;所有文件 (*.*)</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware File (*.bin *.BIN *.hex *.HEX);;All Files (*.*)</source>
+        <translation>固件文件 (*.bin *.BIN *.hex *.HEX);;所有文件 (*.*)</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2162"/>
-        <source>正在升级固件，请勿断开USB连接！</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware update in progress, do not disconnect the USB connection</source>
+        <translation>正在升级固件，请勿断开USB连接！</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2162"/>
-        <source>取消</source>
-        <translation type="unfinished"></translation>
+        <source>Cancel</source>
+        <translation>取消</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2163"/>
-        <source>固件升级</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update</source>
+        <translation>固件升级</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2218"/>
@@ -2269,24 +2271,25 @@ PulseView可能需要重新启动才能正确显示。</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2254"/>
-        <source>关于</source>
-        <translation type="unfinished"></translation>
+        <source>About</source>
+        <translation>关于</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2292"/>
-        <source>升级成功</source>
-        <translation type="unfinished"></translation>
+        <source>Update Success</source>
+        <translation>更新成功</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2293"/>
-        <source>固件升级成功！
-设备已重新启动。</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update Success!
+Device already restart.</source>
+        <translation>固件升级成功！
+设备已重新启动。</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2188"/>
-        <source>升级失败</source>
-        <translation type="unfinished"></translation>
+        <source>Update Failed</source>
+        <translation>升级失败</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2140"/>
@@ -2295,9 +2298,10 @@ PulseView可能需要重新启动才能正确显示。</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2189"/>
-        <source>固件升级失败！
-请检查设备连接和固件文件。</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update Failed!
+Please check the device connection and firmware file.</source>
+        <translation>固件升级失败！
+请检查设备连接和固件文件。</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2219"/>
@@ -2309,8 +2313,8 @@ PulseView可能需要重新启动才能正确显示。</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2233"/>
-        <source>打开失败</source>
-        <translation type="unfinished"></translation>
+        <source>Open Failed</source>
+        <translation>打开失败</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2234"/>
@@ -2324,12 +2328,8 @@ PulseView可能需要重新启动才能正确显示。</translation>
         <location filename="../pv/toolbars/mainbar.cpp" line="2221"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="2264"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="2294"/>
-        <source>确定</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Repeat</source>
-        <translation type="vanished">重复</translation>
+        <source>Confirm</source>
+        <translation>确定</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1866"/>
@@ -2360,11 +2360,11 @@ PulseView可能需要重新启动才能正确显示。</translation>
     </message>
     <message>
         <source>Binary Decoder Output View</source>
-        <translation type="vanished">二进制解码器</translation>
+        <translation>二进制解码器</translation>
     </message>
     <message>
         <source>Tabular Decoder Output View</source>
-        <translation type="vanished">表格解码器</translation>
+        <translation>表格解码器</translation>
     </message>
 </context>
 <context>
@@ -2385,7 +2385,7 @@ PulseView可能需要重新启动才能正确显示。</translation>
         <location filename="../pv/views/decoder_binary/view copy.cpp" line="107"/>
         <location filename="../pv/views/decoder_binary/view.cpp" line="107"/>
         <source>Hexdump</source>
-        <translation type="unfinished"></translation>
+        <translation>十六进制转储</translation>
     </message>
     <message>
         <location filename="../pv/views/decoder_binary/view copy.cpp" line="121"/>
@@ -2405,7 +2405,7 @@ PulseView可能需要重新启动才能正确显示。</translation>
         <location filename="../pv/views/decoder_binary/view copy.cpp" line="351"/>
         <location filename="../pv/views/decoder_binary/view.cpp" line="343"/>
         <source>Binary Data Files (*.bin);;All Files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>二进制数据文件 (*.bin);;所有文件 (*)</translation>
     </message>
     <message>
         <location filename="../pv/views/decoder_binary/view copy.cpp" line="370"/>
@@ -2427,22 +2427,7 @@ PulseView可能需要重新启动才能正确显示。</translation>
         <location filename="../pv/views/decoder_binary/view copy.cpp" line="391"/>
         <location filename="../pv/views/decoder_binary/view.cpp" line="383"/>
         <source>Hex Dumps (*.txt);;All Files (*)</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>pv::views::tabular_decoder</name>
-    <message>
-        <source>Show all</source>
-        <translation type="vanished">全部显示</translation>
-    </message>
-    <message>
-        <source>Show all and focus on newest</source>
-        <translation type="vanished">全部显示并锁定最新内容</translation>
-    </message>
-    <message>
-        <source>Show visible in main view</source>
-        <translation type="vanished">只显示当前主窗口内数据的解码</translation>
+        <translation>十六进制转储文件 (*.txt);;所有文件 (*)</translation>
     </message>
 </context>
 <context>
@@ -2496,6 +2481,26 @@ PulseView可能需要重新启动才能正确显示。</translation>
 <context>
     <name>pv::views::tabular_decoder::View</name>
     <message>
+        <source>CSV, commas escaped</source>
+        <translation>CSV, 逗号已转义</translation>
+    </message>
+    <message>
+        <source>CSV, fields quoted</source>
+        <translation>CSV, 字段已加引号</translation>
+    </message>
+    <message>
+        <source>Show all</source>
+        <translation>全部显示</translation>
+    </message>
+    <message>
+        <source>Show all and focus on newest</source>
+        <translation>全部显示并锁定最新内容</translation>
+    </message>
+    <message>
+        <source>Show visible in main view</source>
+        <translation>只显示当前主窗口内数据的解码</translation>
+    </message>
+    <message>
         <location filename="../pv/views/tabular_decoder/view copy.cpp" line="177"/>
         <location filename="../pv/views/tabular_decoder/view.cpp" line="183"/>
         <source>Decoder:</source>
@@ -2523,7 +2528,7 @@ PulseView可能需要重新启动才能正确显示。</translation>
         <location filename="../pv/views/tabular_decoder/view copy.cpp" line="440"/>
         <location filename="../pv/views/tabular_decoder/view.cpp" line="443"/>
         <source>CSV Files (*.csv);;Text Files (*.txt);;All Files (*)</source>
-        <translation></translation>
+        <translation>CSV文件 (*.csv);;文本文件 (*.txt);;所有文件 (*)</translation>
     </message>
     <message>
         <location filename="../pv/views/tabular_decoder/view copy.cpp" line="507"/>
@@ -3422,7 +3427,7 @@ until (condition)
     <message>
         <location filename="../pv/views/trace/signal.cpp" line="155"/>
         <source>Name</source>
-        <translation></translation>
+        <translation>名称</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/signal.cpp" line="169"/>
@@ -3501,7 +3506,7 @@ until (condition)
     <message>
         <location filename="../pv/views/trace/trace.cpp" line="449"/>
         <source>Name</source>
-        <translation></translation>
+        <translation>名称</translation>
     </message>
 </context>
 <context>

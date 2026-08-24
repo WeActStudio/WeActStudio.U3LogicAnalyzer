@@ -214,7 +214,7 @@ A human-readable form has been saved to disk and was written to the log. You may
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="obsolete">Cancelar</translation>
+        <translation>Cancelar</translation>
     </message>
     <message>
         <source>Create New Session</source>
@@ -227,9 +227,10 @@ A human-readable form has been saved to disk and was written to the log. You may
     </message>
     <message>
         <location filename="../pv/mainwindow.cpp" line="100"/>
-        <source>当前可用内存小于4GB，会影响使用效果。
-是否继续使用？</source>
-        <translation type="unfinished"></translation>
+        <source>Current available memory size is less than 4GB and will affect usage effect. 
+Do you want to continue to use?</source>
+        <translation>Obtenemos que la memoria disponible es menor a 4GB y afectará el rendimiento. 
+¿Desea continuar de todas modos?</translation>
     </message>
     <message>
         <location filename="../pv/mainwindow.cpp" line="103"/>
@@ -238,14 +239,8 @@ A human-readable form has been saved to disk and was written to the log. You may
     </message>
     <message>
         <location filename="../pv/mainwindow.cpp" line="105"/>
-        <source>确定</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../pv/mainwindow.cpp" line="106"/>
-        <location filename="../pv/mainwindow.cpp" line="1129"/>
-        <source>取消</source>
-        <translation type="unfinished"></translation>
+        <source>Confirm</source>
+        <translation>Confirmar</translation>
     </message>
     <message>
         <location filename="../pv/mainwindow.cpp" line="338"/>
@@ -310,14 +305,8 @@ A human-readable form has been saved to disk and was written to the log. You may
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1115"/>
-        <source>&lt;h3&gt;有未保存的采集数据&lt;/h3&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../pv/mainwindow.cpp" line="1123"/>
-        <source>退出后数据将永久丢失。</source>
-        <translation type="unfinished"></translation>
+        <source>&lt;h3&gt;Unsaved Capture Data&lt;/h3&gt;&lt;p&gt;Data will be permanently lost on exit.&lt;/p&gt;</source>
+        <translation>&lt;h3&gt;Datos de captura no guardados&lt;/h3&gt;&lt;p&gt;Se perderán permanentemente al salir.&lt;/p&gt;</translation>
     </message>
     <message>
         <location filename="../pv/mainwindow.cpp" line="1128"/>
@@ -624,15 +613,15 @@ A human-readable form has been saved to disk and was written to the log. You may
         <source>You selected a dark theme.
 Should I set the user-adjustable colors to better suit your choice?
 
-Please keep in mind that PulseView may need a restart to display correctly.</source>
-        <translation type="obsolete">Seleccionaste el tema obscuro.\nDebería de establecer los colores ajustables por el usuario que mejor se ajustan a tu elección?\n\nPor favor ten en cuenta que Pulseview tal vez se tenga que reiniciar para mostrar correctamente.</translation>
+Please keep in mind that the application may need a restart to display correctly.</source>
+        <translation type="obsolete">Seleccionaste el tema obscuro.\nDebería de establecer los colores ajustables por el usuario que mejor se ajustan a tu elección?\n\nPor favor ten en cuenta que la aplicación tal vez se tenga que reiniciar para mostrar correctamente.</translation>
     </message>
     <message>
         <source>You selected a bright theme.
 Should I set the user-adjustable colors to better suit your choice?
 
-Please keep in mind that PulseView may need a restart to display correctly.</source>
-        <translation type="obsolete">Seleccionaste el tema brillante.\nDebería de establecer los colores ajustables por el usuario que mejor se ajustan a tu elección?\n\nPor favor ten en cuenta que Pulseview tal vez se tenga que reiniciar para mostrar correctamente.</translation>
+Please keep in mind that the application may need a restart to display correctly.</source>
+        <translation type="obsolete">Seleccionaste el tema brillante.\nDebería de establecer los colores ajustables por el usuario que mejor se ajustan a tu elección?\n\nPor favor ten en cuenta que la aplicación tal vez se tenga que reiniciar para mostrar correctamente.</translation>
     </message>
     <message>
         <source>Save Log</source>
@@ -758,80 +747,80 @@ Please keep in mind that PulseView may need a restart to display correctly.</sou
     <name>pv::dialogs::IAPDialog</name>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="94"/>
-        <source>固件升级</source>
-        <translation type="unfinished"></translation>
+        <source>FW Update</source>
+        <translation>Actualización de FW</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="102"/>
-        <source>固件文件:</source>
-        <translation type="unfinished"></translation>
+        <source>FW File:</source>
+        <translation>Archivo de firmware:</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="104"/>
-        <source>选择BIN或HEX格式固件文件</source>
-        <translation type="unfinished"></translation>
+        <source>Select firmware file in BIN or HEX format</source>
+        <translation>Seleccionar archivo de firmware en formato BIN o HEX</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="106"/>
-        <source>浏览...</source>
-        <translation type="unfinished"></translation>
+        <source>Browse</source>
+        <translation>Buscar</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="116"/>
-        <source>就绪</source>
-        <translation type="unfinished"></translation>
+        <source>Ready</source>
+        <translation>Listo</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="122"/>
-        <source>升级日志:</source>
-        <translation type="unfinished"></translation>
+        <source>Update Log:</source>
+        <translation>Actualizar registro:</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="132"/>
-        <source>开始升级</source>
-        <translation type="unfinished"></translation>
+        <source>Start</source>
+        <translation>Inicio</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="134"/>
         <location filename="../pv/dialogs/iapdialog.cpp" line="194"/>
-        <source>取消</source>
-        <translation type="unfinished"></translation>
+        <source>Cancel</source>
+        <translation>Cancelar</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="161"/>
-        <source>选择固件文件</source>
-        <translation type="unfinished"></translation>
+        <source>Select firmware file</source>
+        <translation>Seleccionar archivo de firmware</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="163"/>
-        <source>固件文件 (*.bin *.hex);;所有文件 (*.*)</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware File (*.bin *.hex);;All Files (*.*)</source>
+        <translation>Firmware File (*.bin *.hex);;All Files (*.*)</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="177"/>
         <location filename="../pv/dialogs/iapdialog.cpp" line="182"/>
-        <source>错误</source>
-        <translation type="unfinished"></translation>
+        <source>Error</source>
+        <translation>Error</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="177"/>
-        <source>请选择固件文件</source>
-        <translation type="unfinished"></translation>
+        <source>Please select a firmware file</source>
+        <translation>Selecciona un archivo de firmware</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="182"/>
-        <source>固件文件不存在</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware file does not exist</source>
+        <translation>Archivo de firmware no existe</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="196"/>
-        <source>开始固件升级...</source>
-        <translation type="unfinished"></translation>
+        <source>Start firmware update...</source>
+        <translation>Comenzar actualización de firmware...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="197"/>
-        <source>设备索引: %1</source>
-        <translation type="unfinished"></translation>
+        <source>Device index: %1</source>
+        <translation>Indice de dispositivo: %1</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="198"/>
@@ -840,55 +829,57 @@ Please keep in mind that PulseView may need a restart to display correctly.</sou
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="220"/>
-        <source>正在取消升级...</source>
-        <translation type="unfinished"></translation>
+        <source>Canceling firmware update...</source>
+        <translation>Cancelar actualización de firmware...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="242"/>
-        <source>关闭</source>
-        <translation type="unfinished"></translation>
+        <source>Close</source>
+        <translation>Cerrar</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="249"/>
-        <source>升级成功</source>
-        <translation type="unfinished"></translation>
+        <source>Update Success</source>
+        <translation>Actualización exitosa</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="250"/>
-        <source>固件升级成功！</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update Success!</source>
+        <translation>Actualización exitosa de firmware</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="251"/>
-        <source>成功</source>
-        <translation type="unfinished"></translation>
+        <source>Success</source>
+        <translation>Éxito</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="251"/>
-        <source>固件升级成功！
-设备将重新启动。</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update Success!
+Device will restart.</source>
+        <translation>Actualización exitosa de firmware
+Dispositivo se reiniciará</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="253"/>
-        <source>升级失败</source>
-        <translation type="unfinished"></translation>
+        <source>Update Failed</source>
+        <translation>Actualización fallida</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="254"/>
-        <source>固件升级失败！</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update Failed!</source>
+        <translation>Actualización fallida de firmware</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="255"/>
-        <source>失败</source>
-        <translation type="unfinished"></translation>
+        <source>Fail</source>
+        <translation>Fallo</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="255"/>
-        <source>固件升级失败！
-请检查设备连接和固件文件。</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update Failed!
+Please check the device connection and firmware file.</source>
+        <translation>Actualización fallida de firmware
+Por favor, compruebe la conexión del dispositivo y el archivo de firmware.</translation>
     </message>
 </context>
 <context>
@@ -1391,7 +1382,7 @@ Please keep in mind that PulseView may need a restart to display correctly.</sou
     </message>
     <message>
         <source>Protocol decoder search paths:</source>
-        <translation type="vanished">Ruta de búsqueda del decodificador de protocolo:</translation>
+        <translation>Ruta de búsqueda del decodificador de protocolo:</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="485"/>
@@ -1734,8 +1725,8 @@ Please keep in mind that PulseView may need a restart to display correctly.</sou
     </message>
     <message>
         <location filename="../pv/popups/channels.cpp" line="1112"/>
-        <source>确定</source>
-        <translation type="unfinished"></translation>
+        <source>Confirm</source>
+        <translation>Confirmar</translation>
     </message>
 </context>
 <context>
@@ -1914,6 +1905,10 @@ Please keep in mind that PulseView may need a restart to display correctly.</sou
         <translation type="vanished">Nueva &amp;Vista</translation>
     </message>
     <message>
+        <source>Warning</source>
+        <translation>Advertencia</translation>
+    </message>
+    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="203"/>
         <source>&amp;Open...</source>
         <translation>&amp;Abrir...</translation>
@@ -2013,23 +2008,23 @@ Please keep in mind that PulseView may need a restart to display correctly.</sou
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="277"/>
-        <source>single</source>
-        <translation type="unfinished"></translation>
+        <source>Single</source>
+        <translation>Unico</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="278"/>
-        <source>repeat</source>
-        <translation type="unfinished"></translation>
+        <source>Repeat</source>
+        <translation>Repetir</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="287"/>
-        <source>version info</source>
-        <translation type="unfinished"></translation>
+        <source>Version Info</source>
+        <translation>Información de versión</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="289"/>
-        <source>Update</source>
-        <translation type="unfinished"></translation>
+        <source>FW Update</source>
+        <translation>Actualización de FW</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="290"/>
@@ -2193,39 +2188,48 @@ Please keep in mind that PulseView may need a restart to display correctly.</sou
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2126"/>
-        <source>版本信息</source>
-        <translation type="unfinished"></translation>
+        <source>Version Info</source>
+        <translation>Información de versión</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Software Version:&lt;/b&gt; %1&lt;br/&gt;</source>
+        <translation>&lt;b&gt;Versión de software:&lt;/b&gt; %1&lt;br/&gt;</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Firmware Version:&lt;/b&gt; %1&lt;br/&gt;</source>
+        <translation>&lt;b&gt;Versión de firmware:&lt;/b&gt; %1&lt;br/&gt;</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2144"/>
-        <source>当前设备不支持固件升级。
-请连接CH32H417设备后重试。</source>
-        <translation type="unfinished"></translation>
+        <source>The current device does not support firmware upgrade.
+Please connect the CH32H417 device and try again.</source>
+        <translation>El dispositivo actual no soporta la actualización de firmware.
+Por favor, conecte el dispositivo CH32H417 y intente de nuevo.</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2153"/>
-        <source>选择固件文件</source>
-        <translation type="unfinished"></translation>
+        <source>Select firmware file</source>
+        <translation>Seleccionar archivo de firmware</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2155"/>
-        <source>固件文件 (*.bin *.BIN *.hex *.HEX);;所有文件 (*.*)</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware File (*.bin *.BIN *.hex *.HEX);;All Files (*.*)</source>
+        <translation>Archivo de firmware (*.bin *.BIN *.hex *.HEX);;Todos los archivos (*.*)</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2165"/>
-        <source>正在升级固件，请勿断开USB连接！</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware update in progress, do not disconnect the USB connection</source>
+        <translation>Actualización de firmware en progreso, no desconecte la conexión USB</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2165"/>
-        <source>取消</source>
-        <translation type="unfinished"></translation>
+        <source>Cancel</source>
+        <translation>Cancelar</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2166"/>
-        <source>固件升级</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update</source>
+        <translation>Actualización de firmware</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2221"/>
@@ -2234,24 +2238,25 @@ Please keep in mind that PulseView may need a restart to display correctly.</sou
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2257"/>
-        <source>关于</source>
-        <translation type="unfinished"></translation>
+        <source>About</source>
+        <translation>Acerca de</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2295"/>
-        <source>升级成功</source>
-        <translation type="unfinished"></translation>
+        <source>Update Success</source>
+        <translation>Actualización exitosa</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2296"/>
-        <source>固件升级成功！
-设备已重新启动。</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update Success!
+Device already restart.</source>
+        <translation>Actualización exitosa de firmware
+Dispositivo ya se reinició</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2191"/>
-        <source>升级失败</source>
-        <translation type="unfinished"></translation>
+        <source>Update Failed</source>
+        <translation>Actualización fallida</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2143"/>
@@ -2260,9 +2265,10 @@ Please keep in mind that PulseView may need a restart to display correctly.</sou
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2192"/>
-        <source>固件升级失败！
-请检查设备连接和固件文件。</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware Update Failed!
+Please check the device connection and firmware file.</source>
+        <translation>Actualización fallida de firmware
+Por favor, compruebe la conexión del dispositivo y el archivo de firmware.</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2222"/>
@@ -2274,8 +2280,8 @@ Please keep in mind that PulseView may need a restart to display correctly.</sou
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2236"/>
-        <source>打开失败</source>
-        <translation type="unfinished"></translation>
+        <source>Open Failed</source>
+        <translation>Abriendo falló</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2237"/>
@@ -2289,8 +2295,8 @@ Please keep in mind that PulseView may need a restart to display correctly.</sou
         <location filename="../pv/toolbars/mainbar.cpp" line="2224"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="2267"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="2297"/>
-        <source>确定</source>
-        <translation type="unfinished"></translation>
+        <source>Confirm</source>
+        <translation>Confirmar</translation>
     </message>
     <message>
         <source>Total sampling time: %1</source>

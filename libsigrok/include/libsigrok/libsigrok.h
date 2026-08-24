@@ -516,7 +516,7 @@ struct sr_datafeed_logic {
 /** Analog datafeed payload for type SR_DF_ANALOG. */
 struct sr_datafeed_analog {
 	void *data;
-	uint32_t num_samples;
+	uint64_t num_samples;
 	struct sr_analog_encoding *encoding;
 	struct sr_analog_meaning *meaning;
 	struct sr_analog_spec *spec;

@@ -57,7 +57,7 @@
 #include "views/trace/logicsignal.hpp"
 #include "views/trace/signal.hpp"
 #include "views/trace/view.hpp"
-#include <libusb.h>
+#include <libusb-1.0/libusb.h>
 #include <libsigrokcxx/libsigrokcxx.hpp>
 #include <fstream>
 using namespace std;
@@ -246,6 +246,11 @@ void Session::save_setup(QSettings &settings) const
 	int decode_signal_count = 0;
 	int gen_signal_count = 0;
 
+	// Save sample count and sample rate from MainBar
+	if (main_bar_) {
+		main_bar_->save_setup(settings);
+	}
+
 	// Save channels and decoders
 	for (const shared_ptr<data::SignalBase>& base : signalbases_) {
 #ifdef ENABLE_DECODE
@@ -339,9 +344,9 @@ void Session::save_settings(QSettings &settings) const
 			WchDeviceType dev_type = get_wch_device_type_by_driver(
 				hw_device->hardware_device()->driver()->name());
 			if (dev_type == WchDeviceType::CH569)
-				settings.setValue("device_type", "USB3.0(CH569) Logic");
+				settings.setValue("device_type", "CH569 Logic");
 			else if (dev_type == WchDeviceType::CH32H417)
-				settings.setValue("device_type", "USB3.0(CH32H417) Logic");
+				settings.setValue("device_type", "CH32H417 Logic");
 			else
 				settings.setValue("device_type", "hardware");
 			settings.beginGroup("device");
@@ -404,11 +409,31 @@ void Session::save_settings(QSettings &settings) const
 void Session::restore_setup(QSettings &settings)
 {
 #if 1
+	// Restore sample count and sample rate to MainBar
+	if (main_bar_) {
+		main_bar_->restore_setup(settings);
+	}
+
 	// Restore channels
 	for (shared_ptr<data::SignalBase> base : signalbases_) {
-		settings.beginGroup(base->internal_name());
+		QString group_key = base->internal_name();
+		if (!settings.childGroups().contains(group_key)) {
+			QString prefix = (base->type() == data::SignalBase::AnalogChannel) ? "A" : "D";
+			QString fallback_key = prefix + QString::number(base->index());
+			if (settings.childGroups().contains(fallback_key))
+				group_key = fallback_key;
+		}
+		settings.beginGroup(group_key);
 		base->restore_settings(settings);
 		settings.endGroup();
+	}
+
+	for (shared_ptr<data::SignalBase> base : signalbases_) {
+		if (!base->enabled() && !base->is_generated()) {
+			for (shared_ptr<views::ViewBase>& viewbase : views_) {
+				viewbase->remove_signalbase(base);
+			}
+		}
 	}
 
 	// Restore generated signals
@@ -505,7 +530,7 @@ void Session::restore_settings(QSettings &settings)
 	shared_ptr<devices::Device> device;
 
 	const QString device_type = settings.value("device_type").toString();
-	if (device_type == "USB3.0(CH569) Logic" || device_type == "USB3.0(CH32H417) Logic") {
+	if (device_type == "CH569 Logic" || device_type == "CH32H417 Logic") {
 		bool already_demo = false;
 		if (device_) {
 			shared_ptr<devices::HardwareDevice> hw_dev =
@@ -654,6 +679,7 @@ void Session::set_device(shared_ptr<devices::Device> device)
 	// Revert name back to default name (e.g. "Session 1") as the data is gone
 	name_ = default_name_;
 	name_changed();
+	save_path_.clear();
 
 	// Remove all stored data and reset all views
 	for (shared_ptr<views::ViewBase> view : views_) {
@@ -1320,10 +1346,25 @@ void Session::update_signals()
 
 		if (logic_channel_count == 0) {
 			logic_data_.reset();
-		} else if (!logic_data_ ||
-			logic_data_->num_channels() != logic_channel_count) {
+		} else if (!logic_data_) {
+			// No existing logic data, create new one
 			logic_data_.reset(new data::Logic(logic_channel_count));
 			assert(logic_data_);
+			for (auto& sb : signalbases_) {
+				if (sb->type() == data::SignalBase::LogicChannel)
+					sb->set_data(logic_data_);
+			}
+			for (auto it = all_signal_data_.begin(); it != all_signal_data_.end(); ) {
+				if (dynamic_pointer_cast<data::Logic>(*it))
+					it = all_signal_data_.erase(it);
+				else
+					++it;
+			}
+			all_signal_data_.insert(logic_data_);
+		} else if (logic_data_->num_channels() != logic_channel_count) {
+			if (logic_channel_count > logic_data_->num_channels()) {
+				logic_data_->set_num_channels(logic_channel_count);
+			}
 		}
 	}
 
@@ -1394,6 +1435,9 @@ void Session::update_signals()
 		// Add all non-decode signalbases that don't yet exist in the view
 		for (shared_ptr<SignalBase>& session_sb : signalbases_) {
 			if (session_sb->type() == SignalBase::DecodeChannel)
+				continue;
+
+			if (!session_sb->enabled())
 				continue;
 
 			const auto iter = find_if(view_signalbases.cbegin(), view_signalbases.cend(),
@@ -1733,10 +1777,13 @@ void Session::feed_in_logic(shared_ptr<sigrok::Logic> logic)
 
 	if (logic->unit_size() > 8)
 		throw QString(tr("Can't handle more than 64 logic channels."));
-	try {
-		cur_samplerate_ = device_->read_config<uint64_t>(ConfigKey::SAMPLERATE);
-	} catch (Error& e) {
-		// Do nothing
+		
+	if (!cur_samplerate_) {
+		try {
+			cur_samplerate_ = device_->read_config<uint64_t>(ConfigKey::SAMPLERATE);
+		} catch (Error& e) {
+			// Do nothing
+		}
 	}
 
 	lock_guard<recursive_mutex> lock(data_mutex_);
@@ -1754,7 +1801,8 @@ void Session::feed_in_logic(shared_ptr<sigrok::Logic> logic)
 		// Create a new data segment
 		cur_logic_segment_ = make_shared<data::LogicSegment>(
 			*logic_data_, logic_data_->get_segment_count(),
-			logic->unit_size() , cur_samplerate_);
+			logic->unit_size() , cur_samplerate_,
+			main_bar_->get_sample_count());
 		logic_data_->push_segment(cur_logic_segment_);
 		if (!is_wch_device(main_bar_->get_vendorName()) && main_bar_->get_vendorName() != "demo") {
 			logic_channel_count_ = 16;
@@ -1763,7 +1811,7 @@ void Session::feed_in_logic(shared_ptr<sigrok::Logic> logic)
 		}
 		cur_logic_segment_->set_channel_numner(logic_channel_count_);
 		signal_new_segment();
-		connect(cur_logic_segment_.get(), SIGNAL(notifyError()), this, SLOT(on_show_Error()));
+		connect(cur_logic_segment_.get(), SIGNAL(memoryError()), this, SLOT(on_show_Error()));
 	}
 	cur_logic_segment_->append_payload(logic);
 	segment_sample_count_[highest_segment_id_] =

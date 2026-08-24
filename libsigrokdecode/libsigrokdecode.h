@@ -64,6 +64,7 @@ struct srd_session;
 /** Status/error codes returned by libsigrokdecode functions. */
 enum srd_error_code {
 	SRD_OK               =  0, /**< No error */
+	SRD_CHUNK_SKIPPED    =  1, /**< Chunk was skipped by fast path (no Python call) */
 	SRD_ERR              = -1, /**< Generic/unspecified error */
 	SRD_ERR_MALLOC       = -2, /**< Malloc/calloc/realloc error */
 	SRD_ERR_ARG          = -3, /**< Function argument error */
@@ -250,7 +251,6 @@ struct srd_decoder_inst {
 	GSList *pd_output;
 	int dec_num_channels;
 	int *dec_channelmap;
-	int data_unitsize;
 	uint8_t *channel_samples;
 	GSList *next_di;
 
@@ -266,8 +266,17 @@ struct srd_decoder_inst {
 	/** Absolute end sample number. */
 	uint64_t abs_end_samplenum;
 
-	/** Pointer to the buffer/chunk of input samples. */
+	/** Pointer to the interleaved buffer/chunk of input samples. */
 	const uint8_t *inbuf;
+
+	/** Number of bytes per sample in the interleaved buffer. */
+	int data_unitsize;
+
+	/** Bitmask of channels that are constant in this chunk. */
+	uint64_t constant_channel_mask;
+
+	/** Constant values for constant channels (bit per channel). */
+	uint64_t constant_channel_values;
 
 	/** Length (in bytes) of the input sample buffer. */
 	uint64_t inbuflen;
@@ -354,8 +363,13 @@ SRD_API int srd_session_metadata_set(struct srd_session *sess, int key,
 		GVariant *data);
 SRD_API int srd_session_send(struct srd_session *sess,
 		uint64_t abs_start_samplenum, uint64_t abs_end_samplenum,
-		const uint8_t *inbuf, uint64_t inbuflen, uint64_t unitsize);
+		const uint8_t *inbuf, uint64_t inbuflen, uint64_t unitsize,
+		uint64_t constant_channel_mask, uint64_t constant_channel_values);
 SRD_API int srd_session_send_eof(struct srd_session *sess);
+SRD_API int srd_session_skip_chunk(struct srd_session *sess,
+		uint64_t abs_start_samplenum, uint64_t abs_end_samplenum,
+		uint64_t constant_channel_mask, uint64_t constant_channel_values,
+		const uint8_t *first_sample, int unitsize);
 SRD_API int srd_session_terminate_reset(struct srd_session *sess);
 SRD_API int srd_session_destroy(struct srd_session *sess);
 SRD_API int srd_pd_output_callback_add(struct srd_session *sess,
@@ -383,6 +397,7 @@ SRD_API struct srd_decoder_inst *srd_inst_find_by_id(struct srd_session *sess,
 		const char *inst_id);
 SRD_API int srd_inst_initial_pins_set_all(struct srd_decoder_inst *di,
 		GArray *initial_pins);
+
 
 /* log.c */
 typedef int (*srd_log_callback)(void *cb_data, int loglevel,

@@ -506,6 +506,8 @@ SR_PRIV gboolean ch32h417_detect_usb_speed(const struct sr_dev_inst *sdi)
 
 	devc = sdi->priv;
 
+	g_usleep(50000);
+
 	length = sizeof(descr);
 	if (!ch375_get_device_descr(devc->device_index, descr, &length)) {
 		sr_warn("Failed to get device descriptor, assuming USB 3.0");

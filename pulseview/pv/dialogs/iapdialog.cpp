@@ -87,18 +87,18 @@ void IAPDialog::set_firmware_path(const QString &path)
 
 void IAPDialog::setup_ui()
 {
-    setWindowTitle(tr("固件升级"));
+    setWindowTitle(tr("FW Update"));
     setMinimumWidth(500);
     setMinimumHeight(400);
 
     QVBoxLayout *main_layout = new QVBoxLayout(this);
 
     QGridLayout *file_layout = new QGridLayout();
-    file_layout->addWidget(new QLabel(tr("固件文件:")), 0, 0);
+    file_layout->addWidget(new QLabel(tr("FW File:")), 0, 0);
     file_edit_ = new QLineEdit();
-    file_edit_->setPlaceholderText(tr("选择BIN或HEX格式固件文件"));
+    file_edit_->setPlaceholderText(tr("Select firmware file in BIN or HEX format"));
     file_layout->addWidget(file_edit_, 0, 1);
-    browse_btn_ = new QPushButton(tr("浏览..."));
+    browse_btn_ = new QPushButton(tr("Browse"));
     file_layout->addWidget(browse_btn_, 0, 2);
     main_layout->addLayout(file_layout);
 
@@ -107,12 +107,12 @@ void IAPDialog::setup_ui()
     progress_bar_->setRange(0, 100);
     progress_bar_->setValue(0);
     progress_layout->addWidget(progress_bar_);
-    status_label_ = new QLabel(tr("就绪"));
+    status_label_ = new QLabel(tr("Ready"));
     status_label_->setMinimumWidth(100);
     progress_layout->addWidget(status_label_);
     main_layout->addLayout(progress_layout);
 
-    QLabel *log_label = new QLabel(tr("升级日志:"));
+    QLabel *log_label = new QLabel(tr("Update Log:"));
     main_layout->addWidget(log_label);
     log_text_ = new QTextEdit();
     log_text_->setReadOnly(true);
@@ -121,9 +121,9 @@ void IAPDialog::setup_ui()
 
     QHBoxLayout *btn_layout = new QHBoxLayout();
     btn_layout->addStretch();
-    start_btn_ = new QPushButton(tr("开始升级"));
+    start_btn_ = new QPushButton(tr("Start"));
     start_btn_->setDefault(true);
-    cancel_btn_ = new QPushButton(tr("取消"));
+    cancel_btn_ = new QPushButton(tr("Cancel"));
     btn_layout->addWidget(start_btn_);
     btn_layout->addWidget(cancel_btn_);
     main_layout->addLayout(btn_layout);
@@ -149,9 +149,9 @@ void IAPDialog::on_browse_clicked()
 {
     QString file_name = QFileDialog::getOpenFileName(
         this,
-        tr("选择固件文件"),
+        tr("Select firmware file"),
         QString(),
-        tr("固件文件 (*.bin *.hex);;所有文件 (*.*)")
+        tr("Firmware File (*.bin *.hex);;All Files (*.*)")
     );
 
     if (!file_name.isEmpty()) {
@@ -165,12 +165,12 @@ void IAPDialog::on_start_clicked()
     firmware_path_ = file_edit_->text();
 
     if (firmware_path_.isEmpty()) {
-        QMessageBox::warning(this, tr("错误"), tr("请选择固件文件"));
+        QMessageBox::warning(this, tr("Error"), tr("Please select a firmware file"));
         return;
     }
 
     if (!QFile::exists(firmware_path_)) {
-        QMessageBox::warning(this, tr("错误"), tr("固件文件不存在"));
+        QMessageBox::warning(this, tr("Error"), tr("Firmware file does not exist"));
         return;
     }
 
@@ -182,10 +182,10 @@ void IAPDialog::on_start_clicked()
     start_btn_->setEnabled(false);
     browse_btn_->setEnabled(false);
     file_edit_->setEnabled(false);
-    cancel_btn_->setText(tr("取消"));
+    cancel_btn_->setText(tr("Cancel"));
 
-    log(tr("开始固件升级..."));
-    log(tr("设备索引: %1").arg(device_index_));
+    log(tr("Start firmware update..."));
+    log(tr("Device index: %1").arg(device_index_));
     log(tr("IAP VID: 0x%1, PID: 0x%2").arg(iap_vid_, 4, 16, QChar('0')).arg(iap_pid_, 4, 16, QChar('0')));
 
     /* 创建工作线程 */
@@ -208,7 +208,7 @@ void IAPDialog::on_cancel_clicked()
 {
     if (is_upgrading_ && worker_) {
         worker_->cancel();
-        log(tr("正在取消升级..."));
+        log(tr("Canceling firmware update..."));
     } else {
         reject();
     }
@@ -230,31 +230,32 @@ void IAPDialog::on_upgrade_finished(bool success)
     start_btn_->setEnabled(true);
     browse_btn_->setEnabled(true);
     file_edit_->setEnabled(true);
-    cancel_btn_->setText(tr("关闭"));
+    cancel_btn_->setText(tr("Close"));
 
     worker_ = nullptr;
     worker_thread_ = nullptr;
 
     if (success) {
-        update_progress(100, tr("升级成功"));
-        log(tr("固件升级成功！"));
-        QMessageBox::information(this, tr("成功"), tr("固件升级成功！\n设备将重新启动。"));
+        update_progress(100, tr("Update Success"));
+        log(tr("Firmware Update Success!"));
+        QMessageBox::information(this, tr("Success"), tr("Firmware Update Success!\nDevice will restart."));
     } else {
-        update_progress(0, tr("升级失败"));
-        log(tr("固件升级失败！"));
-        QMessageBox::critical(this, tr("失败"), tr("固件升级失败！\n请检查设备连接和固件文件。"));
+        update_progress(0, tr("Update Failed"));
+        log(tr("Firmware Update Failed!"));
+        QMessageBox::critical(this, tr("Fail"), tr("Firmware Update Failed!\nPlease check the device connection and firmware file."));
     }
 }
 
 /* IAPWorker implementation */
 
 IAPWorker::IAPWorker(int device_index, const QString &firmware_path,
-                     uint16_t iap_vid, uint16_t iap_pid)
+                     uint16_t iap_vid, uint16_t iap_pid, bool already_in_hid_mode)
     : device_index_(device_index)
     , firmware_path_(firmware_path)
     , iap_vid_(iap_vid)
     , iap_pid_(iap_pid)
     , hid_handle_(nullptr)
+    , already_in_hid_mode_(already_in_hid_mode)
     , cancelled_(false)
 {
 }
@@ -775,10 +776,15 @@ void IAPWorker::do_work()
         return;
     }
 
-    update_progress(10, tr("进入IAP模式..."));
-    if (!enter_iap_mode()) {
-        Q_EMIT finished(false);
-        return;
+    if (already_in_hid_mode_) {
+        log(tr("设备已处于HID/IAP模式，跳过模式切换"));
+        update_progress(10, tr("设备已处于IAP模式..."));
+    } else {
+        update_progress(10, tr("进入IAP模式..."));
+        if (!enter_iap_mode()) {
+            Q_EMIT finished(false);
+            return;
+        }
     }
 
     update_progress(15, tr("查找HID设备..."));

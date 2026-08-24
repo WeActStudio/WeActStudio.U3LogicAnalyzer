@@ -98,7 +98,7 @@ static const int32_t trigger_matches[] = {
 };
 
 static const uint64_t samplerates[] = {
-	SR_MHZ(4),
+	SR_MHZ(5),
 	SR_GHZ(1),
 	SR_HZ(1),
 };

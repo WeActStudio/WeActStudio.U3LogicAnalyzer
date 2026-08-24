@@ -65,6 +65,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <dwmapi.h>
 #elif defined(__APPLE__)
 #include <mach/mach.h>
 #else
@@ -97,6 +98,9 @@ MainWindow::MainWindow(QWidget *parent) :
 	icon_green_(":/icons/status-green.svg"),
 	icon_grey_(":/icons/status-grey.svg")
 {
+	installEventFilter(this);
+    qApp->installEventFilter(this);
+
 	//Check memory size
 	shared_ptr<sigrok::Context> context = sigrok::Context::create();
 	device_manager_ = new pv::DeviceManager(context, "", true);
@@ -107,13 +111,13 @@ MainWindow::MainWindow(QWidget *parent) :
 
 bool MainWindow::checkSystemRequirements()
 {
-	int memFree = INT_MAX;
+	int memFree;
 
 #ifdef _WIN32
 	MEMORYSTATUSEX statex;
 	statex.dwLength = sizeof(statex);
 	GlobalMemoryStatusEx(&statex);
-	memFree = statex.ullAvailPhys / GB;
+	memFree = statex.ullAvailPhys * 1.0 / GB;
 #elif defined(__APPLE__)
 	vm_size_t page_size;
 	if (host_page_size(mach_host_self(), &page_size) == KERN_SUCCESS) {
@@ -135,15 +139,13 @@ bool MainWindow::checkSystemRequirements()
 
 	if (memFree < 4){
 		QDialog dialog(nullptr);
-		dialog.setWindowTitle(tr("提示"));
+		dialog.setWindowTitle(tr("Warning"));
 
 		// 设置更大的字体
 		QFont font = dialog.font();
 		font.setPointSize(font.pointSize() + 2);
 		dialog.setFont(font);
-
-		// 设置对话框大小
-		dialog.setFixedSize(300, 160);
+		dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint | Qt::WindowStaysOnTopHint);
 
 		QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
@@ -158,7 +160,7 @@ bool MainWindow::checkSystemRequirements()
 
 		// 创建文本标签
 		QLabel *label = new QLabel(&dialog);
-		label->setText(tr("当前可用内存小于4GB，会影响使用效果。\n是否继续使用？"));
+		label->setText(tr("Current available memory size is less than 4GB and will affect usage effect. \nDo you want to continue to use?"));
 		label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 		contentLayout->addWidget(label, 1);
 
@@ -167,8 +169,8 @@ bool MainWindow::checkSystemRequirements()
 		// 创建按钮
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 		buttonLayout->addStretch();
-		QPushButton *okBtn = new QPushButton(tr("确定"), &dialog);
-		QPushButton *cancelBtn = new QPushButton(tr("取消"), &dialog);
+		QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
+		QPushButton *cancelBtn = new QPushButton(tr("Cancel"), &dialog);
 		buttonLayout->addWidget(okBtn);
 		buttonLayout->addWidget(cancelBtn);
 		layout->addLayout(buttonLayout);
@@ -337,6 +339,7 @@ shared_ptr<views::ViewBase> MainWindow::add_view(views::ViewType type,
 			connect(main_bar.get(), SIGNAL(show_decoder_selector(Session*)),
 				this, SLOT(on_show_decoder_selector(Session*)));
 			connect(main_bar.get(), SIGNAL(run_stop_button_clicked()), this, SLOT(on_run_stop_clicked()));
+			connect(main_bar.get(), SIGNAL(settings_triggered()), this, SLOT(on_settings_clicked()));
 
 			main_bar->action_view_show_cursors()->setChecked(tv->cursors_shown());
 			session.set_main_bar(main_bar);
@@ -542,10 +545,8 @@ void MainWindow::do_device_detach_switch()
 		last_focused_session_->select_device(default_device);
 		if (default_device) {
 			if (found_device_type != WchDeviceType::None) {
-				QString device_name = (found_device_type == WchDeviceType::CH569)
-					? "USB3.0(CH569)" : "USB3.0(CH32H417)";
-				QString vendor_name = (found_device_type == WchDeviceType::CH569)
-					? "USB3.0(CH569)" : "USB3.0(CH32H417)";
+				QString device_name = DeviceModelNames[static_cast<int>(found_device_type)];
+				QString vendor_name = device_name;
 				last_focused_session_->main_bar()->set_device_selector_name(device_name);
 				last_focused_session_->main_bar()->set_vendorName(vendor_name);
 				restore_sessions();
@@ -568,34 +569,73 @@ void MainWindow::show_device_detach()
 
 	attach_process_done = false;
 
-	QMessageBox* msgBox = new QMessageBox(this);
-	msgBox->setWindowTitle(tr("警告"));
-	msgBox->setText(tr("设备已断开！\n是否保存会话？"));
-	msgBox->setIcon(QMessageBox::Warning);
-	QPushButton* saveBtn = msgBox->addButton(tr("保存"), QMessageBox::AcceptRole);
-	QPushButton* cancelBtn = msgBox->addButton(tr("不保存"), QMessageBox::RejectRole);
-	msgBox->setModal(false);
+	QDialog* dialog = new QDialog(this);
+	dialog->setWindowTitle(tr("警告"));
 
-	connect(msgBox, &QMessageBox::buttonClicked, [=](QAbstractButton* button){
-		if (button == saveBtn) {
-			if (last_focused_session_->main_bar()->channels_ &&
-				is_wch_device(last_focused_session_->main_bar()->channels_->device_name_)) {
-				save_sessions();
-				last_focused_session_->main_bar()->set_setting_default();
-			}
+	// 设置更大的字体
+	QFont font = dialog->font();
+	font.setPointSize(font.pointSize() + 2);
+	dialog->setFont(font);
+
+	QVBoxLayout *layout = new QVBoxLayout(dialog);
+	layout->setContentsMargins(28, 24, 28, 20);
+	layout->setSpacing(20);
+
+	// 创建图标和文本布局
+	QHBoxLayout *contentLayout = new QHBoxLayout();
+	contentLayout->setSpacing(18);
+
+	// 创建图标标签
+	QLabel *iconLabel = new QLabel(dialog);
+	iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Warning));
+	iconLabel->setAlignment(Qt::AlignTop);
+	contentLayout->addWidget(iconLabel);
+
+	// 创建文本标签
+	QLabel *label = new QLabel(dialog);
+	label->setText(tr("设备已断开！\n是否保存会话？"));
+	label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
+	label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+	contentLayout->addWidget(label, 1);
+
+	layout->addLayout(contentLayout);
+
+	// 创建按钮
+	QHBoxLayout *buttonLayout = new QHBoxLayout();
+	buttonLayout->setSpacing(12);
+	buttonLayout->addStretch();
+	QPushButton *saveBtn = new QPushButton(tr("保存"), dialog);
+	QPushButton *cancelBtn = new QPushButton(tr("不保存"), dialog);
+	saveBtn->setMinimumWidth(90);
+	cancelBtn->setMinimumWidth(90);
+	buttonLayout->addWidget(saveBtn);
+	buttonLayout->addWidget(cancelBtn);
+	layout->addLayout(buttonLayout);
+
+	// 根据内容自动计算大小，禁止窗口缩放
+	dialog->setFixedSize(dialog->sizeHint());
+
+	// 非模态显示
+	dialog->setModal(false);
+
+	connect(saveBtn, &QPushButton::clicked, [=](){
+		if (last_focused_session_->main_bar()->channels_ &&
+			is_wch_device(last_focused_session_->main_bar()->channels_->device_name_)) {
+			save_sessions();
+			last_focused_session_->main_bar()->set_setting_default();
 		}
 		do_device_detach_switch();
 		attach_process_done = true;
-		msgBox->deleteLater();
+		dialog->deleteLater();
 	});
 
-	connect(msgBox, &QMessageBox::rejected, [=](){
+	connect(cancelBtn, &QPushButton::clicked, [=](){
 		do_device_detach_switch();
 		attach_process_done = true;
-		msgBox->deleteLater();
+		dialog->deleteLater();
 	});
 
-	msgBox->show();
+	dialog->show();
 }
 
 void sleep_ex(unsigned int msec)
@@ -633,8 +673,8 @@ void MainWindow::on_device_attached()
 		device_manager->devices();
 
 	QString currentVendorName = last_focused_session_->main_bar()->get_vendorName();
-	bool is_using_ch569 = (currentVendorName == "USB3.0(CH569)");
-	bool is_using_ch32h417 = (currentVendorName == "USB3.0(CH32H417)");
+	bool is_using_ch569 = (currentVendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH569)]);
+	bool is_using_ch32h417 = (currentVendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]);
 
 	bool current_device_still_exists = false;
 	if (is_using_ch569) {
@@ -691,10 +731,8 @@ void MainWindow::on_device_attached()
 
 		if (default_device) {
 			last_focused_session_->select_device(default_device);
-			QString device_name = (found_device_type == WchDeviceType::CH569)
-				? "USB3.0(CH569)" : "USB3.0(CH32H417)";
-			QString vendor_name = (found_device_type == WchDeviceType::CH569)
-				? "USB3.0(CH569)" : "USB3.0(CH32H417)";
+			QString device_name = DeviceModelNames[static_cast<int>(found_device_type)];
+			QString vendor_name = device_name;
 			last_focused_session_->main_bar()->set_device_selector_name(device_name);
 			last_focused_session_->main_bar()->set_vendorName(vendor_name);
 			restore_sessions();
@@ -1141,22 +1179,19 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	if (!data_saved)
 	{
 		QDialog dialog(this);
-		dialog.setWindowTitle(tr("警告"));
+		dialog.setWindowTitle(tr("Warning"));
 
 		// 设置更大的字体
 		QFont font = dialog.font();
 		font.setPointSize(font.pointSize() + 2);
 		dialog.setFont(font);
-
-		// 直接设置对话框大小
-		dialog.setFixedSize(300, 160);
+		dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
 		QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
 		// 创建标签
 		QLabel *label = new QLabel(&dialog);
-		label->setText(tr("<h3>有未保存的采集数据</h3>"
-						  "<p>退出后数据将永久丢失。</p>"));
+		label->setText(tr("<h3>Unsaved Capture Data</h3><p>Data will be permanently lost on exit.</p>"));
 		label->setTextFormat(Qt::RichText);
 		label->setAlignment(Qt::AlignCenter);
 		layout->addWidget(label);
@@ -1164,7 +1199,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 		// 创建按钮
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 		QPushButton *discardBtn = new QPushButton(tr("Discard && Exit"), &dialog);
-		QPushButton *cancelBtn = new QPushButton(tr("取消"), &dialog);
+		QPushButton *cancelBtn = new QPushButton(tr("Cancel"), &dialog);
 
 		buttonLayout->addStretch();
 		buttonLayout->addWidget(discardBtn);
@@ -1551,6 +1586,34 @@ void MainWindow::on_close_current_tab()
 void MainWindow::on_close_decoder_dock(Session *session)
 {
 	on_show_decoder_selector(session);
+}
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *event)
+{
+    if (event->type() == QEvent::Show)
+    {
+        if (QWidget *w = qobject_cast<QWidget*>(obj))
+        {
+			#ifdef _WIN32
+            // 排除顶层之外的子widget，只处理独立顶层窗口
+            if(w->isTopLevel())
+            {
+                HWND hwnd = reinterpret_cast<HWND>(w->winId());
+                if(hwnd)
+                {
+                    BOOL useDark = TRUE;
+                    HRESULT hr = DwmSetWindowAttribute(hwnd, 20, &useDark, sizeof(useDark));
+					if(SUCCEEDED(hr))
+					{
+						MARGINS margins = {0,0,0,1};
+						DwmExtendFrameIntoClientArea(hwnd, &margins);
+					}
+                }
+            }
+			#endif
+        }
+    }
+    return QObject::eventFilter(obj, event);
 }
 
 } // namespace pv

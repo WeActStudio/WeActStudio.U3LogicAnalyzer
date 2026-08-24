@@ -151,7 +151,7 @@ public:
      * @param iap_pid IAP模式PID
      */
     IAPWorker(int device_index, const QString &firmware_path,
-              uint16_t iap_vid, uint16_t iap_pid);
+              uint16_t iap_vid, uint16_t iap_pid, bool already_in_hid_mode = false);
     ~IAPWorker();
 
     void start();
@@ -195,6 +195,7 @@ private:
     uint16_t iap_pid_;
 
     void *hid_handle_;              /* hidapi设备句柄 */
+    bool already_in_hid_mode_;      /* 设备是否已处于HID模式 */
     bool cancelled_;                /* 取消标志 */
     QMutex mutex_;                  /* 互斥锁 */
 };

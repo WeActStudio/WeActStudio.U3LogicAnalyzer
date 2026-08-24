@@ -63,7 +63,7 @@ typedef struct {
 	struct srd_decoder_inst *di;
 	uint64_t abs_start_samplenum;
 	unsigned int itercnt;
-	uint8_t *inbuf;
+	const uint8_t *inbuf;
 	uint64_t inbuflen;
 	PyObject *sample;
 } srd_logic;
@@ -91,7 +91,8 @@ SRD_PRIV void match_array_free(struct srd_decoder_inst *di);
 SRD_PRIV void condition_list_free(struct srd_decoder_inst *di);
 SRD_PRIV int srd_inst_decode(struct srd_decoder_inst *di,
 		uint64_t abs_start_samplenum, uint64_t abs_end_samplenum,
-		const uint8_t *inbuf, uint64_t inbuflen, uint64_t unitsize);
+		const uint8_t *inbuf, uint64_t inbuflen, uint64_t unitsize,
+		uint64_t constant_channel_mask, uint64_t constant_channel_values);
 SRD_PRIV int process_samples_until_condition_match(struct srd_decoder_inst *di, gboolean *found_match);
 SRD_PRIV int srd_inst_flush(struct srd_decoder_inst *di);
 SRD_PRIV int srd_inst_send_eof(struct srd_decoder_inst *di);

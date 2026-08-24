@@ -1,8 +1,10 @@
 /*
- * This file is part of the libsigrokdecode project.
+ * This file is part of the LogicAnalyzer project.
+ * LogicAnalyzer is based on PulseView.
  *
  * Copyright (C) 2010 Uwe Hermann <uwe@hermann-uwe.de>
  * Copyright (C) 2012 Bert Vermeulen <bert@biot.com>
+ * Copyright (C) 2026 Q2H2
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -421,6 +423,8 @@ SRD_API struct srd_decoder_inst *srd_inst_new(struct srd_session *sess,
 	di->abs_end_samplenum = 0;
 	di->inbuf = NULL;
 	di->inbuflen = 0;
+	di->constant_channel_mask = 0;
+	di->constant_channel_values = 0;
 	di->abs_cur_samplenum = 0;
 	di->thread_handle = NULL;
 	di->got_new_samples = FALSE;
@@ -496,6 +500,8 @@ static void srd_inst_reset_state(struct srd_decoder_inst *di)
 	di->abs_end_samplenum = 0;
 	di->inbuf = NULL;
 	di->inbuflen = 0;
+	di->constant_channel_mask = 0;
+	di->constant_channel_values = 0;
 	di->abs_cur_samplenum = 0;
 	oldpins_array_free(di);
 	di->got_new_samples = FALSE;
@@ -823,6 +829,114 @@ static gboolean have_non_null_conds(const struct srd_decoder_inst *di)
 	return FALSE;
 }
 
+static gboolean have_skip_terms_pending(const struct srd_decoder_inst *di)
+{
+	GSList *l, *ll;
+	struct srd_term *term;
+
+	if (!di)
+		return FALSE;
+
+	for (l = di->condition_list; l; l = l->next) {
+		for (ll = l->data; ll; ll = ll->next) {
+			term = ll->data;
+			if (term->type == SRD_TERM_SKIP &&
+			    term->num_samples_already_skipped < term->num_samples_to_skip)
+				return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+static int64_t find_next_edge_offset(const struct srd_decoder_inst *di,
+		int ch, uint64_t from_offset, uint64_t max_offset)
+{
+	int sig_index, byte_offset, bit_offset;
+	uint8_t bit_mask, old_val;
+	const uint8_t *base;
+	uint64_t s;
+
+	if (!di || !di->dec_channelmap || !di->inbuf)
+		return -1;
+
+	sig_index = di->dec_channelmap[ch];
+	if (sig_index == -1)
+		return -1;
+
+	byte_offset = sig_index / 8;
+	bit_offset = sig_index % 8;
+	bit_mask = (1 << bit_offset);
+	base = di->inbuf + byte_offset;
+
+	/* Get the current value of the channel at from_offset */
+	old_val = (base[from_offset * di->data_unitsize] & bit_mask) ? 1 : 0;
+
+	/* Scan for the first sample where the bit value differs */
+	for (s = from_offset + 1; s < max_offset; s++) {
+		uint8_t cur = (base[s * di->data_unitsize] & bit_mask) ? 1 : 0;
+		if (cur != old_val)
+			return (int64_t)s;
+	}
+
+	return -1; /* No edge found */
+}
+
+static uint64_t find_earliest_skip_match(struct srd_decoder_inst *di, uint64_t max_advance)
+{
+	GSList *sll, *stl;
+	struct srd_term *st;
+	uint64_t min_to_match = UINT64_MAX;
+
+	if (!di || max_advance == 0)
+		return UINT64_MAX;
+
+	for (sll = di->condition_list; sll; sll = sll->next) {
+		if (!sll->data) continue;
+		for (stl = sll->data; stl; stl = stl->next) {
+			st = stl->data;
+			if (st->type == SRD_TERM_SKIP) {
+				uint64_t left = st->num_samples_to_skip - st->num_samples_already_skipped;
+				if (left <= max_advance && left < min_to_match)
+					min_to_match = left;
+			}
+		}
+	}
+
+	return min_to_match;
+}
+
+static uint64_t advance_skip_terms(struct srd_decoder_inst *di, uint64_t num_samples)
+{
+	GSList *sll, *stl;
+	struct srd_term *st;
+	uint64_t min_to_match = UINT64_MAX;
+
+	if (!di || num_samples == 0)
+		return UINT64_MAX;
+
+	for (sll = di->condition_list; sll; sll = sll->next) {
+		if (!sll->data) continue;
+		for (stl = sll->data; stl; stl = stl->next) {
+			st = stl->data;
+			if (st->type == SRD_TERM_SKIP) {
+				uint64_t left = st->num_samples_to_skip - st->num_samples_already_skipped;
+				if (left <= num_samples) {
+					/* SKIP will reach its target within num_samples */
+					st->num_samples_already_skipped = st->num_samples_to_skip;
+					if (left < min_to_match)
+						min_to_match = left;
+				} else {
+					/* SKIP won't reach target yet */
+					st->num_samples_already_skipped += num_samples;
+				}
+			}
+		}
+	}
+
+	return min_to_match;
+}
+
 static void update_old_pins_array(struct srd_decoder_inst *di,
 		const uint8_t *sample_pos)
 {
@@ -868,39 +982,57 @@ static void update_old_pins_array_initial_pins(struct srd_decoder_inst *di)
 }
 
 static gboolean term_matches(const struct srd_decoder_inst *di,
-		struct srd_term *term, const uint8_t *sample_pos)
+		struct srd_term *term, const uint8_t *sample_pos,
+		gboolean *skip_allow)
 {
 	uint8_t old_sample, sample;
 	int byte_offset, bit_offset, ch;
 
 	/* Caller ensures di, di->dec_channelmap, term, sample_pos != NULL. */
 
-	if (term->type == SRD_TERM_SKIP)
+	*skip_allow = FALSE;
+	if (term->type == SRD_TERM_SKIP) {
+		*skip_allow = TRUE;
 		return sample_matches(0, 0, term);
+	}
 
 	ch = term->channel;
-	byte_offset = di->dec_channelmap[ch] / 8;
-	bit_offset = di->dec_channelmap[ch] % 8;
-	sample = *(sample_pos + byte_offset) & (1 << bit_offset) ? 1 : 0;
+	if (di->constant_channel_mask & (1ULL << ch)) {
+		sample = (di->constant_channel_values & (1ULL << ch)) ? 1 : 0;
+		*skip_allow = TRUE;
+	} else {
+		byte_offset = di->dec_channelmap[ch] / 8;
+		bit_offset = di->dec_channelmap[ch] % 8;
+		sample = *(sample_pos + byte_offset) & (1 << bit_offset) ? 1 : 0;
+	}
 	old_sample = di->old_pins_array->data[ch];
 
 	return sample_matches(old_sample, sample, term);
 }
 
 static gboolean all_terms_match(const struct srd_decoder_inst *di,
-		const GSList *cond, const uint8_t *sample_pos)
+		const GSList *cond, const uint8_t *sample_pos,
+		gboolean *all_skip_allow)
 {
 	const GSList *l;
 	struct srd_term *term;
+	gboolean skip_allow;
 
 	/* Caller ensures di, cond, sample_pos != NULL. */
 
+	*all_skip_allow = TRUE;
 	for (l = cond; l; l = l->next) {
 		term = l->data;
-		if (term->type == SRD_TERM_ALWAYS_FALSE)
+		if (term->type == SRD_TERM_ALWAYS_FALSE) {
 			return FALSE;
-		if (!term_matches(di, term, sample_pos))
+		}
+		if (!term_matches(di, term, sample_pos, &skip_allow)) {
+			if (!skip_allow)
+				*all_skip_allow = FALSE;
 			return FALSE;
+		}
+		if (!skip_allow)
+			*all_skip_allow = FALSE;
 	}
 
 	return TRUE;
@@ -921,12 +1053,134 @@ static gboolean at_least_one_condition_matched(
 	return FALSE;
 }
 
+static gboolean can_skip_entire_chunk(struct srd_decoder_inst *di,
+		uint64_t chunk_samples)
+{
+	GSList *l, *tl;
+	struct srd_term *term;
+	uint64_t constant_mask = di->constant_channel_mask;
+	uint64_t constant_vals = di->constant_channel_values;
+
+	static uint64_t cse_dbg_counter = 0;
+	cse_dbg_counter++;
+
+	for (l = di->condition_list; l; l = l->next) {
+		GSList *cond = l->data;
+		if (!cond) {
+			// if (cse_dbg_counter <= 5)
+			// 	fprintf(stderr, "CSE[%s] #%lu: NULL cond -> return FALSE\n",
+			// 		di->inst_id, (unsigned long)cse_dbg_counter);
+			return FALSE; /* NULL condition = automatic match */
+		}
+
+		gboolean cond_possible = TRUE; /* Assume possible until proven otherwise */
+		int cond_idx = 0;
+
+		for (tl = cond; tl; tl = tl->next) {
+			term = tl->data;
+
+			/* SKIP term: if it expires within this chunk, we cannot skip */
+			if (term->type == SRD_TERM_SKIP) {
+				uint64_t remaining = term->num_samples_to_skip
+					- term->num_samples_already_skipped;
+				if (remaining < chunk_samples) {
+					// if (cse_dbg_counter <= 5)
+					// 	fprintf(stderr, "CSE[%s] #%lu: SKIP expires -> return FALSE\n",
+					// 		di->inst_id, (unsigned long)cse_dbg_counter);
+					return FALSE; /* SKIP expires in chunk, cannot skip */
+				}
+				continue;
+			}
+
+			if (term->type == SRD_TERM_ALWAYS_FALSE) {
+				cond_possible = FALSE;
+				break; /* This condition can never match */
+			}
+
+			int ch = term->channel;
+
+			/* Non-constant channel: value may change, cannot skip */
+			if (!(constant_mask & (1ULL << ch))) {
+				// if (cse_dbg_counter <= 5)
+				// 	fprintf(stderr, "CSE[%s] #%lu: ch=%d not const (mask=0x%lx) -> return FALSE\n",
+				// 		di->inst_id, (unsigned long)cse_dbg_counter,
+				// 		ch, (unsigned long)constant_mask);
+				return FALSE;
+			}
+
+			/* Constant channel: check if condition can match */
+			uint8_t val = (constant_vals & (1ULL << ch)) ? 1 : 0;
+			uint8_t old_val = di->old_pins_array->data[ch];
+
+			// if (cse_dbg_counter <= 5)
+			// 	fprintf(stderr, "CSE[%s] #%lu: cond[%d] ch=%d type=%d old=%d val=%d\n",
+			// 		di->inst_id, (unsigned long)cse_dbg_counter,
+			// 		cond_idx, ch, term->type, old_val, val);
+
+			switch (term->type) {
+			case SRD_TERM_RISING_EDGE:
+				if (old_val != val)
+					return FALSE;
+				cond_possible = FALSE;
+				break;
+			case SRD_TERM_FALLING_EDGE:
+				if (old_val != val)
+					return FALSE;
+				cond_possible = FALSE;
+				break;
+			case SRD_TERM_EITHER_EDGE:
+				if (old_val != val)
+					return FALSE;
+				cond_possible = FALSE;
+				break;
+			case SRD_TERM_NO_EDGE:
+				if (old_val != val)
+					cond_possible = FALSE;
+				break;
+			case SRD_TERM_HIGH:
+				if (!val)
+					cond_possible = FALSE;
+				break;
+			case SRD_TERM_LOW:
+				if (val)
+					cond_possible = FALSE;
+				break;
+			}
+
+			if (!cond_possible)
+				break; /* AND logic: one impossible term = whole cond impossible */
+			cond_idx++;
+		}
+
+		if (cond_possible) {
+			/* This condition could match - cannot skip chunk */
+			// if (cse_dbg_counter <= 5)
+			// 	fprintf(stderr, "CSE[%s] #%lu: cond_possible -> return FALSE\n",
+			// 		di->inst_id, (unsigned long)cse_dbg_counter);
+			return FALSE;
+		}
+		/* This condition is impossible, check next condition (OR logic) */
+	}
+
+	// if (cse_dbg_counter <= 5)
+	// 	fprintf(stderr, "CSE[%s] #%lu: ALL impossible -> return TRUE (SKIP!)\n",
+	// 		di->inst_id, (unsigned long)cse_dbg_counter);
+	return TRUE;
+}
+
+/* find_match statistics - global counters */
+static uint64_t fm_total_calls = 0;
+static uint64_t fm_total_samples_to_process = 0;
+static uint64_t fm_cond_all_skip_hits = 0;
+static uint64_t fm_samples_skipped_by_all_skip = 0;
+
 static gboolean find_match(struct srd_decoder_inst *di)
 {
 	uint64_t i, j, num_samples_to_process;
 	GSList *l, *cond;
 	const uint8_t *sample_pos;
 	unsigned int num_conditions;
+	gboolean all_skip_allow;
 
 	/* Caller ensures di != NULL. */
 
@@ -944,6 +1198,8 @@ static gboolean find_match(struct srd_decoder_inst *di)
 
 	num_samples_to_process = di->abs_end_samplenum - di->abs_cur_samplenum;
 	num_conditions = g_slist_length(di->condition_list);
+	fm_total_calls++;
+	fm_total_samples_to_process += num_samples_to_process;
 
 	/* di->match_array is NULL here. Create a new GArray. */
 	di->match_array = g_array_sized_new(FALSE, TRUE, sizeof(gboolean), num_conditions);
@@ -952,27 +1208,153 @@ static gboolean find_match(struct srd_decoder_inst *di)
 	/* Sample 0: Set di->old_pins_array for SRD_INITIAL_PIN_SAME_AS_SAMPLE0 pins. */
 	if (di->abs_cur_samplenum == 0)
 		update_old_pins_array_initial_pins(di);
-	
+
+	if (can_skip_entire_chunk(di, num_samples_to_process)) {
+		di->abs_cur_samplenum = di->abs_end_samplenum;
+
+		for (int ch = 0; ch < di->dec_num_channels; ch++) {
+			if (di->constant_channel_mask & (1ULL << ch)) {
+				di->old_pins_array->data[ch] =
+					(di->constant_channel_values & (1ULL << ch)) ? 1 : 0;
+			} else if (di->dec_channelmap && di->dec_channelmap[ch] >= 0) {
+				int sig_index = di->dec_channelmap[ch];
+				int byte_off = sig_index / 8;
+				int bit_off = sig_index % 8;
+				const uint8_t *last = di->inbuf +
+					((num_samples_to_process - 1) * di->data_unitsize + byte_off);
+				di->old_pins_array->data[ch] = (*last >> bit_off) & 1;
+			}
+		}
+
+		advance_skip_terms(di, num_samples_to_process);
+
+		fm_samples_skipped_by_all_skip += num_samples_to_process;
+		return FALSE; /* No match in this chunk */
+	}
+
 	for (i = 0; i < num_samples_to_process; ++i, ++(di->abs_cur_samplenum)) {
+
+		/* if edge-search skipped past the end, break out */
+		if (di->abs_cur_samplenum >= di->abs_end_samplenum)
+			break;
 
 		sample_pos = di->inbuf + ((di->abs_cur_samplenum - di->abs_start_samplenum) * di->data_unitsize);
 
-		/* Check whether the current sample matches at least one of the conditions (logical OR). */
-		/* IMPORTANT: We need to check all conditions, even if there was a match already! */
+		gboolean cond_all_skip = TRUE;
+		gboolean any_matched = FALSE;
+		int edge_ch = -1;
+		gboolean edge_ch_is_non_constant = FALSE;
+		gboolean edge_search_safe = TRUE;
 		for (l = di->condition_list, j = 0; l; l = l->next, j++) {
 			cond = l->data;
-			if (!cond)
+			if (!cond) {
+				/* NULL condition means automatic match */
+				di->match_array->data[j] = TRUE;
+				any_matched = TRUE;
 				continue;
+			}
 			/* All terms in 'cond' must match (logical AND). */
-			di->match_array->data[j] = all_terms_match(di, cond, sample_pos);
+			di->match_array->data[j] = all_terms_match(di, cond, sample_pos, &all_skip_allow);
+			if (di->match_array->data[j])
+				any_matched = TRUE;
+			if (!all_skip_allow) {
+				cond_all_skip = FALSE;
+				/* Find non-constant edge terms for edge-search.
+				 * Edge search is safe only when all edge terms
+				 * reference the same channel. */
+				GSList *tl;
+				struct srd_term *t;
+				for (tl = cond; tl; tl = tl->next) {
+					t = tl->data;
+					if ((t->type == SRD_TERM_RISING_EDGE ||
+					     t->type == SRD_TERM_FALLING_EDGE ||
+					     t->type == SRD_TERM_EITHER_EDGE) &&
+					    !(di->constant_channel_mask & (1ULL << t->channel))) {
+						if (edge_ch == -1) {
+							edge_ch = t->channel;
+							edge_ch_is_non_constant = TRUE;
+						} else if (edge_ch != t->channel) {
+							/* Different edge channels: not safe to skip */
+							edge_search_safe = FALSE;
+						}
+					}
+				}
+			}
 		}
 
 		update_old_pins_array(di, sample_pos);
-		/* If at least one condition matched we're done. */
-		if (at_least_one_condition_matched(di, num_conditions))
+		if (any_matched)
 			return TRUE;
-	}
 
+		if (cond_all_skip && !any_matched) {
+			fm_cond_all_skip_hits++;
+			fm_samples_skipped_by_all_skip += (di->abs_end_samplenum - di->abs_cur_samplenum);
+			uint64_t remaining = di->abs_end_samplenum - di->abs_cur_samplenum;
+			uint64_t skip_match_at = find_earliest_skip_match(di, remaining - 1);
+
+			if (skip_match_at == 0) {
+				if (remaining > 1)
+					advance_skip_terms(di, remaining - 1);
+				di->abs_cur_samplenum = di->abs_end_samplenum;
+				return FALSE;
+			} else if (skip_match_at < remaining) {
+				advance_skip_terms(di, skip_match_at);
+				di->abs_cur_samplenum += skip_match_at;
+				sample_pos = di->inbuf + ((di->abs_cur_samplenum - 1 - di->abs_start_samplenum) * di->data_unitsize);
+				update_old_pins_array(di, sample_pos);
+				di->abs_cur_samplenum--;
+				continue;
+			} else {
+				/* No SKIP term will match in remaining samples.
+				 * Safe to skip to chunk end. */
+				if (remaining > 1)
+					advance_skip_terms(di, remaining - 1);
+				di->abs_cur_samplenum = di->abs_end_samplenum;
+				return FALSE;
+			}
+		}
+
+		if (0 && edge_search_safe && edge_ch_is_non_constant && edge_ch >= 0) {
+		// if (edge_search_safe && edge_ch_is_non_constant && edge_ch >= 0) {
+			uint64_t remaining = di->abs_end_samplenum - di->abs_cur_samplenum;
+			uint64_t skip_match_at = find_earliest_skip_match(di, remaining - 1);
+			uint64_t cur_offset = di->abs_cur_samplenum - di->abs_start_samplenum;
+			uint64_t max_offset = di->abs_end_samplenum - di->abs_start_samplenum;
+			int64_t edge_offset = find_next_edge_offset(di, edge_ch,
+				cur_offset, max_offset);
+
+			uint64_t edge_dist = (edge_offset >= 0) ?
+				(uint64_t)edge_offset - cur_offset : remaining;
+
+			if (skip_match_at > 0 && skip_match_at < edge_dist) {
+				advance_skip_terms(di, skip_match_at);
+				di->abs_cur_samplenum += skip_match_at;
+				sample_pos = di->inbuf + ((di->abs_cur_samplenum - 1 - di->abs_start_samplenum) * di->data_unitsize);
+				update_old_pins_array(di, sample_pos);
+				di->abs_cur_samplenum--;
+				continue;
+			}
+
+			if (edge_offset < 0) {
+				if (remaining > 1) {
+					uint64_t last_offset = di->abs_end_samplenum - di->abs_start_samplenum - 1;
+					sample_pos = di->inbuf + (last_offset * di->data_unitsize);
+					update_old_pins_array(di, sample_pos);
+					advance_skip_terms(di, remaining - 1);
+					di->abs_cur_samplenum = di->abs_end_samplenum - 1;
+				}
+				continue;
+			}
+
+			uint64_t skip_count = (uint64_t)edge_offset - cur_offset;
+			if (skip_count > 1) {
+				sample_pos = di->inbuf + ((edge_offset - 1) * di->data_unitsize);
+				update_old_pins_array(di, sample_pos);
+				advance_skip_terms(di, skip_count - 1);
+				di->abs_cur_samplenum += skip_count - 1;
+			}
+		}
+	}
 	return FALSE;
 }
 
@@ -1180,7 +1562,8 @@ static gpointer di_thread(gpointer data)
  */
 SRD_PRIV int srd_inst_decode(struct srd_decoder_inst *di,
 		uint64_t abs_start_samplenum, uint64_t abs_end_samplenum,
-		const uint8_t *inbuf, uint64_t inbuflen, uint64_t unitsize)
+		const uint8_t *inbuf, uint64_t inbuflen, uint64_t unitsize,
+		uint64_t constant_channel_mask, uint64_t constant_channel_values)
 {
 	/* Return an error upon unusable input. */
 	if (!di) {
@@ -1209,11 +1592,9 @@ SRD_PRIV int srd_inst_decode(struct srd_decoder_inst *di,
 	}
 
 	di->data_unitsize = unitsize;
-	srd_dbg("Decoding: abs start sample %" PRIu64 ", abs end sample %"
-		PRIu64 " (%" PRIu64 " samples, %" PRIu64 " bytes, unitsize = "
-		"%d), instance %s.", abs_start_samplenum, abs_end_samplenum,
-		abs_end_samplenum - abs_start_samplenum, inbuflen, di->data_unitsize,
-		di->inst_id);
+	di->constant_channel_mask = constant_channel_mask;
+	di->constant_channel_values = constant_channel_values;
+
 
 	/* If this is the first call, start the worker thread. */
 	if (!di->thread_handle) {
@@ -1229,6 +1610,8 @@ SRD_PRIV int srd_inst_decode(struct srd_decoder_inst *di,
 	di->abs_end_samplenum = abs_end_samplenum;
 	di->inbuf = inbuf;
 	di->inbuflen = inbuflen;
+	di->constant_channel_mask = constant_channel_mask;
+	di->constant_channel_values = constant_channel_values;
 	di->got_new_samples = TRUE;
 	di->handled_all_samples = FALSE;
 	/* Signal the thread that we have new data. */
@@ -1248,6 +1631,7 @@ SRD_PRIV int srd_inst_decode(struct srd_decoder_inst *di,
 
 	return SRD_OK;
 }
+
 
 
 /**
@@ -1310,6 +1694,15 @@ SRD_PRIV int srd_inst_send_eof(struct srd_decoder_inst *di)
 	 * started or previously finished is perfectly acceptable.
 	 */
 	srd_dbg("End of sample data: instance %s.", di->inst_id);
+
+	/* Print final find_match statistics */
+	// fprintf(stderr, "FM_FINAL[%s]: calls=%lu total_samples=%lu all_skip_hits=%lu skipped_samples=%lu (%.1f%%)\n",
+	// 	di->inst_id, (unsigned long)fm_total_calls,
+	// 	(unsigned long)fm_total_samples_to_process,
+	// 	(unsigned long)fm_cond_all_skip_hits,
+	// 	(unsigned long)fm_samples_skipped_by_all_skip,
+	// 	fm_total_samples_to_process ? 100.0*fm_samples_skipped_by_all_skip/fm_total_samples_to_process : 0);
+
 	if (!di->thread_handle) {
 		srd_dbg("No worker thread, nothing to do.");
 		return SRD_OK;
@@ -1319,6 +1712,8 @@ SRD_PRIV int srd_inst_send_eof(struct srd_decoder_inst *di)
 	g_mutex_lock(&di->data_mutex);
 	di->inbuf = NULL;
 	di->inbuflen = 0;
+	di->constant_channel_mask = 0;
+	di->constant_channel_values = 0;
 	di->got_new_samples = TRUE;
 	di->handled_all_samples = FALSE;
 	di->want_wait_terminate = TRUE;

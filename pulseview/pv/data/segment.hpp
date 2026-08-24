@@ -97,6 +97,7 @@ public:
 	uint64_t get_chunk_size() const;
 
 	void free_unused_memory();
+	void mark_bad_memory();
 	void set_channel_numner(uint16_t channel_num);
 	void set_unit_size(uint16_t unit_size);
 	uint16_t channel_num_ = 16;
@@ -104,8 +105,10 @@ public:
 
 Q_SIGNALS:
 	void completed();
+	void memoryError();
 
 protected:
+	bool bad_memory_ = false;
 	void append_single_sample(void *data);
 	void append_samples(void *data, uint64_t samples);
 	const uint8_t* get_raw_sample(uint64_t sample_num) const;

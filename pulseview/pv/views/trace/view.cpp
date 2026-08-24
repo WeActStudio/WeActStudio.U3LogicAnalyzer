@@ -105,14 +105,6 @@ const int View::ViewScrollMargin = 0;
 
 const int View::ScaleUnits[3] = {1, 2, 5};
 
-#define FIND_RANGE_LEVEL_1 4000
-#define FIND_RANGE_LEVEL_2 8000
-#define FIND_RANGE_LEVEL_3 20000
-#define GET_FIND_RANGE(value) \
-    ((value) < SR_MHZ(125) ? FIND_RANGE_LEVEL_1 : \
-     (value) < SR_MHZ(500) ? FIND_RANGE_LEVEL_2 : \
-     FIND_RANGE_LEVEL_3)
-
 CustomScrollArea::CustomScrollArea(QWidget *parent) :
 	QAbstractScrollArea(parent)
 {
@@ -126,7 +118,7 @@ bool CustomScrollArea::viewportEvent(QEvent *event)
 	case QEvent::MouseButtonRelease:
 	case QEvent::MouseButtonDblClick:
 	case QEvent::MouseMove:
-	case QEvent::Wheel:	
+	case QEvent::Wheel:
 	case QEvent::TouchBegin:
 	case QEvent::TouchUpdate:
 	case QEvent::TouchEnd:
@@ -135,6 +127,12 @@ bool CustomScrollArea::viewportEvent(QEvent *event)
 		return QAbstractScrollArea::viewportEvent(event);
 		// break;
 	}
+}
+
+void CustomScrollArea::scrollContentsBy(int dx, int dy)
+{
+	Q_UNUSED(dx);
+	Q_UNUSED(dy);
 }
 
 View::View(Session &session, bool is_main_view, QMainWindow *parent) :
@@ -223,9 +221,13 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 	connect(&lazy_event_handler_, SIGNAL(timeout()),
 		this, SLOT(process_sticky_events()));
 
-	connect(viewport_, SIGNAL(mouse_marker_pressed(QMouseEvent*)), ruler_, SLOT(on_add_RuleFlag(QMouseEvent*)));
+	connect(viewport_, SIGNAL(add_rule_flag(QMouseEvent*)), ruler_, SLOT(on_add_RuleFlag(QMouseEvent*)));
 	lazy_event_handler_.setSingleShot(true);
 	lazy_event_handler_.setInterval(1000 / ViewBase::MaxViewAutoUpdateRate);
+
+	measure_timer_.setSingleShot(true);
+	measure_timer_.setInterval(50);
+	connect(&measure_timer_, &QTimer::timeout, this, &View::renew_measure);
 
 	// Set up local keyboard shortcuts
 	zoom_in_shortcut_ = new QShortcut(QKeySequence(Qt::Key_Plus), this,
@@ -460,8 +462,8 @@ void View::remove_decode_signal(shared_ptr<data::DecodeSignal> signal)
 void View::remove_trace(shared_ptr<Trace> trace)
 {
 	TraceTreeItemOwner *const owner = trace->owner();
-	assert(owner);
-	owner->remove_child_item(trace);
+	if (owner)
+		owner->remove_child_item(trace);
 
 	for (auto i = signals_.begin(); i != signals_.end(); i++)
 		if ((*i) == trace) {
@@ -560,7 +562,14 @@ void View::restore_settings(QSettings &settings)
 			(Trace::SegmentDisplayMode)(settings.value("segment_display_mode").toInt()));
 
 	for (shared_ptr<Signal> signal : signals_) {
-		settings.beginGroup(signal->base()->internal_name());
+		QString group_key = signal->base()->internal_name();
+		if (!settings.childGroups().contains(group_key)) {
+			QString prefix = (signal->base()->type() == data::SignalBase::AnalogChannel) ? "A" : "D";
+			QString fallback_key = prefix + QString::number(signal->base()->index());
+			if (settings.childGroups().contains(fallback_key))
+				group_key = fallback_key;
+		}
+		settings.beginGroup(group_key);
 		signal->restore_settings(settings);
 		settings.endGroup();
 	}
@@ -681,7 +690,6 @@ int View::owner_visual_v_offset() const
 
 void View::set_v_offset(int offset)
 {
-	offset = 0;
 	scrollarea_->verticalScrollBar()->setSliderPosition(offset);
 	header_->update();
 	viewport_->update();
@@ -1346,16 +1354,7 @@ void View::adjust_top_margin()
 
 	// Do we have empty space at the top while the last trace goes out of screen?
 	if ((top_margin > 0) && (trace_bottom > areaSize.height())) {
-		const int trace_height = extents.second - extents.first;
-
-		// Center everything vertically if there is enough space
-		if (areaSize.height() >= trace_height){
-			set_v_offset(extents.first -
-				((areaSize.height() - trace_height) / 2));
-		}	
-		else
-			// Remove the top margin to make as many traces fit on screen as possible
-			set_v_offset(extents.first);
+		set_v_offset(extents.first);
 	}
 }
 
@@ -1392,6 +1391,8 @@ void View::update_scroll()
 	updating_scroll_ = false;
 
 	// Set the vertical scrollbar
+	// Save current position before modifying range/pageStep, which may reset it
+	const int saved_v_pos = vscrollbar->sliderPosition();
 	vscrollbar->setPageStep(areaSize.height());
 	vscrollbar->setSingleStep(areaSize.height() / 8);
 
@@ -1406,6 +1407,9 @@ void View::update_scroll()
 		int min_scroll = max(extents.first, extents.first - areaSize.height() + top_margin);
 		vscrollbar->setRange(min_scroll, extents.second - btm_margin);
 	}
+
+	// Restore vertical position that setRange/setPageStep may have changed
+	vscrollbar->setSliderPosition(saved_v_pos);
 
 	if (scroll_needs_defaults_) {
 		set_scroll_default();
@@ -1422,19 +1426,8 @@ void View::set_scroll_default()
 {
 	assert(viewport_);
 
-	const QSize areaSize = viewport_->size();
-
 	const pair<int, int> extents = v_extents();
-	const int trace_height = extents.second - extents.first;
-
-	// Do all traces fit in the view?
-	if (areaSize.height() >= trace_height){
-		// Center all traces vertically
-		set_v_offset(extents.first - ((areaSize.height() - trace_height) / 2));
-	}		
-	else
-		// Put the first trace at the top, letting the bottom ones overflow
-		set_v_offset(extents.first);
+	set_v_offset(extents.first);
 }
 
 void View::determine_if_header_was_shrunk()
@@ -1586,7 +1579,8 @@ bool View::eventFilter(QObject *object, QEvent *event)
 		////////////////////
 		if (/*object == viewport_*/1) {
 			if (viewport_->bezier_start_ == QPointF(0,0)) {
-				renew_measure();
+				if (!measure_timer_.isActive())
+					measure_timer_.start();
 			} else {
 				if (!grabbed_widget_) {
 					viewport()->update();
@@ -1703,24 +1697,6 @@ float View::update_bezier_start()
 {
 	return roundf(((bezier_start_sample_ / session_.get_samplerate() - offset()) / scale()).convert_to<float>()) + 0.5f;
 }
-
-// void View::search_edges(uint64_t sample, vector<data::LogicSegment::EdgePair>& edges)
-// {
-// 	// search 5 range edges,left have 2, right have 2;
-// 	int search_range = GET_FIND_RANGE(session_.get_samplerate();
-// 	uint64_t sample_pos[] = {sample, \
-// 							sample - search_range,  \
-// 							sample + search_range,  \
-// 							sample - 2*search_range, \
-// 							sample + 2*search_range, \
-// 							};
-// 	for (int i = 0; i < ARRAY_SIZE(sample_pos); i++) {
-// 		edges = signal_under_mouse_cursor_->get_nearest_level_changes(sample_pos[i]);
-// 		if (edges.size() == 2) {
-// 			return;
-// 		}
-// 	}
-// }
 
 void View::renew_bezier_measure()
 {
@@ -1850,7 +1826,6 @@ void View::renew_measure()
 			const int64_t x_offset = offset().convert_to<double>() / scale();
 			const uint64_t sample_num = max(((x_offset + hover_point_.x()) * samples_per_pixel), 0.0);
 			vector<data::LogicSegment::EdgePair> edges;
-			// search_edges(sample_num, edges);
 			edges = signal_under_mouse_cursor_->get_nearest_level_changes(sample_num);
 			if (edges.size() == 2)
 			{
@@ -2389,17 +2364,9 @@ void View::update_scale_offset(bool is_set)
 	std::shared_ptr<pv::toolbars::MainBar> mainbar = session_.main_bar();
 	current_max_offset_ = mainbar->get_sample_count() / (double)mainbar->get_sample_rate();
 	current_max_scale_= current_max_offset_ / w;
-	
-	// if (mainbar->get_vendorName() != "USB3.0(CH569)" && mainbar->get_vendorName() != "USB3.0(CH32H417)" && mainbar->get_vendorName() != "demo") {
-	// 	current_max_offset_ = 600;
-	// 	current_max_scale_= current_max_offset_ / w;
-	// 	if (is_set)
-	// 		set_scale_offset(0.034, 0);
-	// }
 
 	if (scale_ > current_max_scale_ || is_set) {
-		if (mainbar->get_vendorName() == "USB3.0(CH569)" || mainbar->get_vendorName() == "USB3.0(CH32H417)" || mainbar->get_vendorName() == "demo")
-			set_scale_offset(current_max_scale_, 0);	
+		set_scale_offset(current_max_scale_, 0);	
 	}
 }
 
@@ -2531,9 +2498,11 @@ void View::process_sticky_events()
 		update_layout();
 	if (sticky_events_ & TraceTreeItemVExtentsChanged) {
 		restack_all_trace_tree_items();
+		// Only update scrollbar range, preserve current vertical position.
+		// Do NOT call set_scroll_default() here — it resets the vertical
+		// position via set_v_offset(), which would jump the view to the top
+		// whenever a decode trace's visible_rows_ changes (e.g. on hover).
 		update_scroll();
-		// Reset scroll position when vertical extents changed (e.g. mode switch)
-		set_scroll_default();
 	}
 
 	// Clear the sticky events

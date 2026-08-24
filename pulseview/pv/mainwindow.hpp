@@ -106,6 +106,9 @@ public:
 	void restore_sessions();
 	void add_default_setting();
 
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
 private:
 	void setup_ui();
 	void update_acq_button(Session *session);

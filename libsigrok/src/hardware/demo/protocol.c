@@ -279,7 +279,8 @@ static void set_logic_data(uint64_t bits, uint8_t *data, size_t len)
 /* UART data: "hello logic-analyzer" at 115200 baud */
 static const char uart_data[] = "hello logic-analyzer";
 #define UART_BAUDRATE 115200
-#define UART_IDLE_BITS 10000  /* Idle time after each message (in bit times) */
+#define UART_LEAD_IDLE_BITS 20    /* Idle time before message starts (in bit times) */
+#define UART_IDLE_BITS 10000       /* Idle time after each message (in bit times) */
 
 static void logic_generator(struct sr_dev_inst *sdi, uint64_t size)
 {
@@ -303,15 +304,18 @@ static void logic_generator(struct sr_dev_inst *sdi, uint64_t size)
 		samples_per_bit = devc->cur_samplerate / UART_BAUDRATE;
 		if (samples_per_bit == 0)
 			samples_per_bit = 1;
-		/* Total bits: (chars * 10 bits) + idle time */
-		total_bits = (sizeof(uart_data) - 1) * 10 + UART_IDLE_BITS;
+		/* Total bits: lead idle + (chars * 10 bits) + trailing idle */
+		total_bits = UART_LEAD_IDLE_BITS + (sizeof(uart_data) - 1) * 10 + UART_IDLE_BITS;
 		for (i = 0; i < size; i += devc->logic_unitsize) {
 			current_bit = devc->step % (total_bits * samples_per_bit);
 			bit_index = current_bit / samples_per_bit;
-			if (bit_index < (sizeof(uart_data) - 1) * 10) {
+			if (bit_index < UART_LEAD_IDLE_BITS) {
+				/* Lead idle time: high (UART idle state) */
+				pat = 0x01;
+			} else if (bit_index < UART_LEAD_IDLE_BITS + (sizeof(uart_data) - 1) * 10) {
 				/* UART data transmission */
-				char_index = bit_index / 10;
-				bit_val = bit_index % 10;
+				char_index = (bit_index - UART_LEAD_IDLE_BITS) / 10;
+				bit_val = (bit_index - UART_LEAD_IDLE_BITS) % 10;
 				byte_val = (uint8_t)uart_data[char_index];
 				if (bit_val == 0) {
 					/* Start bit: 0 */
@@ -324,7 +328,7 @@ static void logic_generator(struct sr_dev_inst *sdi, uint64_t size)
 					pat = 0x01;
 				}
 			} else {
-				/* Idle time: high (UART idle state) */
+				/* Trailing idle time: high (UART idle state) */
 				pat = 0x01;
 			}
 			for (j = 0; j < devc->logic_unitsize; j++) {

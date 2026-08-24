@@ -33,8 +33,10 @@
 #include <QDebug>
 #include <QFileDialog>
 #include <QHelpEvent>
+#include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPixmap>
 #include <QSettings>
 #include <QToolTip>
 #include <QString>
@@ -54,6 +56,7 @@
 #include <pv/dialogs/connect.hpp>
 #include <pv/dialogs/inputoutputoptions.hpp>
 #include <pv/dialogs/storeprogress.hpp>
+#include <pv/dialogs/settings.hpp>
 #include <pv/globalsettings.hpp>
 #include <pv/mainwindow.hpp>
 #include <pv/popups/channels.hpp>
@@ -71,6 +74,9 @@
 #endif
 
 #include <libsigrokcxx/libsigrokcxx.hpp>
+
+#include "../util.hpp"
+using namespace pv::util;
 
 using std::back_inserter;
 using std::copy;
@@ -127,6 +133,7 @@ namespace pv
 																							open_button_(new QToolButton()),
 																							save_button_(new QToolButton()),
 																							help_button_(new QToolButton()),
+																							device_status_icon_(new QToolButton()),
 																							device_selector_(parent, session.device_manager_ptr(), action_connect_),
 																							// configure_button_(this),
 																							// configure_button_action_(nullptr),
@@ -148,6 +155,14 @@ namespace pv
 			setIconSize(QSize(32, 32));
 			channel_number_ = 16;
 			channels_ = nullptr;
+
+			// 初始化设备状态图标
+			device_status_icon_->setObjectName(QString::fromUtf8("device_status_icon"));
+			device_status_icon_->setIcon(QIcon(":/icons/Demo.png"));
+			device_status_icon_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+			device_status_icon_->setText(tr("Demo"));
+			device_status_icon_->setToolTip(tr("Device Status: Demo"));
+			device_status_icon_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 			setObjectName(QString::fromUtf8("MainBar"));
 
 			setContextMenuPolicy(Qt::PreventContextMenu);
@@ -156,7 +171,6 @@ namespace pv
 				"QToolBar {"
 				"    spacing: 2px;"
 				"    padding: 4px;"
-				"    background: transparent;"
 				"}"
 				"QToolBar QToolButton {"
 				"    margin: 0px;"
@@ -170,6 +184,10 @@ namespace pv
 				"}"
 				"QToolBar QToolButton:pressed {"
 				"    background: rgba(150, 150, 150, 80);"
+				"}"
+				"QToolBar QToolButton#device_status_icon {"
+				"}"
+				"QToolBar QToolButton#device_status_icon:disabled {"
 				"}"
 				"QToolBar QToolButton[popupMode='1'] {"  // MenuButtonPopup
 				"    padding-right: 8px;"
@@ -274,8 +292,8 @@ namespace pv
 
 			// model_ button
 			QMenu *menu_model_view = new QMenu();
-			QAction *actionSingle = menu_model_view->addAction(tr("single"));
-			QAction *actionRepeat = menu_model_view->addAction(tr("repeat"));
+			QAction *actionSingle = menu_model_view->addAction(tr("Single"));
+			QAction *actionRepeat = menu_model_view->addAction(tr("Repeat"));
 			actionSingle->setIcon(QIcon(":/icons/Single.png"));
 			actionRepeat->setIcon(QIcon(":/icons/Repeat.png"));
 
@@ -284,15 +302,17 @@ namespace pv
 
 			// help button menu
 			QMenu *menu_help_view = new QMenu();
-			QAction *action_version_info = menu_help_view->addAction(tr("version info"));
+			QAction *action_settings = menu_help_view->addAction(tr("Settings"));
+			QAction *action_version_info = menu_help_view->addAction(tr("Version Info"));
 			// QAction *action_feedback = menu_help_view->addAction(tr("feedback"));
-			QAction *action_update = menu_help_view->addAction(tr("Update"));
-			QAction *action_use_guide = menu_help_view->addAction(tr("User Guide"));
+			QAction *action_update = menu_help_view->addAction(tr("FW Update"));
+			// QAction *action_use_guide = menu_help_view->addAction(tr("User Guide"));
 			// QAction *action_about = menu_help_view->addAction(tr("About"));
+			connect(action_settings, SIGNAL(triggered(bool)), this, SIGNAL(settings_triggered()));
 			connect(action_version_info, SIGNAL(triggered(bool)), this, SLOT(on_action_version_info_triggered()));
 			// connect(action_feedback, SIGNAL(triggered(bool)), this, SLOT(on_action_feedback_triggered()));
 			connect(action_update, SIGNAL(triggered(bool)), this, SLOT(on_action_update_triggered()));
-			connect(action_use_guide, SIGNAL(triggered(bool)), this, SLOT(on_action_use_guide_triggered()));
+			// connect(action_use_guide, SIGNAL(triggered(bool)), this, SLOT(on_action_use_guide_triggered()));
 			// connect(action_about, SIGNAL(triggered(bool)), this, SLOT(on_action_about_triggered()));
 			// Open button
 			vector<QAction *> open_actions;
@@ -428,6 +448,7 @@ namespace pv
 			update_device_list();
 			is_rate_setting_default_ = false;
 			is_count_setting_default_ = false;
+			update_device_status_icon();
 		}
 
 		MainBar::~MainBar()
@@ -643,7 +664,7 @@ namespace pv
 					gvar_list, &num_elements, sizeof(uint64_t));
 				QString vendor = QString::fromStdString(sr_dev->vendor());
 				QString model = QString::fromStdString(sr_dev->model());
-				if (vendor == "USB3.0(CH569)")
+				if (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH569)])
 				{
 					// CH569: 采样率数量随通道数变化
 					switch (channel_number_)
@@ -662,7 +683,7 @@ namespace pv
 						break;
 					}
 				}
-				else if (model == "USB3.0(CH32H417)")
+				else if (model == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 				{
 					// CH32H417: 固定16个采样率，不随通道数变化
 					num_elements = 16;
@@ -767,16 +788,17 @@ namespace pv
 			{
 				sampleRate = 25000;
 			}
-			double max_time = 4000000000.00 / ((double)sampleRate * (double)(channel_number_ / 8.00));
-			double min_time = 0.5;
+			double max_time = 18000000000.00 / ((double)sampleRate * (double)(channel_number_ / 8.00));
+			shared_ptr<devices::HardwareDevice> hw_dev_for_min_time =
+				std::dynamic_pointer_cast<devices::HardwareDevice>(device);
+			bool is_demo_min_time = false;
+			if (hw_dev_for_min_time) {
+				string driver_name = hw_dev_for_min_time->hardware_device()->driver()->name();
+				is_demo_min_time = (driver_name == "demo");
+			}
+			double min_time = is_demo_min_time ? 0.002 : 0.5;
 			sample_count_.show_125_list(min_time * 10000, max_time * 10000); // commit sample count
-			// if (is_count_setting_default_){
-			// 	sample_count_.set_current_index(sample_count_default_index_);
-			// 	commit_sample_count();
-			// }
-			// sample_count_.show_125_list(min_sample_count, max_sample_count);
 
-			// end
 			if (sr_dev->config_check(ConfigKey::LIMIT_SAMPLES, Capability::GET))
 			{
 				auto gvar = sr_dev->config_get(ConfigKey::LIMIT_SAMPLES);
@@ -807,7 +829,7 @@ namespace pv
 
 			QString vendor = QString::fromStdString(device->device()->vendor());
 			QString model = QString::fromStdString(device->device()->model());
-			bool is_ch32h417 = (vendor == "USB3.0(CH32H417)" || model == "USB3.0(CH32H417)");
+			bool is_ch32h417 = (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)] || model == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]);
 
 			// CH32H417处理
 			if (is_ch32h417)
@@ -912,6 +934,8 @@ namespace pv
 
 			commit_channel_number(channelCount);
 			channel_number_ = channelCount;
+
+			update_sample_count_selector();
 		}
 
 		void MainBar::on_update_threshold_value_1(float thresholdValue)
@@ -1029,6 +1053,73 @@ namespace pv
 			}
 		}
 
+		void MainBar::update_device_status_icon()
+		{
+			const shared_ptr<devices::Device> device = device_selector_.selected_device();
+			if (!device) {
+				device_status_icon_->setIcon(QIcon(":/icons/Demo.png"));
+				device_status_icon_->setText(tr("Demo"));
+				device_status_icon_->setToolTip(tr("Device Status: Demo"));
+				return;
+			}
+
+			if (session_.using_file_device()) {
+				device_status_icon_->setIcon(QIcon(":/icons/File.png"));
+				device_status_icon_->setText(tr("File"));
+				device_status_icon_->setToolTip(tr("Device Status: File"));
+				return;
+			}
+
+			shared_ptr<devices::HardwareDevice> hw_device =
+				std::dynamic_pointer_cast<devices::HardwareDevice>(device);
+
+			if (hw_device) {
+				string driver_name = hw_device->hardware_device()->driver()->name();
+				if (driver_name == "demo") {
+					device_status_icon_->setIcon(QIcon(":/icons/Demo.png"));
+					device_status_icon_->setText(tr("Demo"));
+					device_status_icon_->setToolTip(tr("Device Status: Demo"));
+					return;
+				}
+			}
+
+			const shared_ptr<sigrok::Device> sr_dev = device->device();
+			QString vendor = QString::fromStdString(sr_dev->vendor());
+
+			if (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]) {
+				bool is_usb2 = false;
+				if (sr_dev->config_check(ConfigKey::USB_VERSION, Capability::GET)) {
+					try {
+						auto gvar = sr_dev->config_get(ConfigKey::USB_VERSION);
+						if (gvar.gobj()) {
+							uint64_t usb_version = Glib::VariantBase::cast_dynamic<Glib::Variant<guint64>>(gvar).get();
+							is_usb2 = (usb_version == 2);
+						}
+					} catch (Error &error) {
+						// 默认USB3.0
+					}
+				}
+
+				if (is_usb2) {
+					device_status_icon_->setIcon(QIcon(":/icons/USB20.png"));
+					device_status_icon_->setText(tr("USB2.0"));
+					device_status_icon_->setToolTip(tr("Device Status: USB 2.0"));
+				} else {
+					device_status_icon_->setIcon(QIcon(":/icons/USB30.png"));
+					device_status_icon_->setText(tr("USB3.0"));
+					device_status_icon_->setToolTip(tr("Device Status: USB 3.0"));
+				}
+			} else if (vendor == "USB3.0(CH569)") {
+				device_status_icon_->setIcon(QIcon(":/icons/USB30.png"));
+				device_status_icon_->setText(tr("USB3.0"));
+				device_status_icon_->setToolTip(tr("Device Status: USB 3.0"));
+			} else {
+				device_status_icon_->setIcon(QIcon(":/icons/Demo.png"));
+				device_status_icon_->setText(tr("Demo"));
+				device_status_icon_->setToolTip(tr("Device Status: Demo"));
+			}
+		}
+
 		void MainBar::renew_samplecount_samplerate(uint64_t samplerate, uint64_t samplerate_max)
 		{
 			uint16_t sampelrate_index = sample_rate_.get_current_index();
@@ -1091,7 +1182,7 @@ namespace pv
 			settings.beginGroup("Settings");
 
 			QString vendorName = get_vendorName();
-			if (vendorName == "USB3.0(CH32H417)")
+			if (vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 			{
 				// CH32H417使用GlobalSettings的ThresholdLevel键值
 				GlobalSettings gs;
@@ -1119,6 +1210,24 @@ namespace pv
 			while (iss >> word)
 			{
 				decoder_list_default_ << QString::fromLocal8Bit(word.data());
+			}
+		}
+
+		void MainBar::save_setup(QSettings &settings) const
+		{
+			// Save sample count and sample rate values
+			settings.setValue("sample_count", QVariant::fromValue(sample_count_value_));
+			settings.setValue("sample_rate", QVariant::fromValue(sample_rate_value_));
+		}
+
+		void MainBar::restore_setup(QSettings &settings)
+		{
+			// Restore sample count and sample rate values
+			if (settings.contains("sample_count")) {
+				sample_count_value_ = settings.value("sample_count").value<uint64_t>();
+			}
+			if (settings.contains("sample_rate")) {
+				sample_rate_value_ = settings.value("sample_rate").value<uint64_t>();
 			}
 		}
 
@@ -1256,11 +1365,11 @@ namespace pv
 			// restore settings
 			QString vendorName = get_vendorName();
 			// 支持 CH569 和 CH32H417 两种设备
-			if (vendorName != "USB3.0(CH569)" && vendorName != "USB3.0(CH32H417)")
+			if (vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] && vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 				return;
 
 			// CH32H417使用GlobalSettings的ThresholdLevel键值
-			if (vendorName == "USB3.0(CH32H417)")
+			if (vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 			{
 				GlobalSettings gs;
 				if (gs.contains(GlobalSettings::Key_ThresholdLevel))
@@ -1370,7 +1479,7 @@ namespace pv
 			try
 			{
 				sr_dev->config_set(ConfigKey::NUM_LOGIC_CHANNELS,
-								   Glib::Variant<guint64>::create((uint64_t)channelNum));
+								   Glib::Variant<gint32>::create((int32_t)channelNum));
 			}
 			catch (Error &error)
 			{
@@ -1462,9 +1571,14 @@ namespace pv
 			const shared_ptr<sigrok::Device> sr_dev = device->device();
 
 			sample_count = ((double)sample_count_.get_current_data(sample_count_.get_current_index())) / 10000.00 * (double)sample_rate_.get_current_data(sample_rate_.get_current_index());
-			if (sample_count > 16000000000 || sample_count <= 0)
 			{
-				sample_count = 0.5 * (double)sample_rate_.get_current_data(sample_rate_.get_current_index());
+				const double bytes_per_sample = (double)(channel_number_ / 8.00);
+				const double max_samples =
+					18000000000.00 / (bytes_per_sample > 0.0 ? bytes_per_sample : 1.0);
+				if (sample_count <= 0)
+					sample_count = 0.5 * (double)sample_rate_.get_current_data(sample_rate_.get_current_index());
+				else if (sample_count > max_samples)
+					sample_count = (uint64_t)max_samples;
 			}
 			if (sample_count_supported_)
 			{
@@ -1490,7 +1604,7 @@ namespace pv
 		void MainBar::show_session_error(const QString text, const QString info_text)
 		{
 			QDialog dialog(this);
-			dialog.setWindowTitle(tr("错误"));
+			dialog.setWindowTitle(tr("Error"));
 
 			// 设置更大的字体
 			QFont font = dialog.font();
@@ -1515,6 +1629,7 @@ namespace pv
 			// 创建文本标签
 			QLabel *label = new QLabel(&dialog);
 			label->setText(text + "\n\n" + info_text);
+			label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
 			label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 			contentLayout->addWidget(label, 1);
 
@@ -1523,7 +1638,7 @@ namespace pv
 			// 创建按钮
 			QHBoxLayout *buttonLayout = new QHBoxLayout();
 			buttonLayout->addStretch();
-			QPushButton *okBtn = new QPushButton(tr("确定"), &dialog);
+			QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 			buttonLayout->addWidget(okBtn);
 			layout->addLayout(buttonLayout);
 
@@ -1685,22 +1800,18 @@ namespace pv
 			QString model = QString::fromStdString(sr_dev->model());
 
 			// 处理 CH569 和 CH32H417 设备的切换
-			if (vendor == "USB3.0(CH569)" || vendor == "USB3.0(CH32H417)")
+			if (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] || vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 			{
 				// 更新设备选择器显示的名称
-				QString device_name = (vendor == "USB3.0(CH569)")
-										  ? "USB3.0(CH569)"
-										  : "USB3.0(CH32H417)";
-				QString vendor_name = (vendor == "USB3.0(CH569)")
-										  ? "USB3.0(CH569)"
-										  : "USB3.0(CH32H417)";
+				QString device_name = vendor;
+				QString vendor_name = vendor;
 				set_device_selector_name(device_name);
 				set_vendorName(vendor_name);
 
 				// 切换到选中的设备
 				session_.select_device(device);
 
-				if (vendor == "USB3.0(CH32H417)")
+				if (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 				{
 					try
 					{
@@ -1793,6 +1904,7 @@ namespace pv
 		{
 			update_device_list();
 			update_device_config_widgets();
+			update_device_status_icon();
 			renew_setting_default();
 		}
 
@@ -1818,7 +1930,7 @@ namespace pv
 			}
 			hot_plug_listen_ = true;
 			usleep(10000);
-			t_hot_plug = std::thread(&MainBar::hot_plug_listen, this);
+			t_hot_plug = std::thread(hot_plug_listen, this);
 		}
 
 		void MainBar::hot_plug_stop()
@@ -2010,6 +2122,7 @@ namespace pv
 
 		void MainBar::add_toolbar_widgets()
 		{
+			addWidget(device_status_icon_);
 			addWidget(open_button_);
 			addWidget(save_button_);
 			addSeparator();
@@ -2094,16 +2207,16 @@ namespace pv
 
 		void MainBar::on_action_version_info_triggered()
 		{
-			QString softwareVersion = "0.2 based on pulseview 0.5.0-git-7e5c839";
+			QString softwareVersion = "0.4 based on pulseview 0.5.0-git-7e5c839";
 			QString firmwareVersion;
 			QString fpgaVersion;
 			QString text;
 			QString vendorName = get_vendorName();
-
+			
 			// demo设备或无设备时，只显示软件版本
-			if (vendorName != "USB3.0(CH32H417)" && vendorName != "USB3.0(CH569)")
+			if (vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)] && vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH569)])
 			{
-				text = QString("<b>软件版本：</b> %1").arg(softwareVersion);
+				text = tr("<b>Software Version:</b> %1<br/>").arg(softwareVersion);
 			}
 			else
 			{
@@ -2114,7 +2227,7 @@ namespace pv
 					firmwareVersion = "null";
 					fpgaVersion = "null";
 				}
-				else if (vendorName == "USB3.0(CH32H417)")
+				else if (vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 				{
 					// CH32H417: fw_version格式为 (固件版本 << 8) | 硬件版本
 					// 显示格式: 硬件版本.固件版本 (如 1.1)
@@ -2122,11 +2235,8 @@ namespace pv
 					uint8_t hw = hardware_version_ & 0xff;		  // 硬件版本
 					firmwareVersion = QString::number(hw) + "." + QString::number(fw);
 
-					text = QString(
-							   "<b>软件版本：</b> %1<br/>"
-							   "<b>固件版本：</b> %2<br/>")
-							   .arg(softwareVersion)
-							   .arg(firmwareVersion);
+					text = tr("<b>Software Version:</b> %1<br/>").arg(softwareVersion) + \
+						   tr("<b>Firmware Version:</b> %1<br/>").arg(firmwareVersion);
 				}
 				else
 				{
@@ -2137,17 +2247,14 @@ namespace pv
 					fpgaVersion = QString::number((hardware_version_ >> 0) & 0xff);
 					fpgaVersion += ".";
 					fpgaVersion += QString::number((hardware_version_ >> 8) & 0xff);
-					text = QString(
-							   "<b>软件版本：</b> %1<br/>"
-							   "<b>固件版本：</b> %2<br/>"
-							   "<b>FPGA版本：</b> %3")
-							   .arg(softwareVersion)
-							   .arg(firmwareVersion)
-							   .arg(fpgaVersion);
+					text = tr("<b>Software Version:</b> %1<br/>").arg(softwareVersion) + \
+						   tr("<b>Firmware Version:</b> %1<br/>").arg(firmwareVersion) + \
+						   tr("<b>FPGA Version:</b> %1").arg(fpgaVersion);	   
 				}
 			}
 			QDialog dialog(this);
-				dialog.setWindowTitle(tr("版本信息"));
+				dialog.setWindowTitle(tr("Version Info"));
+				dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
 				// 设置更大的字体
 				QFont font = dialog.font();
@@ -2173,6 +2280,7 @@ namespace pv
 				QLabel *label = new QLabel(&dialog);
 				label->setText(text);
 				label->setTextFormat(Qt::RichText);
+				label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
 				label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 				contentLayout->addWidget(label, 1);
 
@@ -2181,7 +2289,7 @@ namespace pv
 				// 创建按钮
 				QHBoxLayout *buttonLayout = new QHBoxLayout();
 				buttonLayout->addStretch();
-				QPushButton *okBtn = new QPushButton(tr("确定"), &dialog);
+				QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 				buttonLayout->addWidget(okBtn);
 				layout->addLayout(buttonLayout);
 
@@ -2197,12 +2305,29 @@ namespace pv
 
 		void MainBar::on_action_update_triggered()
 		{
-			/* 检查当前设备是否为CH32H417 */
+			/* 检查当前设备是否为CH32H417（USB模式或HID模式） */
 			QString currentVendorName = get_vendorName();
-			if (currentVendorName != "USB3.0(CH32H417)")
+			bool is_ch32h417_usb = (currentVendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]);
+
+			bool is_ch32h417_hid = false;
+			libusb_device **hid_devlist;
+			struct libusb_device_descriptor hid_des;
+			libusb_context *hid_ctx = NULL;
+			int hid_count = libusb_get_device_list(hid_ctx, &hid_devlist);
+			for (int i = 0; i < hid_count; i++) {
+				libusb_get_device_descriptor(hid_devlist[i], &hid_des);
+				if (hid_des.idVendor == WCH_VID && hid_des.idProduct == WCH_PID_CH32H417_HID) {
+					is_ch32h417_hid = true;
+					break;
+				}
+			}
+			if (hid_count >= 0)
+				libusb_free_device_list(hid_devlist, 1);
+
+			if (!is_ch32h417_usb && !is_ch32h417_hid)
 			{
 				QDialog dialog(this);
-				dialog.setWindowTitle(tr("警告"));
+				dialog.setWindowTitle(tr("Warning"));
 
 				// 设置更大的字体
 				QFont font = dialog.font();
@@ -2226,7 +2351,8 @@ namespace pv
 
 				// 创建文本标签
 				QLabel *label = new QLabel(&dialog);
-				label->setText(tr("当前设备不支持固件升级。\n请连接CH32H417设备后重试。"));
+				label->setText(tr("The current device does not support firmware upgrade.\nPlease connect the CH32H417 device and try again."));
+				label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
 				label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 				contentLayout->addWidget(label, 1);
 
@@ -2235,7 +2361,7 @@ namespace pv
 				// 创建按钮
 				QHBoxLayout *buttonLayout = new QHBoxLayout();
 				buttonLayout->addStretch();
-				QPushButton *okBtn = new QPushButton(tr("确定"), &dialog);
+				QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 				buttonLayout->addWidget(okBtn);
 				layout->addLayout(buttonLayout);
 
@@ -2248,9 +2374,9 @@ namespace pv
 
 			/* 弹出文件选择对话框，让用户选择固件文件 */
 			QString firmwarePath = QFileDialog::getOpenFileName(this,
-																tr("选择固件文件"),
-																QCoreApplication::applicationDirPath(),
-																tr("固件文件 (*.bin *.BIN *.hex *.HEX);;所有文件 (*.*)"));
+																tr("Select firmware file"),
+																"",
+																tr("Firmware File (*.bin *.BIN *.hex *.HEX);;All Files (*.*)"));
 
 			/* 用户取消选择 */
 			if (firmwarePath.isEmpty())
@@ -2258,19 +2384,25 @@ namespace pv
 				return;
 			}
 
+			if (session_.get_capture_state() != Session::Stopped)
+			{
+				session_.stop_capture();
+			}
+
 			/* 创建进度对话框 */
 			QProgressDialog *progressDlg = new QProgressDialog(
-				tr("正在升级固件，请勿断开USB连接！"), tr("取消"), 0, 100, this);
-			progressDlg->setWindowTitle(tr("固件升级"));
+				tr("Firmware update in progress, do not disconnect the USB connection"), tr("Cancel"), 0, 100, this);
+			progressDlg->setWindowTitle(tr("Firmware Update"));
 			progressDlg->setWindowModality(Qt::WindowModal);
 			progressDlg->setMinimumDuration(0);
 			progressDlg->setValue(0);
 			progressDlg->setCancelButton(nullptr); /* 禁止取消 */
+			progressDlg->setWindowFlags(progressDlg->windowFlags() & ~Qt::WindowContextHelpButtonHint | Qt::WindowStaysOnTopHint);
 
 			/* 设置IAP升级标志，防止热插拔检测误报设备掉线 */
 			iap_upgrading_ = true;
 
-			pv::dialogs::IAPWorker *worker = new pv::dialogs::IAPWorker(0, firmwarePath, WCH_VID, WCH_PID_CH32H417_HID);
+			pv::dialogs::IAPWorker *worker = new pv::dialogs::IAPWorker(0, firmwarePath, WCH_VID, WCH_PID_CH32H417_HID, is_ch32h417_hid);
 			QThread *workerThread = new QThread();
 			worker->moveToThread(workerThread);
 
@@ -2282,7 +2414,8 @@ namespace pv
 				if (!success) {
 					iap_upgrading_ = false;
 					QDialog dialog(this);
-					dialog.setWindowTitle(tr("升级失败"));
+					dialog.setWindowTitle(tr("Update Failed"));
+					dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
 					// 设置更大的字体
 					QFont font = dialog.font();
@@ -2306,7 +2439,8 @@ namespace pv
 
 					// 创建文本标签
 					QLabel *label = new QLabel(&dialog);
-					label->setText(tr("固件升级失败！\n请检查设备连接和固件文件。"));
+					label->setText(tr("Firmware Update Failed!\nPlease check the device connection and firmware file."));
+					label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
 					label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 					contentLayout->addWidget(label, 1);
 
@@ -2315,7 +2449,7 @@ namespace pv
 					// 创建按钮
 					QHBoxLayout *buttonLayout = new QHBoxLayout();
 					buttonLayout->addStretch();
-					QPushButton *okBtn = new QPushButton(tr("确定"), &dialog);
+					QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 					buttonLayout->addWidget(okBtn);
 					layout->addLayout(buttonLayout);
 
@@ -2372,6 +2506,7 @@ namespace pv
 				// 创建文本标签
 				QLabel *label = new QLabel(&dialog);
 				label->setText(tr("找不到PDF文件：\n%1\n\n请确认 doc 目录和用户手册文件是否存在。").arg(pdfPath));
+				label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
 				label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 				contentLayout->addWidget(label, 1);
 
@@ -2380,7 +2515,7 @@ namespace pv
 				// 创建按钮
 				QHBoxLayout *buttonLayout = new QHBoxLayout();
 				buttonLayout->addStretch();
-				QPushButton *okBtn = new QPushButton(tr("确定"), &dialog);
+				QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 				buttonLayout->addWidget(okBtn);
 				layout->addLayout(buttonLayout);
 
@@ -2397,7 +2532,7 @@ namespace pv
 			if (!opened)
 			{
 				QDialog dialog(this);
-				dialog.setWindowTitle(tr("打开失败"));
+				dialog.setWindowTitle(tr("Open Failed"));
 
 				// 设置更大的字体
 				QFont font = dialog.font();
@@ -2422,6 +2557,7 @@ namespace pv
 				// 创建文本标签
 				QLabel *label = new QLabel(&dialog);
 				label->setText(tr("无法打开PDF文件，请确认系统已安装PDF阅读器。"));
+				label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
 				label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 				contentLayout->addWidget(label, 1);
 
@@ -2430,7 +2566,7 @@ namespace pv
 				// 创建按钮
 				QHBoxLayout *buttonLayout = new QHBoxLayout();
 				buttonLayout->addStretch();
-				QPushButton *okBtn = new QPushButton(tr("确定"), &dialog);
+				QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 				buttonLayout->addWidget(okBtn);
 				layout->addLayout(buttonLayout);
 
@@ -2444,7 +2580,7 @@ namespace pv
 		void MainBar::on_action_about_triggered()
 		{
 			QString appName = "U3LogicAnalyzer";
-			QString appVersion = "v0.2";
+			QString appVersion = "v0.4";
 			QString website = "<a href='https://oshwhub.com/q2h2/project_bszkxrnf' style='color:#afe2ff;'>访问我们：https://oshwhub.com/q2h2/project_bszkxrnf</a>";
 			QString text = QString(
 						   "<b>%1 (%2)</b><br/><br/>"
@@ -2454,7 +2590,7 @@ namespace pv
 						   .arg(website);
 
 			QDialog dialog(this);
-			dialog.setWindowTitle(tr("关于"));
+			dialog.setWindowTitle(tr("About"));
 
 			// 设置更大的字体
 			QFont font = dialog.font();
@@ -2480,6 +2616,7 @@ namespace pv
 			QLabel *label = new QLabel(&dialog);
 			label->setText(text);
 			label->setTextFormat(Qt::RichText);
+			label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
 			label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 			label->setOpenExternalLinks(true);
 			contentLayout->addWidget(label, 1);
@@ -2489,7 +2626,7 @@ namespace pv
 			// 创建按钮
 			QHBoxLayout *buttonLayout = new QHBoxLayout();
 			buttonLayout->addStretch();
-			QPushButton *okBtn = new QPushButton(tr("确定"), &dialog);
+			QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 			buttonLayout->addWidget(okBtn);
 			layout->addLayout(buttonLayout);
 
@@ -2514,7 +2651,7 @@ namespace pv
 		void MainBar::on_ch32h417_device_event(unsigned long eventStatus)
 		{
 			QString currentVendorName = get_vendorName();
-			bool is_using_ch32h417 = (currentVendorName == "USB3.0(CH32H417)");
+			bool is_using_ch32h417 = (currentVendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]);
 
 			if (eventStatus == CH375_DEVICE_ARRIVAL)
 			{
@@ -2522,7 +2659,8 @@ namespace pv
 				{
 					iap_upgrading_ = false;
 					QDialog *dialog = new QDialog(this);
-					dialog->setWindowTitle(tr("升级成功"));
+					dialog->setWindowTitle(tr("Update Success"));
+					dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
 					// 设置更大的字体
 					QFont font = dialog->font();
@@ -2546,7 +2684,8 @@ namespace pv
 
 					// 创建文本标签
 					QLabel *label = new QLabel(dialog);
-					label->setText(tr("固件升级成功！\n设备已重新启动。"));
+					label->setText(tr("Firmware Update Success!\nDevice already restart."));
+					label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
 					label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 					contentLayout->addWidget(label, 1);
 
@@ -2555,7 +2694,7 @@ namespace pv
 					// 创建按钮
 					QHBoxLayout *buttonLayout = new QHBoxLayout();
 					buttonLayout->addStretch();
-					QPushButton *okBtn = new QPushButton(tr("确定"), dialog);
+					QPushButton *okBtn = new QPushButton(tr("Confirm"), dialog);
 					buttonLayout->addWidget(okBtn);
 					layout->addLayout(buttonLayout);
 

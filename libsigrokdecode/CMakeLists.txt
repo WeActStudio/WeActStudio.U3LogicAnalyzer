@@ -110,8 +110,8 @@ if(WIN32 OR MINGW)
 endif()
 
 target_link_libraries(sigrokdecode
-    ${GLIB_LDFLAGS}
-    ${PYTHON3_LDFLAGS}
+    ${GLIB_LIBRARIES}
+    ${PYTHON3_LIBRARIES}
     ${PLATFORM_LIBS}
 )
 

@@ -261,22 +261,30 @@ SRD_API int srd_session_metadata_set(struct srd_session *sess, int key,
  */
 SRD_API int srd_session_send(struct srd_session *sess,
 		uint64_t abs_start_samplenum, uint64_t abs_end_samplenum,
-		const uint8_t *inbuf, uint64_t inbuflen, uint64_t unitsize)
+		const uint8_t *inbuf, uint64_t inbuflen, uint64_t unitsize,
+		uint64_t constant_channel_mask, uint64_t constant_channel_values)
 {
 	GSList *d;
 	int ret;
 
 	if (!sess)
 		return SRD_ERR_ARG;
-	
+
+	gboolean all_skipped = TRUE;
 	for (d = sess->di_list; d; d = d->next) {
-		if ((ret = srd_inst_decode(d->data, abs_start_samplenum,
-				abs_end_samplenum, inbuf, inbuflen, unitsize)) != SRD_OK)
+		ret = srd_inst_decode(d->data, abs_start_samplenum,
+				abs_end_samplenum, inbuf, inbuflen, unitsize,
+				constant_channel_mask, constant_channel_values);
+		if (ret == SRD_CHUNK_SKIPPED)
+			continue;
+		all_skipped = FALSE;
+		if (ret != SRD_OK)
 			return ret;
 	}
 
-	return SRD_OK;
+	return all_skipped ? SRD_CHUNK_SKIPPED : SRD_OK;
 }
+
 
 /**
  * Communicate the end of the stream of sample data to the session.
