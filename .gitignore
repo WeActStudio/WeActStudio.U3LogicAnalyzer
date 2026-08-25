@@ -2,3 +2,6 @@
 /build_cmake
 /install
 /dist
+/CMakeFiles
+
+CMakeCache.txt
