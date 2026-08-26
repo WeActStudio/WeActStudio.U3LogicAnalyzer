@@ -25,6 +25,7 @@
 #endif
 #include <libsigrok/libsigrok.h>
 #include "libsigrok-internal.h"
+#include "minilzo/minilzo.h"
 
 /** @cond PRIVATE */
 #define LOG_PREFIX "backend"
@@ -136,8 +137,18 @@ SR_API GSList *sr_buildinfo_libs_get(void)
 		glib_binary_age, glib_interface_age));
 	l = g_slist_append(l, m);
 
+#ifdef HAVE_ZLIB
+	m = g_slist_append(NULL, g_strdup("zlib"));
+	m = g_slist_append(m, g_strdup_printf("%s", CONF_ZLIB_VERSION));
+	l = g_slist_append(l, m);
+#endif
+
 	m = g_slist_append(NULL, g_strdup("libzip"));
 	m = g_slist_append(m, g_strdup_printf("%s", CONF_LIBZIP_VERSION));
+	l = g_slist_append(l, m);
+
+	m = g_slist_append(NULL, g_strdup("minilzo"));
+	m = g_slist_append(m, g_strdup_printf("%s", lzo_version_string()));
 	l = g_slist_append(l, m);
 
 #ifdef HAVE_LIBSERIALPORT
@@ -594,6 +605,14 @@ SR_API int sr_init(struct sr_context **ctx)
 	}
 #endif
 
+	if ((ret = lzo_init()) != LZO_E_OK) {
+		sr_err("lzo_init() failed with return code %d.", ret);
+		sr_err("This usually indicates a compiler bug. Recompile without");
+		sr_err("optimizations, and enable '-DLZO_DEBUG' for diagnostics.");
+		ret = SR_ERR;
+		goto done;
+	}
+
 #ifdef HAVE_LIBUSB_1_0
 	ret = libusb_init(&context->libusb_ctx);
 	if (LIBUSB_SUCCESS != ret) {
@@ -662,80 +681,5 @@ SR_API int sr_exit(struct sr_context *ctx)
 
 	return SR_OK;
 }
-
-// LIBUSB_CALL int sr_hotplug_callback(struct libusb_context *ctx, struct libusb_device *dev,
-//                                   libusb_hotplug_event event, void *user_data){
-
-// 	//   if (user_data == NULL){
-// 	// 	  sr_err("%s(): libsigrok usb event callback, userdata is NULL.", __func__);
-// 	// 	 return 0;
-// 	//   }
-
-// 	//   if (event == (int)LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED)
-// 	//   	 ev = USB_EV_HOTPLUG_ATTACH;
-// 	//   else if (event == (int)LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT)
-// 	//   	 ev = USB_EV_HOTPLUG_DETTACH;
-
-//     //   struct sr_context *user_ctx = (struct sr_context*)user_data;
-// 	//   if (user_ctx->hotplug_callback != NULL){
-// 	// 	  user_ctx->hotplug_callback(ctx, dev, ev, user_ctx->hotplug_user_data);
-// 	//   }
-// 	done++;
-// 	return 0;
-// }
-
-// SR_API int sr_listen_hotplug()
-// {
-// 	libusb_hotplug_callback_handle hp[2];
-// 	int ret;
-	
-//     ret = libusb_hotplug_register_callback(NULL,
-//                                            (libusb_hotplug_event)(LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED),
-//                                            (libusb_hotplug_flag)LIBUSB_HOTPLUG_ENUMERATE,
-//                                            0x1A86,
-//                                            LIBUSB_HOTPLUG_MATCH_ANY,
-//                                            LIBUSB_HOTPLUG_MATCH_ANY, 
-//                                            (libusb_hotplug_callback_fn)sr_hotplug_callback,
-//                                            NULL,
-//                                            &hp[0]);
-//     if (LIBUSB_SUCCESS != ret){
-//        return -1;
-//     }
-// 	ret = libusb_hotplug_register_callback(NULL,
-//                                            (libusb_hotplug_event)(LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT),
-//                                            0,
-//                                            0x1A86,
-//                                            LIBUSB_HOTPLUG_MATCH_ANY,
-//                                            LIBUSB_HOTPLUG_MATCH_ANY, 
-//                                            (libusb_hotplug_callback_fn)sr_hotplug_callback,
-//                                            NULL,
-//                                            &hp[1]);
-//     if (LIBUSB_SUCCESS != ret){
-//        return -1;
-//     }
-// 	return 0;
-// }
-
-// SR_API int sr_close_hotplug(struct sr_context *ctx)
-// {
-// 	// if (!ctx) {
-// 	// 	sr_err("%s(): libsigrok context was NULL.", __func__);
-// 	// 	return SR_ERR;
-// 	// }
-
-// 	// libusb_hotplug_deregister_callback(ctx->libusb_ctx, ctx->hotplug_handle);
-
-// 	return 0;
-// }
-
-// SR_API int sr_hotplug_wait_timout()
-// {
-// 	// if (!ctx) {
-// 	// 	sr_err("%s(): libsigrok context was NULL.", __func__);
-// 	// 	return;
-// 	// }
-// 	libusb_handle_events(NULL);
-// 	return done;
-// }
 
 /** @} */

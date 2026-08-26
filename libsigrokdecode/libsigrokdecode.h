@@ -23,6 +23,7 @@
 
 #include <stdint.h>
 #include <glib.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -41,7 +42,7 @@ struct srd_session;
  * The correct way to get/use the libsigrokdecode API functions is:
  *
  * @code{.c}
-//  *   #include <libsigrokdecode/libsigrokdecode.h>
+ *   #include <libsigrokdecode/libsigrokdecode.h>
  * @endcode
  */
 
@@ -106,17 +107,21 @@ enum srd_loglevel {
  */
 
 /* Marks public libsigrokdecode API symbols. */
-#ifndef _WIN32
-#define SRD_API __attribute__((visibility("default")))
+#if defined _WIN32
+#  if defined DLL_EXPORT
+#    define SRD_API __declspec(dllexport)
+#  else
+#    define SRD_API extern
+#  endif
 #else
-#define SRD_API
+#  define SRD_API __attribute__((visibility("default")))
 #endif
 
 /* Marks private, non-public libsigrokdecode symbols (not part of the API). */
-#ifndef _WIN32
-#define SRD_PRIV __attribute__((visibility("hidden")))
+#if defined _WIN32
+#  define SRD_PRIV /* EMPTY */
 #else
-#define SRD_PRIV
+#  define SRD_PRIV __attribute__((visibility("hidden")))
 #endif
 
 /*
@@ -266,7 +271,7 @@ struct srd_decoder_inst {
 	/** Absolute end sample number. */
 	uint64_t abs_end_samplenum;
 
-	/** Pointer to the interleaved buffer/chunk of input samples. */
+	/** Pointer to the buffer/chunk of input samples. */
 	const uint8_t *inbuf;
 
 	/** Number of bytes per sample in the interleaved buffer. */
@@ -397,7 +402,6 @@ SRD_API struct srd_decoder_inst *srd_inst_find_by_id(struct srd_session *sess,
 		const char *inst_id);
 SRD_API int srd_inst_initial_pins_set_all(struct srd_decoder_inst *di,
 		GArray *initial_pins);
-
 
 /* log.c */
 typedef int (*srd_log_callback)(void *cb_data, int loglevel,

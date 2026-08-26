@@ -334,7 +334,7 @@ Do you want to continue to use?</source>
     <message>
         <source>device detached!
 Do you want to save the session?</source>
-        <translation type="vanished">设备拔出!
+        <translation>设备拔出!
 是否保存当前会话?</translation>
     </message>
     <message>

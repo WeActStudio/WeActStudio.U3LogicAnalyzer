@@ -593,7 +593,7 @@ void MainWindow::show_device_detach()
 
 	// 创建文本标签
 	QLabel *label = new QLabel(dialog);
-	label->setText(tr("设备已断开！\n是否保存会话？"));
+	label->setText(tr("device detached!\nDo you want to save the session?"));
 	label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
 	label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 	contentLayout->addWidget(label, 1);
@@ -619,9 +619,12 @@ void MainWindow::show_device_detach()
 	dialog->setModal(false);
 
 	connect(saveBtn, &QPushButton::clicked, [=](){
+		qDebug() << last_focused_session_->main_bar()->channels_->device_name_;
+		qDebug() << last_focused_session_->main_bar()->channels_;
 		if (last_focused_session_->main_bar()->channels_ &&
 			is_wch_device(last_focused_session_->main_bar()->channels_->device_name_)) {
 			save_sessions();
+			last_focused_session_->main_bar()->action_save()->triggered();
 			last_focused_session_->main_bar()->set_setting_default();
 		}
 		do_device_detach_switch();

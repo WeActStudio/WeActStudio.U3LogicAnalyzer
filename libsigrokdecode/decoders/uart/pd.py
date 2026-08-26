@@ -114,7 +114,7 @@ class Decoder(srd.Decoder):
         {'id': 'parity', 'desc': 'Parity', 'default': 'none',
             'values': ('none', 'odd', 'even', 'zero', 'one', 'ignore')},
         {'id': 'stop_bits', 'desc': 'Stop bits', 'default': 1.0,
-            'values': (0.0, 0.5, 1.0, 1.5)},
+            'values': (0.0, 0.5, 1.0, 1.5, 2.0)},
         {'id': 'bit_order', 'desc': 'Bit order', 'default': 'lsb-first',
             'values': ('lsb-first', 'msb-first')},
         {'id': 'format', 'desc': 'Data format', 'default': 'hex',
@@ -207,11 +207,12 @@ class Decoder(srd.Decoder):
         self.samplerate = None
         self.frame_start = [-1, -1]
         self.frame_valid = [None, None]
+        self.cur_frame_bit = [None, None]
         self.startbit = [-1, -1]
         self.cur_data_bit = [0, 0]
         self.datavalue = [0, 0]
         self.paritybit = [-1, -1]
-        self.stopbit1 = [-1, -1]
+        self.stopbits = [[], []]
         self.startsample = [-1, -1]
         self.state = ['WAIT FOR START BIT', 'WAIT FOR START BIT']
         self.databits = [[], []]
@@ -251,11 +252,13 @@ class Decoder(srd.Decoder):
         # Save the sample number where the start bit begins.
         self.frame_start[rxtx] = self.samplenum
         self.frame_valid[rxtx] = True
+        self.cur_frame_bit[rxtx] = 0
 
-        self.state[rxtx] = 'GET START BIT'
+        self.advance_state(rxtx, signal)
 
     def get_start_bit(self, rxtx, signal):
         self.startbit[rxtx] = signal
+        self.cur_frame_bit[rxtx] += 1
 
         # The startbit must be 0. If not, we report an error and wait
         # for the next start bit (assuming this one was spurious).
@@ -266,17 +269,21 @@ class Decoder(srd.Decoder):
             es = self.samplenum + ceil(self.bit_width / 2.0)
             self.putpse(self.frame_start[rxtx], es, ['FRAME', rxtx,
                 (self.datavalue[rxtx], self.frame_valid[rxtx])])
-            self.state[rxtx] = 'WAIT FOR START BIT'
+            self.advance_state(rxtx, signal, fatal = True, idle = es)
             return
 
+        # Reset internal state for the pending UART frame.
         self.cur_data_bit[rxtx] = 0
         self.datavalue[rxtx] = 0
+        self.paritybit[rxtx] = -1
+        self.stopbits[rxtx].clear()
         self.startsample[rxtx] = -1
+        self.databits[rxtx].clear()
 
         self.putp(['STARTBIT', rxtx, self.startbit[rxtx]])
         self.putg([Ann.RX_START + rxtx, ['Start bit', 'Start', 'S']])
 
-        self.state[rxtx] = 'GET DATA BITS'
+        self.advance_state(rxtx, signal)
 
     def handle_packet(self, rxtx):
         d = 'rx' if (rxtx == RX) else 'tx'
@@ -312,6 +319,7 @@ class Decoder(srd.Decoder):
         # Store individual data bits and their start/end samplenumbers.
         s, halfbit = self.samplenum, int(self.bit_width / 2)
         self.databits[rxtx].append([signal, s - halfbit, s + halfbit])
+        self.cur_frame_bit[rxtx] += 1
 
         # Return here, unless we already received all data bits.
         self.cur_data_bit[rxtx] += 1
@@ -339,11 +347,7 @@ class Decoder(srd.Decoder):
 
         self.databits[rxtx] = []
 
-        # Advance to either reception of the parity bit, or reception of
-        # the STOP bits if parity is not applicable.
-        self.state[rxtx] = 'GET PARITY BIT'
-        if self.options['parity'] == 'none':
-            self.state[rxtx] = 'GET STOP BITS'
+        self.advance_state(rxtx, signal)
 
     def format_value(self, v):
         # Format value 'v' according to configured options.
@@ -389,6 +393,7 @@ class Decoder(srd.Decoder):
 
     def get_parity_bit(self, rxtx, signal):
         self.paritybit[rxtx] = signal
+        self.cur_frame_bit[rxtx] += 1
 
         if parity_ok(self.options['parity'], self.paritybit[rxtx],
                      self.datavalue[rxtx], self.options['data_bits']):
@@ -400,34 +405,93 @@ class Decoder(srd.Decoder):
             self.putg([Ann.RX_PARITY_ERR + rxtx, ['Parity error', 'Parity err', 'PE']])
             self.frame_valid[rxtx] = False
 
-        self.state[rxtx] = 'GET STOP BITS'
+        self.advance_state(rxtx, signal)
 
-    # TODO: Currently only supports 1 stop bit.
     def get_stop_bits(self, rxtx, signal):
-        self.stopbit1[rxtx] = signal
+        self.stopbits[rxtx].append(signal)
+        self.cur_frame_bit[rxtx] += 1
 
         # Stop bits must be 1. If not, we report an error.
-        if self.stopbit1[rxtx] != 1:
-            self.putp(['INVALID STOPBIT', rxtx, self.stopbit1[rxtx]])
+        if signal != 1:
+            self.putp(['INVALID STOPBIT', rxtx, signal])
             self.putg([Ann.RX_WARN + rxtx, ['Frame error', 'Frame err', 'FE']])
             self.frame_valid[rxtx] = False
 
-        self.putp(['STOPBIT', rxtx, self.stopbit1[rxtx]])
+        self.putp(['STOPBIT', rxtx, signal])
         self.putg([Ann.RX_STOP + rxtx, ['Stop bit', 'Stop', 'T']])
 
+        # Postprocess the UART frame after all STOP bits were seen.
+        if len(self.stopbits[rxtx]) < self.options['stop_bits']:
+            return
+        self.advance_state(rxtx, signal)
+
+    def advance_state(self, rxtx, signal = None, fatal = False, idle = None):
+        # Advances the protocol decoder's internal state for all regular
+        # UART frame inspection. Deals with either edges, sample points,
+        # or other .wait() conditions. Also gracefully handles extreme
+        # undersampling. Each turn takes one .wait() call which in turn
+        # corresponds to at least one sample. That is why as many state
+        # transitions are done here as required within a single call.
+        frame_end = self.frame_start[rxtx] + self.frame_len_sample_count
+        if idle is not None:
+            # When requested by the caller, start another (potential)
+            # IDLE period after the caller specified position.
+            self.idle_start[rxtx] = idle
+        if fatal:
+            # When requested by the caller, don't advance to the next
+            # UART frame's field, but to the start of the next START bit
+            # instead.
+            self.state[rxtx] = 'WAIT FOR START BIT'
+            return
+        # Advance to the next UART frame's field that we expect. Cope
+        # with absence of optional fields. Force scan for next IDLE
+        # after the (optional) STOP bit field, so that callers need
+        # not deal with optional field presence. Also handles the cases
+        # where the decoder navigates to edges which are not strictly
+        # a field's sampling point.
+        if self.state[rxtx] == 'WAIT FOR START BIT':
+            self.state[rxtx] = 'GET START BIT'
+            return
+        if self.state[rxtx] == 'GET START BIT':
+            self.state[rxtx] = 'GET DATA BITS'
+            return
+        if self.state[rxtx] == 'GET DATA BITS':
+            self.state[rxtx] = 'GET PARITY BIT'
+            if self.options['parity'] != 'none':
+                return
+            # FALLTHROUGH
+        if self.state[rxtx] == 'GET PARITY BIT':
+            self.state[rxtx] = 'GET STOP BITS'
+            if self.options['stop_bits']:
+                return
+            # FALLTHROUGH
+        if self.state[rxtx] == 'GET STOP BITS':
+            # Postprocess the previously received UART frame. Advance
+            # the read position to after the frame's last bit time. So
+            # that the start of the next START bit won't fall into the
+            # end of the previously received UART frame. This improves
+            # robustness in the presence of glitchy input data.
+            ss = self.frame_start[rxtx]
+            es = self.samplenum + ceil(self.bit_width / 2.0)
+            self.handle_frame(rxtx, ss, es)
+            self.state[rxtx] = 'WAIT FOR START BIT'
+            self.idle_start[rxtx] = frame_end
+            return
+        # Unhandled state, actually a programming error. Emit diagnostics?
+        self.state[rxtx] = 'WAIT FOR START BIT'
+
+    def handle_frame(self, rxtx, ss, es):
         # Pass the complete UART frame to upper layers.
-        es = self.samplenum + ceil(self.bit_width / 2.0)
-        self.putpse(self.frame_start[rxtx], es, ['FRAME', rxtx,
+        self.putpse(ss, es, ['FRAME', rxtx,
             (self.datavalue[rxtx], self.frame_valid[rxtx])])
 
-        self.state[rxtx] = 'WAIT FOR START BIT'
-        self.idle_start[rxtx] = self.frame_start[rxtx] + self.frame_len_sample_count
+    def handle_idle(self, rxtx, ss, es):
+        self.putpse(ss, es, ['IDLE', rxtx, 0])
 
-    def handle_break(self, rxtx):
-        self.putpse(self.frame_start[rxtx], self.samplenum,
-                ['BREAK', rxtx, 0])
-        self.putgse(self.frame_start[rxtx], self.samplenum,
-                [Ann.RX_BREAK + rxtx, ['Break condition', 'Break', 'Brk', 'B']])
+    def handle_break(self, rxtx, ss, es):
+        self.putpse(ss, es, ['BREAK', rxtx, 0])
+        self.putgse(ss, es, [Ann.RX_BREAK + rxtx,
+                ['Break condition', 'Break', 'Brk', 'B']])
         self.state[rxtx] = 'WAIT FOR START BIT'
 
     def get_wait_cond(self, rxtx, inv):
@@ -437,17 +501,12 @@ class Decoder(srd.Decoder):
         state = self.state[rxtx]
         if state == 'WAIT FOR START BIT':
             return {rxtx: 'r' if inv else 'f'}
-        if state == 'GET START BIT':
-            bitnum = 0
-        elif state == 'GET DATA BITS':
-            bitnum = 1 + self.cur_data_bit[rxtx]
-        elif state == 'GET PARITY BIT':
-            bitnum = 1 + self.options['data_bits']
-        elif state == 'GET STOP BITS':
-            bitnum = 1 + self.options['data_bits']
-            bitnum += 0 if self.options['parity'] == 'none' else 1
-        want_num = ceil(self.get_sample_point(rxtx, bitnum))
-        return {'skip': want_num - self.samplenum}
+        if state in ('GET START BIT', 'GET DATA BITS',
+                'GET PARITY BIT', 'GET STOP BITS'):
+            bitnum = self.cur_frame_bit[rxtx]
+            # TODO: Currently does not support half STOP bits.
+            want_num = ceil(self.get_sample_point(rxtx, bitnum))
+            return {'skip': want_num - self.samplenum}
 
     def get_idle_cond(self, rxtx, inv):
         # Return a condition that corresponds to the (expected) end of
@@ -490,7 +549,8 @@ class Decoder(srd.Decoder):
             return
         diff = self.samplenum - self.break_start[rxtx]
         if diff >= self.break_min_sample_count:
-            self.handle_break(rxtx)
+            ss, es = self.frame_start[rxtx], self.samplenum
+            self.handle_break(rxtx, ss, es)
         self.break_start[rxtx] = None
 
     def inspect_idle(self, rxtx, signal, inv):
@@ -509,8 +569,8 @@ class Decoder(srd.Decoder):
         if diff < self.frame_len_sample_count:
             return
         ss, es = self.idle_start[rxtx], self.samplenum
-        self.putpse(ss, es, ['IDLE', rxtx, 0])
-        self.idle_start[rxtx] = self.samplenum
+        self.handle_idle(rxtx, ss, es)
+        self.idle_start[rxtx] = es
 
     def decode(self):
         if not self.samplerate:

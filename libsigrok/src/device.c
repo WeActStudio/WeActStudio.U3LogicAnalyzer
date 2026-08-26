@@ -67,7 +67,7 @@ SR_PRIV struct sr_channel *sr_channel_new(struct sr_dev_inst *sdi,
 	ch->index = index;
 	ch->type = type;
 	ch->enabled = enabled;
-	if (name)
+	if (name && *name)
 		ch->name = g_strdup(name);
 
 	sdi->channels = g_slist_append(sdi->channels, ch);
@@ -119,6 +119,8 @@ SR_API int sr_dev_channel_name_set(struct sr_channel *channel,
 		const char *name)
 {
 	if (!channel)
+		return SR_ERR_ARG;
+	if (!name || !*name)
 		return SR_ERR_ARG;
 
 	g_free(channel->name);
@@ -253,6 +255,62 @@ SR_PRIV gboolean sr_channel_lists_differ(GSList *l1, GSList *l2)
 		return TRUE;
 
 	return FALSE;
+}
+
+/**
+ * Allocate and initialize a new channel group, and add it to sdi.
+ *
+ * @param[in] sdi The device instance the channel group is connected to.
+ *                Optional, can be NULL.
+ * @param[in] name @copydoc sr_channel_group::name
+ * @param[in] priv @copydoc sr_channel_group::priv
+ *
+ * @return A pointer to a new struct sr_channel_group, NULL upon error.
+ *
+ * @private
+ */
+SR_PRIV struct sr_channel_group *sr_channel_group_new(struct sr_dev_inst *sdi,
+	const char *name, void *priv)
+{
+	struct sr_channel_group *cg;
+
+	cg = g_malloc0(sizeof(*cg));
+	if (name && *name)
+		cg->name = g_strdup(name);
+	cg->priv = priv;
+
+	if (sdi)
+		sdi->channel_groups = g_slist_append(sdi->channel_groups, cg);
+
+	return cg;
+}
+
+/**
+ * Release a previously allocated struct sr_channel_group.
+ *
+ * @param[in] cg Pointer to struct sr_channel_group.
+ *
+ * @private
+ */
+SR_PRIV void sr_channel_group_free(struct sr_channel_group *cg)
+{
+	if (!cg)
+		return;
+
+	g_free(cg->name);
+	g_slist_free(cg->channels);
+	g_free(cg->priv);
+	g_free(cg);
+}
+
+/**
+ * Wrapper around sr_channel_group_free(), suitable for glib iterators.
+ *
+ * @private
+ */
+SR_PRIV void sr_channel_group_free_cb(void *cg)
+{
+	return sr_channel_group_free(cg);
 }
 
 /**
@@ -433,7 +491,8 @@ SR_API int sr_dev_inst_channel_add(struct sr_dev_inst *sdi, int index, int type,
 	if (!sdi || sdi->inst_type != SR_INST_USER || index < 0)
 		return SR_ERR_ARG;
 
-	sr_channel_new(sdi, index, type, TRUE, name);
+	if (!sr_channel_new(sdi, index, type, TRUE, name))
+		return SR_ERR_DATA;
 
 	return SR_OK;
 }
@@ -448,7 +507,6 @@ SR_API int sr_dev_inst_channel_add(struct sr_dev_inst *sdi, int index, int type,
 SR_PRIV void sr_dev_inst_free(struct sr_dev_inst *sdi)
 {
 	struct sr_channel *ch;
-	struct sr_channel_group *cg;
 	GSList *l;
 
 	if (!sdi)
@@ -459,15 +517,7 @@ SR_PRIV void sr_dev_inst_free(struct sr_dev_inst *sdi)
 		sr_channel_free(ch);
 	}
 	g_slist_free(sdi->channels);
-
-	for (l = sdi->channel_groups; l; l = l->next) {
-		cg = l->data;
-		g_free(cg->name);
-		g_slist_free(cg->channels);
-		g_free(cg->priv);
-		g_free(cg);
-	}
-	g_slist_free(sdi->channel_groups);
+	g_slist_free_full(sdi->channel_groups, sr_channel_group_free_cb);
 
 	if (sdi->session)
 		sr_session_dev_remove(sdi->session, sdi);
@@ -519,6 +569,15 @@ SR_PRIV void sr_usb_dev_inst_free(struct sr_usb_dev_inst *usb)
 	g_free(usb);
 }
 
+/**
+ * Wrapper for g_slist_free_full() convenience.
+ *
+ * @private
+ */
+SR_PRIV void sr_usb_dev_inst_free_cb(gpointer p)
+{
+	sr_usb_dev_inst_free(p);
+}
 #endif
 
 #ifdef HAVE_SERIAL_COMM
@@ -674,20 +733,16 @@ SR_API int sr_dev_open(struct sr_dev_inst *sdi)
 	if (sdi->status == SR_ST_ACTIVE) {
 		sr_err("%s: Device instance already active, can't re-open.",
 			sdi->driver->name);
-		//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);	
 		return SR_ERR;
 	}
 
 	sr_dbg("%s: Opening device instance.", sdi->driver->name);
-	//DbgPrint("Enter file:%s, API: %s, line:%d,%s: Opening device instance.", __FILE__, __func__, __LINE__, sdi->driver->name);	
 
 	ret = sdi->driver->dev_open(sdi);
-	//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);	
 
 	if (ret == SR_OK)
 		sdi->status = SR_ST_ACTIVE;
-	//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);	
-	
+
 	return ret;
 }
 
@@ -718,12 +773,11 @@ SR_API int sr_dev_close(struct sr_dev_inst *sdi)
 	if (sdi->status != SR_ST_ACTIVE) {
 		sr_err("%s: Device instance not active, can't close.",
 			sdi->driver->name);
-		//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);	
 		return SR_ERR_DEV_CLOSED;
 	}
 
 	sdi->status = SR_ST_INACTIVE;
-	//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);
+
 	sr_dbg("%s: Closing device instance.", sdi->driver->name);
 
 	return sdi->driver->dev_close(sdi);

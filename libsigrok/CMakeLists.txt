@@ -190,6 +190,8 @@ set(LIBSIGROK_SOURCES
     # --- End of driver list ---
     src/driver_list_stop.c
 
+    src/minilzo/minilzo.c
+
     # Input modules
     src/input/input.c
     src/input/feed_queue.c
@@ -197,11 +199,13 @@ set(LIBSIGROK_SOURCES
     src/input/chronovu_la8.c
     src/input/csv.c
     src/input/logicport.c
+    src/input/protocoldata.c
     src/input/raw_analog.c
     src/input/saleae.c
     src/input/trace32_ad.c
     src/input/vcd.c
     src/input/wav.c
+    src/input/isf.c
     src/input/null.c
 
     # Output modules

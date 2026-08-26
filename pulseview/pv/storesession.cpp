@@ -149,10 +149,13 @@ bool StoreSession::start()
 	uint64_t end_sample;
 
 	if (sample_range_.first == sample_range_.second) {
+		qDebug() << "No sample range specified, save everything we have";
 		// No sample range specified, save everything we have
 		start_sample_ = 0;
 		sample_count_ =	any_segment->get_sample_count();
+		qDebug() << "Sample count: " << sample_count_;
 	} else {
+		qDebug() << "Exporting sample range" << sample_range_.first << "to" << sample_range_.second;
 		if (sample_range_.first > sample_range_.second) {
 			start_sample_ = sample_range_.second;
 			end_sample = min(sample_range_.first, any_segment->get_sample_count());

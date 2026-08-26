@@ -63,7 +63,7 @@ typedef struct {
 	struct srd_decoder_inst *di;
 	uint64_t abs_start_samplenum;
 	unsigned int itercnt;
-	const uint8_t *inbuf;
+	uint8_t *inbuf;
 	uint64_t inbuflen;
 	PyObject *sample;
 } srd_logic;

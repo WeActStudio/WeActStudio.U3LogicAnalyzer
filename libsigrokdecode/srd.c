@@ -270,15 +270,46 @@ SRD_API int srd_init(const char *path)
 	}
 
 	/* Environment variable overrides everything, for debugging. */
+	/*
+	 * TODO
+	 * Is the comment still applicable and correct or up to date?
+	 * This implementation adds paths which were specified by the
+	 * env var. Which can shadow files in other locations, or can
+	 * extend the set of available decoders. Which need not only
+	 * serve for development, it is as beneficial to regular users.
+	 * Without shadowing all other files still are found.
+	 */
 	if ((env_path = g_getenv("SIGROKDECODE_DIR"))) {
 		if ((ret = srd_decoder_searchpath_add(env_path)) != SRD_OK) {
 			Py_Finalize();
 			return ret;
 		}
 	}
+	env_path = g_getenv("SIGROKDECODE_PATH");
+	if (env_path) {
+		char **dir_list, **dir_iter, *dir_item;
+		dir_list = g_strsplit(env_path, G_SEARCHPATH_SEPARATOR_S, 0);
+		for (dir_iter = dir_list; *dir_iter; dir_iter++) {
+			dir_item = *dir_iter;
+			if (!dir_item || !*dir_item)
+				continue;
+			ret = srd_decoder_searchpath_add(dir_item);
+			if (ret != SRD_OK) {
+				Py_Finalize();
+				return ret;
+			}
+		}
+		g_strfreev(dir_list);
+	}
 
-	/* Initialize the Python GIL (this also happens to acquire it). */
+#if PY_VERSION_HEX < 0x03090000
+	/*
+	 * Initialize and acquire the Python GIL. In Python 3.7+ this
+	 * will be done implicitly as part of the Py_InitializeEx()
+	 * call above. PyEval_InitThreads() was deprecated in 3.9.
+	 */
 	PyEval_InitThreads();
+#endif
 
 	/* Release the GIL (ignore return value, we don't need it here). */
 	(void)PyEval_SaveThread();

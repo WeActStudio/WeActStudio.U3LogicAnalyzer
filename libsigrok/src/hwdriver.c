@@ -64,6 +64,8 @@ static struct sr_key_info sr_key_info_config[] = {
 	{SR_CONF_SIGNAL_GENERATOR, SR_T_STRING, NULL, "Signal generator", NULL},
 	{SR_CONF_POWERMETER, SR_T_STRING, NULL, "Power meter", NULL},
 	{SR_CONF_MULTIPLEXER, SR_T_STRING, NULL, "Multiplexer", NULL},
+	{SR_CONF_DELAY_GENERATOR, SR_T_STRING, NULL, "Delay generator", NULL},
+	{SR_CONF_FREQUENCY_COUNTER, SR_T_STRING, NULL, "Frequency counter", NULL},
 
 	/* Driver scan options */
 	{SR_CONF_CONN, SR_T_STRING, "conn",
@@ -74,6 +76,8 @@ static struct sr_key_info sr_key_info_config[] = {
 		"Modbus slave address", NULL},
 	{SR_CONF_FORCE_DETECT, SR_T_STRING, "force_detect",
 		"Forced detection", NULL},
+	{SR_CONF_PROBE_NAMES, SR_T_STRING, "probe_names",
+		"Names of device's probes", NULL},
 
 	/* Device (or channel group) configuration */
 	{SR_CONF_SAMPLERATE, SR_T_UINT64, "samplerate",
@@ -212,6 +216,10 @@ static struct sr_key_info sr_key_info_config[] = {
 		"Power Target", NULL},
 	{SR_CONF_RESISTANCE_TARGET, SR_T_FLOAT, "resistance_target",
 		"Resistance Target", NULL},
+	{SR_CONF_OVER_CURRENT_PROTECTION_DELAY, SR_T_FLOAT, "ocp_delay",
+		"Over-current protection delay", NULL},
+	{SR_CONF_INVERTED, SR_T_BOOL, "inverted",
+		"Signal inverted", NULL},
 
 	/* Special stuff */
 	{SR_CONF_SESSIONFILE, SR_T_STRING, "sessionfile",
@@ -248,6 +256,19 @@ static struct sr_key_info sr_key_info_config[] = {
 		"Device mode", NULL},
 	{SR_CONF_TEST_MODE, SR_T_STRING, "test_mode",
 		"Test mode", NULL},
+
+	{SR_CONF_OVER_POWER_PROTECTION_ENABLED, SR_T_BOOL, "opp_enabled",
+		"Over-power protection enabled", NULL},
+	{SR_CONF_OVER_POWER_PROTECTION_ACTIVE, SR_T_BOOL, "opp_active",
+		"Over-power protection active", NULL},
+	{SR_CONF_OVER_POWER_PROTECTION_THRESHOLD, SR_T_FLOAT, "opp_threshold",
+		"Over-power protection threshold", NULL},
+
+	{SR_CONF_RESISTANCE, SR_T_FLOAT, "resistance",
+		"Resistance", NULL},
+
+	{SR_CONF_GATE_TIME, SR_T_RATIONAL_PERIOD, "gate_time",
+		"Gate time", NULL},
 	{SR_CONF_HOT_PLUG, SR_T_UINT64, "hot_plug",
 		"hot plug", NULL},
 	{SR_CONF_TRIGGER_OFFSET, SR_T_UINT64, "trigger_offset",
@@ -348,6 +369,8 @@ SR_PRIV const GVariantType *sr_variant_type_get(int datatype)
 	switch (datatype) {
 	case SR_T_INT32:
 		return G_VARIANT_TYPE_INT32;
+	case SR_T_UINT32:
+		return G_VARIANT_TYPE_UINT32;
 	case SR_T_UINT64:
 		return G_VARIANT_TYPE_UINT64;
 	case SR_T_STRING:
@@ -708,9 +731,9 @@ static void log_key(const struct sr_dev_inst *sdi,
 	srci = sr_key_info_get(SR_KEY_CONFIG, key);
 
 	tmp_str = g_variant_print(data, TRUE);
-	// sr_spew("sr_config_%s(): key %d (%s) sdi %p cg %s -> %s", opstr, key,
-	// 	srci ? srci->id : "NULL", sdi, cg ? cg->name : "NULL",
-	// 	data ? tmp_str : "NULL");
+	sr_spew("sr_config_%s(): key %d (%s) sdi %p cg %s -> %s", opstr, key,
+		srci ? srci->id : "NULL", sdi, cg ? cg->name : "NULL",
+		data ? tmp_str : "NULL");
 	g_free(tmp_str);
 }
 
@@ -776,15 +799,15 @@ static int check_key(const struct sr_dev_driver *driver,
 		}
 	}
 	g_variant_unref(gvar_opts);
-	// if (!pub_opt) {
-	// 	sr_err("Option '%s' not available%s.", srci->id, suffix);
-	// 	return SR_ERR_ARG;
-	// }
+	if (!pub_opt) {
+		sr_err("Option '%s' not available%s.", srci->id, suffix);
+		return SR_ERR_ARG;
+	}
 
-	// if (!(pub_opt & op)) {
-	// 	sr_err("Option '%s' not available to %s%s.", srci->id, opstr, suffix);
-	// 	return SR_ERR_ARG;
-	// }
+	if (!(pub_opt & op)) {
+		sr_err("Option '%s' not available to %s%s.", srci->id, opstr, suffix);
+		return SR_ERR_ARG;
+	}
 
 	return SR_OK;
 }
@@ -836,7 +859,7 @@ SR_API int sr_config_get(const struct sr_dev_driver *driver,
 	}
 
 	if ((ret = driver->config_get(key, data, sdi, cg)) == SR_OK) {
-		// log_key(sdi, cg, key, SR_CONF_GET, *data);
+		log_key(sdi, cg, key, SR_CONF_GET, *data);
 		/* Got a floating reference from the driver. Sink it here,
 		 * caller will need to unref when done with it. */
 		g_variant_ref_sink(*data);
@@ -874,21 +897,19 @@ SR_API int sr_config_set(const struct sr_dev_inst *sdi,
 		uint32_t key, GVariant *data)
 {
 	int ret;
-	ret = sdi->driver->config_set(key, data, sdi, cg);
+
 	g_variant_ref_sink(data);
 
 	if (!sdi || !sdi->driver || !sdi->priv || !data)
 		ret = SR_ERR;
-	else if (!sdi->driver->config_set){
+	else if (!sdi->driver->config_set)
 		ret = SR_ERR_ARG;
-	}
 	else if (sdi->status != SR_ST_ACTIVE) {
 		sr_err("%s: Device instance not active, can't set config.",
 			sdi->driver->name);
 		ret = SR_ERR_DEV_CLOSED;
-	} else if (check_key(sdi->driver, sdi, cg, key, SR_CONF_SET, data) != SR_OK){
+	} else if (check_key(sdi->driver, sdi, cg, key, SR_CONF_SET, data) != SR_OK)
 		return SR_ERR_ARG;
-	}
 	else if ((ret = sr_variant_type_check(key, data)) == SR_OK) {
 		log_key(sdi, cg, key, SR_CONF_SET, data);
 		ret = sdi->driver->config_set(key, data, sdi, cg);
@@ -969,26 +990,18 @@ SR_API int sr_config_list(const struct sr_dev_driver *driver,
 	if (!driver || !data)
 		return SR_ERR;
 
-	//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);
-
 	if (!driver->config_list)
 		return SR_ERR_ARG;
-
-	//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);
 
 	if (key != SR_CONF_SCAN_OPTIONS && key != SR_CONF_DEVICE_OPTIONS) {
 		if (check_key(driver, sdi, cg, key, SR_CONF_LIST, NULL) != SR_OK)
 			return SR_ERR_ARG;
 	}
 
-	//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);
-
 	if (sdi && !sdi->priv) {
 		sr_err("Can't list config (sdi != NULL, sdi->priv == NULL).");
 		return SR_ERR;
 	}
-
-	//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);
 
 	if (key != SR_CONF_SCAN_OPTIONS && key != SR_CONF_DEVICE_OPTIONS && !sdi) {
 		sr_err("Config keys other than SR_CONF_SCAN_OPTIONS and "
@@ -996,44 +1009,30 @@ SR_API int sr_config_list(const struct sr_dev_driver *driver,
 		return SR_ERR_ARG;
 	}
 
-	//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);
-
 	if (cg && sdi && !sdi->channel_groups) {
 		sr_err("Can't list config for channel group, there are none.");
 		return SR_ERR_ARG;
 	}
-
-	//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);
 
 	if (cg && sdi && !g_slist_find(sdi->channel_groups, cg)) {
 		sr_err("If a channel group is specified, it must be a valid one.");
 		return SR_ERR_ARG;
 	}
 
-	//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);
-
 	if (cg && !sdi) {
 		sr_err("Need sdi when a channel group is specified.");
 		return SR_ERR_ARG;
 	}
-
-	//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);
 
 	if ((ret = driver->config_list(key, data, sdi, cg)) == SR_OK) {
 		log_key(sdi, cg, key, SR_CONF_LIST, *data);
 		g_variant_ref_sink(*data);
 	}
 
-	//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);
-
-	if (ret == SR_ERR_CHANNEL_GROUP) {
+	if (ret == SR_ERR_CHANNEL_GROUP)
 		sr_err("%s: No channel group specified.",
 			(sdi) ? sdi->driver->name : "unknown");
-		//DbgPrint("%s: No channel group specified.",
-			//(sdi) ? sdi->driver->name : "unknown");
-	}
 
-	//DbgPrint("Enter file:%s, API: %s, line:%d", __FILE__, __func__, __LINE__);
 	return ret;
 }
 

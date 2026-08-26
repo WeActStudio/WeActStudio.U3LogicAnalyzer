@@ -23,7 +23,6 @@
 #include "libsigrokdecode.h"
 #include <glib.h>
 
-
 /**
  * @file
  *
@@ -579,6 +578,7 @@ static int get_binary_classes(struct srd_decoder *dec)
 	PyGILState_STATE gstate;
 
 	gstate = PyGILState_Ensure();
+
 	if (!PyObject_HasAttrString(dec->py_dec, "binary")) {
 		PyGILState_Release(gstate);
 		return SRD_OK;

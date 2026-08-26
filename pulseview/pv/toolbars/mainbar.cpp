@@ -2423,8 +2423,8 @@ namespace pv
 					dialog.setFont(font);
 
 					// 设置对话框最小宽度，高度自动计算
-					dialog.setMinimumWidth(400);
-					dialog.adjustSize();
+					// dialog.setMinimumWidth(400);
+					// dialog.adjustSize();
 
 					QVBoxLayout *layout = new QVBoxLayout(&dialog);
 

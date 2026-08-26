@@ -215,7 +215,7 @@ SR_PRIV int soft_trigger_logic_check(struct soft_trigger_logic *stl,
 				/* Fire trigger. */
 				offset = i / stl->unitsize;
 
-				// std_session_send_df_trigger(stl->sdi);
+				std_session_send_df_trigger(stl->sdi);
 				break;
 			}
 		} else if (stl->cur_stage > 0) {

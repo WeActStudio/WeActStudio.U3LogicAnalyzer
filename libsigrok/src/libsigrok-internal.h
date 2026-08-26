@@ -32,6 +32,9 @@
 #ifdef HAVE_LIBUSB_1_0
 #include <libusb.h>
 #endif
+#ifdef HAVE_LIBFTDI
+#include <ftdi.h>
+#endif
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -165,6 +168,23 @@ static inline uint32_t read_u24le(const uint8_t *p)
 	u <<= 8; u |= p[2];
 	u <<= 8; u |= p[1];
 	u <<= 8; u |= p[0];
+
+	return u;
+}
+
+/**
+ * Read a 24 bits big endian unsigned integer out of memory.
+ * @param x a pointer to the input memory
+ * @return the corresponding unsigned integer
+ */
+static inline uint32_t read_u24be(const uint8_t *p)
+{
+	uint32_t u;
+
+	u = 0;
+	u <<= 8; u |= p[0];
+	u <<= 8; u |= p[1];
+	u <<= 8; u |= p[2];
 
 	return u;
 }
@@ -448,6 +468,19 @@ static inline void write_u16le(uint8_t *p, uint16_t x)
 #define WL16(p, x) write_u16le((uint8_t *)(p), (uint16_t)(x))
 
 /**
+ * Write a 24 bits unsigned integer to memory stored as little endian.
+ * @param p a pointer to the output memory
+ * @param x the input unsigned integer
+ */
+static inline void write_u24le(uint8_t *p, uint32_t x)
+{
+	p[0] = x & 0xff; x >>= 8;
+	p[1] = x & 0xff; x >>= 8;
+	p[2] = x & 0xff; x >>= 8;
+}
+#define WL24(p, x) write_u24le((uint8_t *)(p), (uint32_t)(x))
+
+/**
  * Write a 32 bits unsigned integer to memory stored as big endian.
  * @param p a pointer to the output memory
  * @param x the input unsigned integer
@@ -474,6 +507,21 @@ static inline void write_u32le(uint8_t *p, uint32_t x)
 	p[3] = x & 0xff; x >>= 8;
 }
 #define WL32(p, x) write_u32le((uint8_t *)(p), (uint32_t)(x))
+
+/**
+ * Write a 40 bits unsigned integer to memory stored as little endian.
+ * @param p a pointer to the output memory
+ * @param x the input unsigned integer
+ */
+static inline void write_u40le(uint8_t *p, uint64_t x)
+{
+	p[0] = x & 0xff; x >>= 8;
+	p[1] = x & 0xff; x >>= 8;
+	p[2] = x & 0xff; x >>= 8;
+	p[3] = x & 0xff; x >>= 8;
+	p[4] = x & 0xff; x >>= 8;
+}
+#define WL40(p, x) write_u40le((uint8_t *)(p), (uint64_t)(x))
 
 /**
  * Write a 48 bits unsigned integer to memory stored as little endian.
@@ -585,6 +633,30 @@ static inline uint8_t read_u8_inc(const uint8_t **p)
 }
 
 /**
+ * Read unsigned 8bit integer, check length, increment read position.
+ * @param[in, out] p Pointer into byte stream.
+ * @param[in, out] l Remaining input payload length.
+ * @return Retrieved integer value, unsigned.
+ */
+static inline uint8_t read_u8_inc_len(const uint8_t **p, size_t *l)
+{
+	uint8_t v;
+
+	if (!p || !*p)
+		return 0;
+	if (l && *l < sizeof(v)) {
+		*l = 0;
+		return 0;
+	}
+	v = read_u8(*p);
+	*p += sizeof(v);
+	if (l)
+		*l -= sizeof(v);
+
+	return v;
+}
+
+/**
  * Read signed 8bit integer from raw memory, increment read position.
  * @param[in, out] p Pointer into byte stream.
  * @return Retrieved integer value, signed.
@@ -631,6 +703,30 @@ static inline uint16_t read_u16le_inc(const uint8_t **p)
 		return 0;
 	v = read_u16le(*p);
 	*p += sizeof(v);
+
+	return v;
+}
+
+/**
+ * Read unsigned 16bit integer (LE format), check length, increment position.
+ * @param[in, out] p Pointer into byte stream.
+ * @param[in, out] l Remaining input payload length.
+ * @return Retrieved integer value, unsigned.
+ */
+static inline uint16_t read_u16le_inc_len(const uint8_t **p, size_t *l)
+{
+	uint16_t v;
+
+	if (!p || !*p)
+		return 0;
+	if (l && *l < sizeof(v)) {
+		*l = 0;
+		return 0;
+	}
+	v = read_u16le(*p);
+	*p += sizeof(v);
+	if (l)
+		*l -= sizeof(v);
 
 	return v;
 }
@@ -896,6 +992,19 @@ static inline void write_u16le_inc(uint8_t **p, uint16_t x)
 }
 
 /**
+ * Write unsigned 24bit liggle endian integer to raw memory, increment write position.
+ * @param[in, out] p Pointer into byte stream.
+ * @param[in] x Value to write.
+ */
+static inline void write_u24le_inc(uint8_t **p, uint32_t x)
+{
+	if (!p || !*p)
+		return;
+	write_u24le(*p, x);
+	*p += 3 * sizeof(uint8_t);
+}
+
+/**
  * Write unsigned 32bit big endian integer to raw memory, increment write position.
  * @param[in, out] p Pointer into byte stream.
  * @param[in] x Value to write.
@@ -919,6 +1028,19 @@ static inline void write_u32le_inc(uint8_t **p, uint32_t x)
 		return;
 	write_u32le(*p, x);
 	*p += sizeof(x);
+}
+
+/**
+ * Write unsigned 40bit little endian integer to raw memory, increment write position.
+ * @param[in, out] p Pointer into byte stream.
+ * @param[in] x Value to write.
+ */
+static inline void write_u40le_inc(uint8_t **p, uint64_t x)
+{
+	if (!p || !*p)
+		return;
+	write_u40le(*p, x);
+	*p += 5 * sizeof(uint8_t);
 }
 
 /**
@@ -979,6 +1101,21 @@ static inline void write_dblle_inc(uint8_t **p, double x)
 #define libusb_has_capability(x) 0
 #define libusb_handle_events_timeout_completed(ctx, tv, c) \
 	libusb_handle_events_timeout(ctx, tv)
+#endif
+
+/*
+ * Convenience for FTDI library version dependency.
+ * - Version 1.5 introduced ftdi_tciflush(), ftdi_tcoflush(), and
+ *   ftdi_tcioflush() all within the same commit, and deprecated
+ *   ftdi_usb_purge_buffers() which suffered from inverse semantics.
+ *   The API is drop-in compatible (arguments count and data types are
+ *   identical). The libsigrok source code always flushes RX and TX at
+ *   the same time, never individually.
+ */
+#if defined HAVE_FTDI_TCIOFLUSH && HAVE_FTDI_TCIOFLUSH
+#  define PURGE_FTDI_BOTH ftdi_tcioflush
+#else
+#  define PURGE_FTDI_BOTH ftdi_usb_purge_buffers
 #endif
 
 /* Static definitions of structs ending with an all-zero entry are a
@@ -1451,6 +1588,13 @@ struct sr_usb_dev_inst {
 };
 #endif
 
+/** Raw TCP device instance. */
+struct sr_tcp_dev_inst {
+	char *host_addr;	/**!< IP address or host name */
+	char *tcp_port;		/**!< TCP port number/name */
+	int sock_fd;		/**!< TCP socket's file descriptor */
+};
+
 struct sr_serial_dev_inst;
 #ifdef HAVE_SERIAL_COMM
 struct ser_lib_functions;
@@ -1500,6 +1644,9 @@ struct sr_serial_dev_inst {
 		SER_BT_CONN_BLE122,	/**!< BLE, BLE122 module, indications */
 		SER_BT_CONN_NRF51,	/**!< BLE, Nordic nRF51, notifications */
 		SER_BT_CONN_CC254x,	/**!< BLE, TI CC254x, notifications */
+		SER_BT_CONN_AC6328,	/**!< BLE, JL AC6328B, notifications */
+		SER_BT_CONN_DIALOG,	/**!< BLE, dialog DA14580, notifications */
+		SER_BT_CONN_NOTIFY,	/**!< BLE, generic notifications */
 		SER_BT_CONN_MAX,	/**!< sentinel */
 	} bt_conn_type;
 	char *bt_addr_local;
@@ -1509,9 +1656,11 @@ struct sr_serial_dev_inst {
 	uint16_t bt_notify_handle_write;
 	uint16_t bt_notify_handle_cccd;
 	uint16_t bt_notify_value_cccd;
+	uint16_t bt_ble_mtu;
 	struct sr_bt_desc *bt_desc;
 	GSList *bt_source_args;
 #endif
+	struct sr_tcp_dev_inst *tcp_dev;
 };
 #endif
 
@@ -1529,16 +1678,19 @@ struct drv_context {
 
 /*--- log.c -----------------------------------------------------------------*/
 
+/* Provide a macro for other source code locations to re-use. */
 #if defined(_WIN32) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4))
 /*
  * On MinGW, we need to specify the gnu_printf format flavor or GCC
  * will assume non-standard Microsoft printf syntax.
  */
-SR_PRIV int sr_log(int loglevel, const char *format, ...)
-		__attribute__((__format__ (__gnu_printf__, 2, 3)));
+#define ATTR_FMT_PRINTF(fmt_pos, arg_pos) \
+		__attribute__((__format__ (__gnu_printf__, fmt_pos, arg_pos)))
 #else
-SR_PRIV int sr_log(int loglevel, const char *format, ...) G_GNUC_PRINTF(2, 3);
+#define ATTR_FMT_PRINTF(fmt_pos, arg_pos)	G_GNUC_PRINTF(fmt_pos, arg_pos)
 #endif
+
+SR_PRIV int sr_log(int loglevel, const char *format, ...) ATTR_FMT_PRINTF(2, 3);
 
 /* Message logging helpers with subsystem-specific prefix string. */
 #define sr_spew(...)	sr_log(SR_LOG_SPEW, LOG_PREFIX ": " __VA_ARGS__)
@@ -1572,6 +1724,11 @@ SR_PRIV struct sr_channel *sr_next_enabled_channel(const struct sr_dev_inst *sdi
 		struct sr_channel *cur_channel);
 SR_PRIV gboolean sr_channels_differ(struct sr_channel *ch1, struct sr_channel *ch2);
 SR_PRIV gboolean sr_channel_lists_differ(GSList *l1, GSList *l2);
+
+SR_PRIV struct sr_channel_group *sr_channel_group_new(struct sr_dev_inst *sdi,
+	const char *name, void *priv);
+SR_PRIV void sr_channel_group_free(struct sr_channel_group *cg);
+SR_PRIV void sr_channel_group_free_cb(void *cg);
 
 /** Device instance data */
 struct sr_dev_inst {
@@ -1611,6 +1768,7 @@ SR_PRIV void sr_dev_inst_free(struct sr_dev_inst *sdi);
 SR_PRIV struct sr_usb_dev_inst *sr_usb_dev_inst_new(uint8_t bus,
 		uint8_t address, struct libusb_device_handle *hdl);
 SR_PRIV void sr_usb_dev_inst_free(struct sr_usb_dev_inst *usb);
+SR_PRIV void sr_usb_dev_inst_free_cb(gpointer p); /* Glib wrapper. */
 #endif
 
 #ifdef HAVE_SERIAL_COMM
@@ -1845,6 +2003,9 @@ SR_PRIV int sr_atof(const char *str, float *ret);
 SR_PRIV int sr_atod_ascii(const char *str, double *ret);
 SR_PRIV int sr_atod_ascii_digits(const char *str, double *ret, int *digits);
 SR_PRIV int sr_atof_ascii(const char *str, float *ret);
+SR_PRIV int sr_atof_ascii_digits(const char *str, float *ret, int *digits);
+
+SR_PRIV int sr_count_digits(const char *str, int *digits);
 
 SR_PRIV GString *sr_hexdump_new(const uint8_t *data, const size_t len);
 SR_PRIV void sr_hexdump_free(GString *s);
@@ -1916,8 +2077,6 @@ SR_PRIV int serial_stream_detect(struct sr_serial_dev_inst *serial,
 		size_t packet_size, packet_valid_callback is_valid,
 		packet_valid_len_callback is_valid_len, size_t *return_size,
 		uint64_t timeout_ms);
-SR_PRIV int sr_serial_extract_options(GSList *options, const char **serial_device,
-				      const char **serial_options);
 SR_PRIV int serial_source_add(struct sr_session *session,
 		struct sr_serial_dev_inst *serial, int events, int timeout,
 		sr_receive_data_callback cb, void *cb_data);
@@ -1967,6 +2126,8 @@ SR_PRIV int ser_name_is_hid(struct sr_serial_dev_inst *serial);
 extern SR_PRIV struct ser_lib_functions *ser_lib_funcs_hid;
 SR_PRIV int ser_name_is_bt(struct sr_serial_dev_inst *serial);
 extern SR_PRIV struct ser_lib_functions *ser_lib_funcs_bt;
+SR_PRIV int ser_name_is_tcpraw(struct sr_serial_dev_inst *serial);
+extern SR_PRIV struct ser_lib_functions *ser_lib_funcs_tcpraw;
 
 #ifdef HAVE_LIBHIDAPI
 struct vid_pid_item {
@@ -1996,6 +2157,9 @@ SR_PRIV const char *ser_hid_chip_find_name_vid_pid(uint16_t vid, uint16_t pid);
 #endif
 #endif
 
+SR_PRIV int sr_serial_extract_options(GSList *options,
+	const char **serial_device, const char **serial_options);
+
 /*--- bt/ API ---------------------------------------------------------------*/
 
 #ifdef HAVE_BLUETOOTH
@@ -2017,7 +2181,8 @@ SR_PRIV int sr_bt_config_addr_remote(struct sr_bt_desc *desc, const char *addr);
 SR_PRIV int sr_bt_config_rfcomm(struct sr_bt_desc *desc, size_t channel);
 SR_PRIV int sr_bt_config_notify(struct sr_bt_desc *desc,
 	uint16_t read_handle, uint16_t write_handle,
-	uint16_t cccd_handle, uint16_t cccd_value);
+	uint16_t cccd_handle, uint16_t cccd_value,
+	uint16_t ble_mtu);
 
 SR_PRIV int sr_bt_scan_le(struct sr_bt_desc *desc, int duration);
 SR_PRIV int sr_bt_scan_bt(struct sr_bt_desc *desc, int duration);
@@ -2047,6 +2212,8 @@ SR_PRIV int ezusb_upload_firmware(struct sr_context *ctx, libusb_device *dev,
 
 /*--- usb.c -----------------------------------------------------------------*/
 
+SR_PRIV int sr_usb_split_conn(const char *conn,
+	uint16_t *vid, uint16_t *pid, uint8_t *bus, uint8_t *addr);
 #ifdef HAVE_LIBUSB_1_0
 SR_PRIV GSList *sr_usb_find(libusb_context *usb_ctx, const char *conn);
 SR_PRIV int sr_usb_open(libusb_context *usb_ctx, struct sr_usb_dev_inst *usb);
@@ -2059,73 +2226,75 @@ SR_PRIV gboolean usb_match_manuf_prod(libusb_device *dev,
 		const char *manufacturer, const char *product);
 #endif
 
+/*--- tcp.c -----------------------------------------------------------------*/
+
+SR_PRIV gboolean sr_fd_is_readable(int fd);
+
+SR_PRIV struct sr_tcp_dev_inst *sr_tcp_dev_inst_new(
+	const char *host_addr, const char *tcp_port);
+SR_PRIV void sr_tcp_dev_inst_free(struct sr_tcp_dev_inst *tcp);
+SR_PRIV int sr_tcp_get_port_path(struct sr_tcp_dev_inst *tcp,
+	const char *prefix, char separator, char *path, size_t path_len);
+SR_PRIV int sr_tcp_connect(struct sr_tcp_dev_inst *tcp);
+SR_PRIV int sr_tcp_disconnect(struct sr_tcp_dev_inst *tcp);
+SR_PRIV int sr_tcp_write_bytes(struct sr_tcp_dev_inst *tcp,
+	const uint8_t *data, size_t dlen);
+SR_PRIV int sr_tcp_read_bytes(struct sr_tcp_dev_inst *tcp,
+	uint8_t *data, size_t dlen, gboolean nonblocking);
+SR_PRIV int sr_tcp_source_add(struct sr_session *session,
+	struct sr_tcp_dev_inst *tcp, int events, int timeout,
+	sr_receive_data_callback cb, void *cb_data);
+SR_PRIV int sr_tcp_source_remove(struct sr_session *session,
+	struct sr_tcp_dev_inst *tcp);
+
 /*--- binary_helpers.c ------------------------------------------------------*/
 
 /** Binary value type */
 enum binary_value_type {
-	BVT_UINT8 = 0,
-	BVT_BE_UINT8 = BVT_UINT8,
-	BVT_LE_UINT8 = BVT_UINT8,
+	BVT_INVALID,
+
+	BVT_UINT8,
 
 	BVT_BE_UINT16,
+	BVT_BE_UINT24,
 	BVT_BE_UINT32,
-	BVT_BE_UINT64,
-	BVT_BE_FLOAT,
 
 	BVT_LE_UINT16,
+	BVT_LE_UINT24,
 	BVT_LE_UINT32,
-	BVT_LE_UINT64,
-	BVT_LE_FLOAT,
 };
 
 /** Binary value specification */
 struct binary_value_spec {
-	/** Offset into binary blob */
-	size_t offset;
-	/** Data type to decode */
-	enum binary_value_type type;
-	/** Scale factor to get native units */
-	float scale;
-};
-
-/** Binary channel definition */
-struct binary_analog_channel {
-	/** Channel name */
-	const char *name;
-	/** Binary value in data stream */
-	struct binary_value_spec spec;
-	/** Significant digits */
-	int digits;
-	/** Measured quantity */
-	enum sr_mq mq;
-	/** Measured unit */
-	enum sr_unit unit;
+	size_t offset;			/**!< Offset into binary image */
+	enum binary_value_type type;	/**!< Data type to decode */
 };
 
 /**
- * Read extract a value from a binary blob.
+ * Read extract a value from a binary data image, ensuring no out-of-bounds
+ * read happens.
  *
- * @param out Pointer to output buffer.
- * @param spec Binary value specification
- * @param data Pointer to binary blob
- * @param length Size of binary blob
+ * @param[out] out Pointer to output buffer (conversion result)
+ * @param[in] spec Binary value specification
+ * @param[in] data Pointer to binary input data
+ * @param[in] length Size of binary input data
+ *
  * @return SR_OK on success, SR_ERR_* error code on failure.
  */
-SR_PRIV int bv_get_value(float *out, const struct binary_value_spec *spec, const void *data, size_t length);
+SR_PRIV int bv_get_value_len(float *out, const struct binary_value_spec *spec,
+	const uint8_t *data, size_t length);
 
 /**
- * Send an analog channel packet based on a binary analog channel
- * specification.
+ * Read extract a value from a binary data image, without bound check.
  *
- * @param sdi Device instance
- * @param ch Sigrok channel
- * @param spec Channel specification
- * @param data Pointer to binary blob
- * @param length Size of binary blob
+ * @param[out] out Pointer to output buffer (conversion result)
+ * @param[in] spec Binary value specification
+ * @param[in] data Pointer to binary input data
+ *
  * @return SR_OK on success, SR_ERR_* error code on failure.
  */
-SR_PRIV int bv_send_analog_channel(const struct sr_dev_inst *sdi, struct sr_channel *ch,
-				   const struct binary_analog_channel *spec, const void *data, size_t length);
+SR_PRIV int bv_get_value(float *out, const struct binary_value_spec *spec,
+	const uint8_t *data);
 
 /*--- crc.c -----------------------------------------------------------------*/
 
@@ -2391,6 +2560,16 @@ SR_PRIV gboolean sr_rs9lcd_packet_valid(const uint8_t *buf);
 SR_PRIV int sr_rs9lcd_parse(const uint8_t *buf, float *floatval,
 			    struct sr_datafeed_analog *analog, void *info);
 
+/*--- dmm/qm1578.c -----------------------------------------------------------*/
+
+#define DIGITECH_QM1578_PACKET_SIZE 15
+
+/* Dummy info struct. The parser does not use it. */
+struct qm1578_info { int dummy; };
+
+SR_PRIV gboolean sr_digitech_qm1578_packet_valid(const uint8_t *buf);
+SR_PRIV int sr_digitech_qm1578_parse(const uint8_t *buf, float *floatval,
+			     struct sr_datafeed_analog *analog, void *info);
 /*--- dmm/bm25x.c -----------------------------------------------------------*/
 
 #define BRYMEN_BM25X_PACKET_SIZE 15
@@ -2671,6 +2850,9 @@ SR_PRIV int sr_sw_limits_config_set(struct sr_sw_limits *limits, uint32_t key,
 	GVariant *data);
 SR_PRIV void sr_sw_limits_acquisition_start(struct sr_sw_limits *limits);
 SR_PRIV gboolean sr_sw_limits_check(struct sr_sw_limits *limits);
+SR_PRIV int sr_sw_limits_get_remain(const struct sr_sw_limits *limits,
+	uint64_t *samples, uint64_t *frames, uint64_t *msecs,
+	gboolean *exceeded);
 SR_PRIV void sr_sw_limits_update_samples_read(struct sr_sw_limits *limits,
 	uint64_t samples_read);
 SR_PRIV void sr_sw_limits_update_frames_read(struct sr_sw_limits *limits,
@@ -2683,18 +2865,25 @@ struct feed_queue_logic;
 struct feed_queue_analog;
 
 SR_API struct feed_queue_logic *feed_queue_logic_alloc(
-	struct sr_dev_inst *sdi,
+	const struct sr_dev_inst *sdi,
 	size_t sample_count, size_t unit_size);
-SR_API int feed_queue_logic_submit(struct feed_queue_logic *q,
-	const uint8_t *data, size_t count);
+SR_API int feed_queue_logic_submit_one(struct feed_queue_logic *q,
+	const uint8_t *data, size_t repeat_count);
+SR_API int feed_queue_logic_submit_many(struct feed_queue_logic *q,
+	const uint8_t *data, size_t samples_count);
 SR_API int feed_queue_logic_flush(struct feed_queue_logic *q);
+SR_API int feed_queue_logic_send_trigger(struct feed_queue_logic *q);
 SR_API void feed_queue_logic_free(struct feed_queue_logic *q);
 
 SR_API struct feed_queue_analog *feed_queue_analog_alloc(
-	struct sr_dev_inst *sdi,
+	const struct sr_dev_inst *sdi,
 	size_t sample_count, int digits, struct sr_channel *ch);
-SR_API int feed_queue_analog_submit(struct feed_queue_analog *q,
-	float data, size_t count);
+SR_API int feed_queue_analog_mq_unit(struct feed_queue_analog *q,
+	enum sr_mq mq, enum sr_mqflag mq_flag, enum sr_unit unit);
+SR_API int feed_queue_analog_scale_offset(struct feed_queue_analog *q,
+	const struct sr_rational *scale, const struct sr_rational *offset);
+SR_API int feed_queue_analog_submit_one(struct feed_queue_analog *q,
+	float data, size_t repeat_count);
 SR_API int feed_queue_analog_flush(struct feed_queue_analog *q);
 SR_API void feed_queue_analog_free(struct feed_queue_analog *q);
 
