@@ -1213,7 +1213,7 @@ void DecodeSignal::commit_decoder_channels()
 			if (s->internal_name().isEmpty())
 				s->set_internal_name(s->name());
 			QString signal_name = QString::fromUtf8(ch.name.toLatin1().constData());
-			s->set_name(signal_name);
+			s->set_name(signal_name + " (" + s->internal_name() + ")");
 		}
 	}
 }

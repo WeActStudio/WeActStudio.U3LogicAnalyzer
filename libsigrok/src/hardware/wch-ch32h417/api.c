@@ -25,9 +25,10 @@
 /* 支持的设备列表 */
 static const struct ch32h417_profile supported_devices[] = {
 	/* CH32H417逻辑分析仪 */
-	{USB_VENDOR_ID, USB_PRODUCT_ID, "CH32H417", "CH32H417 Logic Analyzer",
+	{USB_VENDOR_ID, USB_PRODUCT_ID, "CH32H417", "CH32H417 Logic Analyzer", "01", 
 	 DEV_CAPS_16BIT_LOGIC | DEV_CAPS_ADC},
-
+	{USB_VENDOR_ID, USB_PRODUCT_ID, "CH32H417", "WeAct Studio Logic Analyzer V2", "b5", 
+	 DEV_CAPS_16BIT_LOGIC},
 	ALL_ZERO};
 
 /* 扫描选项 */
@@ -91,16 +92,28 @@ static const uint64_t logic_samplerates_usb3[] = {
 	SR_MHZ(75.125),
 	SR_MHZ(75),	
 	SR_MHZ(68.75),
+	SR_MHZ(50),
+	SR_MHZ(40),
+	SR_MHZ(25),
+	SR_MHZ(20),
+	SR_MHZ(10),
+	SR_MHZ(6.25),
 };
 
 /* 逻辑分析仪采样率 - USB 2.0 16通道 (最高20MHz) */
 static const uint64_t logic_samplerates_usb2_16ch[] = {
 	SR_MHZ(20),
+	SR_MHZ(10),
+	SR_MHZ(6.25),
 };
 
 /* 逻辑分析仪采样率 - USB 2.0 8通道 (最高40MHz) */
 static const uint64_t logic_samplerates_usb2_8ch[] = {
 	SR_MHZ(40),
+	SR_MHZ(25),
+	SR_MHZ(20),
+	SR_MHZ(10),
+	SR_MHZ(6.25),
 };
 
 /* ADC采样率 */
@@ -117,6 +130,8 @@ static const char *mode_names[] = {
 	[MODE_LOGIC_ANALYZER] = "Logic Analyzer",
 	[MODE_ADC] = "ADC",
 };
+
+static char serial_number[256] = {0};
 
 /* 初始化CH375设备通信参数 */
 static void ch375_init_comm_params(struct dev_context *devc)
@@ -157,6 +172,69 @@ static gboolean is_plausible(uint16_t vid, uint16_t pid)
 
 	return FALSE;
 }
+
+/**
+ * @brief 解析USB设备路径字符串，提取实例序列号，输出小写
+ * @param dev_path 输入字符串，例如 "\\\\?\\usb#vid_1a86&pid_5537#b5e339e33906e19c7f6416064c#{5e7f6bdf‑1ce5‑4d78‑bbcf‑d20c44329f7d}"
+ * @param out_sn 输出缓冲区，存放小写序列号
+ * @param buf_sz 输出缓冲区大小
+ * @return 0成功，‑1失败
+ */
+int extract_usb_serial(const char *dev_path, char *out_sn, size_t buf_sz)
+{
+    const char *p1, *p2, *p3;
+    size_t len;
+
+    if (!dev_path || !out_sn || buf_sz == 0)
+        return -1;
+
+    // 找第一个 #
+    p1 = strchr(dev_path, '#');
+    if (p1 == NULL)
+        return -1;
+    p1++;
+
+    // 找第二个 #
+    p2 = strchr(p1, '#');
+    if (p2 == NULL)
+        return -1;
+	p2++;
+
+	// 找第三个 #
+    p3 = strchr(p2, '#');
+    if (p3 == NULL)
+        return -1;
+
+    len = (size_t)(p3 - p2);
+    if (len >= buf_sz)
+        return -1;
+
+    memcpy(out_sn, p2, len);
+    out_sn[len] = '\0';
+
+    // 全部转小写
+    for (size_t i = 0; i < len; i++)
+    {
+        out_sn[i] = (char)tolower((unsigned char)out_sn[i]);
+    }
+    return 0;
+}
+
+/**
+ * @brief 判断 str 是否以前缀 prefix 开头
+ * @return 1:是前缀；0:不是
+ */
+int str_startswith(const char *str, const char *prefix)
+{
+    if (!str || !prefix)
+        return 0;
+    size_t pre_len = strlen(prefix);
+    size_t str_len = strlen(str);
+    if (str_len < pre_len)
+        return 0;
+    return (memcmp(str, prefix, pre_len) == 0);
+}
+
 
 /* 扫描设备 */
 static GSList *scan(struct sr_dev_driver *di, GSList *options)
@@ -214,17 +292,23 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 
 		sr_dbg("Found device at index %d: VID=0x%04x, PID=0x%04x", i, vid, pid);
 
-		if (!is_plausible(vid, pid))
-		{
-			ch375_close_device(i);
-			continue;
-		}
+		// if (!is_plausible(vid, pid))
+		// {
+		// 	ch375_close_device(i);
+		// 	continue;
+		// }
+		const char *device_name = ch375_get_device_name(i);
+		
+		extract_usb_serial(device_name, serial_number, sizeof(serial_number));
+		sr_dbg("Device name: %s", device_name);
+		sr_dbg("USB serial: %s", serial_number);
 
 		prof = NULL;
 		for (j = 0; supported_devices[j].vid; j++)
 		{
 			if (vid == supported_devices[j].vid &&
-				pid == supported_devices[j].pid)
+				pid == supported_devices[j].pid &&
+				str_startswith(serial_number, supported_devices[j].SN_start))
 			{
 				prof = &supported_devices[j];
 				break;
@@ -244,6 +328,7 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 		sdi->vendor = g_strdup(prof->vendor);
 		sdi->model = g_strdup(prof->model);
 		sdi->connection_id = g_strdup(connection_id);
+		sdi->serial_num = g_strdup(serial_number);
 
 		/* CH32H417支持8通道或16通道模式 */
 		num_logic_channels = 16; /* 默认16通道，可通过配置切换为8通道 */

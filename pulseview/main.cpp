@@ -184,6 +184,32 @@ void usage()
 		"\n", PV_BIN_NAME);
 }
 using namespace std;
+
+/// 设置进程环境：仅当环境变量不存在时才设置；存在则直接跳过
+#ifdef _WIN32
+static void setEnvIfNotExist(const QString &key, const QString &defaultValue)
+{
+    // 先读取当前环境
+    QByteArray existing = qgetenv(key.toLatin1().constData());
+    if (!existing.isEmpty())
+    {
+        // 环境变量已经有定义，不覆盖
+        return;
+    }
+
+    // 不存在，则设置默认值
+    BOOL ok = SetEnvironmentVariableW(
+        reinterpret_cast<const wchar_t*>(key.utf16()),
+        reinterpret_cast<const wchar_t*>(defaultValue.utf16())
+    );
+    Q_UNUSED(ok);
+
+    // MinGW CRT 同步，保证C getenv()可见
+    QString envEntry = QString("%1=%2").arg(key, defaultValue);
+    _wputenv(reinterpret_cast<const wchar_t*>(envEntry.utf16()));
+}
+#endif
+
 int main(int argc, char *argv[])
 {
 	int ret = 0;
@@ -196,6 +222,32 @@ int main(int argc, char *argv[])
 	bool show_version = false;
 	bool debug_console = false;
 	int loglevel = -1;
+
+	#ifdef _WIN32
+	QString exeDir = QCoreApplication::applicationDirPath();
+
+    // 设置进程当前工作目录（等价 cd /d %~dp0）
+    // SetCurrentDirectoryW(reinterpret_cast<const wchar_t*>(exeDir.utf16()));
+
+    // SIGROKDECODE_DIR：有就不设置；没有则使用 exeDir/decoders
+    // QString sigrokDefault = QDir(exeDir).filePath("decoders");
+    // setEnvIfNotExist("SIGROKDECODE_DIR", sigrokDefault);
+
+    // PYTHONHOME：有就不设置；没有则使用 exeDir/python‑portable
+    QString pythonHomeDefault = QDir(exeDir).filePath("python-portable");
+    setEnvIfNotExist("PYTHONHOME", pythonHomeDefault);
+
+    // PATH：通常希望总是前置exe目录，不做“存在就跳过”；如果你也要条件设置可以套用上面函数
+    wchar_t pathBuf[32768] = {0};
+    DWORD pathLen = GetEnvironmentVariableW(L"PATH", pathBuf, 32768);
+    QString oldPath;
+    if (pathLen > 0 && pathLen < 32768)
+    {
+        oldPath = QString::fromWCharArray(pathBuf);
+    }
+    QString newPath = exeDir + ";" + oldPath;
+    setEnvIfNotExist("PATH", newPath); // 注意：PATH几乎一定存在，本行不会生效
+	#endif
 	
 #ifdef ENABLE_FLOW
 	// Initialise gstreamermm. Must be called before any other GLib stuff.

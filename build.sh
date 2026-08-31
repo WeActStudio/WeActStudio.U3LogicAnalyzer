@@ -188,19 +188,18 @@ if [ $IS_WINDOWS -eq 1 ]; then
         libzip.dll libbz2-1.dll liblzma-5.dll zlib1.dll libzstd.dll libpython3.14.dll; do
         cp "/mingw64/bin/$dll" "$PVDIR/" 2>/dev/null || true
     done
-
-    cat > "$PVDIR/run.bat" << 'RBEOF'
-@echo off
-cd /d "%~dp0"
-set "PATH=%~dp0;%PATH%"
-set "PYTHONHOME=%~dp0python-portable"
-set "SIGROKDECODE_DIR=%~dp0decoders"
-if exist "..\..\install\share\libsigrokdecode\decoders" (
-    set "SIGROKDECODE_DIR=..\..\install\share\libsigrokdecode\decoders"
-    set "PYTHONHOME="
-)
-start "" "LogicAnalyzer.exe"
-RBEOF
+#     cat > "$PVDIR/run.bat" << 'RBEOF'
+# @echo off
+# cd /d "%~dp0"
+# set "PATH=%~dp0;%PATH%"
+# set "PYTHONHOME=%~dp0python-portable"
+# set "SIGROKDECODE_DIR=%~dp0decoders"
+# if exist "..\..\install\share\libsigrokdecode\decoders" (
+#     set "SIGROKDECODE_DIR=..\..\install\share\libsigrokdecode\decoders"
+#     set "PYTHONHOME="
+# )
+# start "" "LogicAnalyzer.exe"
+# RBEOF
 
     echo "  $(ls "$PVDIR"/*.dll 2>/dev/null | wc -l) DLLs, run.bat created"
     echo "  Stripping debug symbols..."
@@ -271,6 +270,7 @@ if [ $PACKAGE -eq 1 ]; then
                        sre_constants.py sre_parse.py stat.py string string.py \
                        struct.py subprocess.py sysconfig.py tempfile.py \
                        textwrap.py threading.py token.py tokenize.py \
+                       _weakrefset.py sysconfig _pydecimal.py \
                        types.py typing.py uuid.py warnings.py weakref.py; do
                 cp -r "$PYTHON_SRC/$dir" "$DIST_DIR/python-portable/lib/python3.14/" 2>/dev/null || true
             done
@@ -286,24 +286,29 @@ if [ $PACKAGE -eq 1 ]; then
         fi
 
 	# 6. Create run.bat
-        cat > "$DIST_DIR/run.bat" << 'EOF'
-@echo off
-cd /d "%~dp0"
-set "PATH=%~dp0;%PATH%"
-set "PYTHONHOME=%~dp0python-portable"
-set "SIGROKDECODE_DIR=%~dp0decoders"
-echo Starting LogicAnalyzer...
-LogicAnalyzer.exe
-if %ERRORLEVEL% neq 0 (
-    echo.
-    echo LogicAnalyzer exited with error code %ERRORLEVEL%
-    pause
-)
-EOF
-        echo "  run.bat"
-        echo ""
-        echo "To distribute: copy the entire dist/LogicAnalyzer/ folder."
-        echo "To run: double-click run.bat or LogicAnalyzer.exe"
+#         cat > "$DIST_DIR/run.bat" << 'EOF'
+# @echo off
+# cd /d "%~dp0"
+# set "PATH=%~dp0;%PATH%"
+# set "PYTHONHOME=%~dp0python-portable"
+# set "SIGROKDECODE_DIR=%~dp0decoders"
+# echo Starting LogicAnalyzer...
+# LogicAnalyzer.exe
+# if %ERRORLEVEL% neq 0 (
+#     echo.
+#     echo LogicAnalyzer exited with error code %ERRORLEVEL%
+#     pause
+# )
+# EOF
+#         echo "  run.bat"
+#         echo ""
+#         echo "To distribute: copy the entire dist/LogicAnalyzer/ folder."
+#         echo "To run: double-click run.bat or LogicAnalyzer.exe"
+    # 7. Copy driver directory
+    cp -r "$SCRIPT_DIR/driver" "$DIST_DIR/driver/"
+
+    # 8. Copy license file
+    cp "$SCRIPT_DIR/LICENSE" "$DIST_DIR/"
 
     elif [ $IS_MACOS -eq 1 ]; then
         APP="$DIST_DIR/LogicAnalyzer.app"

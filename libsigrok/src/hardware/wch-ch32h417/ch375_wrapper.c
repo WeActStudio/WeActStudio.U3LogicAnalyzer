@@ -291,6 +291,14 @@ int ch375_get_device_descr(unsigned long index, void *buffer, unsigned long *len
     return pCH375GetDeviceDescr(index, buffer, length);
 }
 
+int ch375_get_config_descr(unsigned long index, void *buffer, unsigned long *length)
+{
+    if (!pCH375GetConfigDescr) {
+        return CH375_FALSE;
+    }
+    return pCH375GetConfigDescr(index, buffer, length);
+}
+
 int ch375_reset_device(unsigned long index)
 {
     if (!pCH375ResetDevice) {

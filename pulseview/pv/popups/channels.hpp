@@ -149,6 +149,8 @@ private:
 	QLabel* adc_channel_label_;
 	QLabel* adc_precision_label_;
 	QLabel* threshold_label_;
+	QLabel* device_name_label_;
+	QLabel* serial_number_label_;
 	QGroupBox* logic_props_box_;
 	QGroupBox* analog_props_box_;
 

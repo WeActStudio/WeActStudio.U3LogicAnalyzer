@@ -1627,6 +1627,18 @@ Please keep in mind that the application may need a restart to display correctly
         <translation>设备模式</translation>
     </message>
     <message>
+        <source>Model:</source>
+        <translation>型号:</translation>
+    </message>
+    <message>
+        <source>Options</source>
+        <translation>选项</translation>
+    </message>
+    <message>
+        <source>Channels</source>
+        <translation>通道</translation>
+    </message>
+    <message>
         <location filename="../pv/popups/channels.cpp" line="384"/>
         <source>ADC Channel 0</source>
         <translation>ADC通道0</translation>

@@ -570,7 +570,9 @@ void MainWindow::show_device_detach()
 	attach_process_done = false;
 
 	QDialog* dialog = new QDialog(this);
-	dialog->setWindowTitle(tr("警告"));
+	dialog->setWindowTitle(tr("Warning"));
+
+	dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
 	// 设置更大的字体
 	QFont font = dialog->font();
@@ -604,8 +606,8 @@ void MainWindow::show_device_detach()
 	QHBoxLayout *buttonLayout = new QHBoxLayout();
 	buttonLayout->setSpacing(12);
 	buttonLayout->addStretch();
-	QPushButton *saveBtn = new QPushButton(tr("保存"), dialog);
-	QPushButton *cancelBtn = new QPushButton(tr("不保存"), dialog);
+	QPushButton *saveBtn = new QPushButton(tr("Save"), dialog);
+	QPushButton *cancelBtn = new QPushButton(tr("Cancel"), dialog);
 	saveBtn->setMinimumWidth(90);
 	cancelBtn->setMinimumWidth(90);
 	buttonLayout->addWidget(saveBtn);

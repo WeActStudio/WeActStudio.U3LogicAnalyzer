@@ -45,7 +45,7 @@ protected:
 	 */
 	TimeItem(View &view);
 
-	bool snapping_disabled_ = true;
+	bool snapping_disabled_ = false;
 
 public:
 	/**

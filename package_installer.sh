@@ -42,7 +42,7 @@ echo ">>> 步骤 2/3: 生成安装脚本..."
 
 VERSION=0.2
 OUTPUT="${DIST_DIR}/${SETUP_NAME}.exe"
-NSIS_SCRIPT="${DIST_DIR}/setup.nsi"
+NSIS_SCRIPT="${SCRIPT_DIR}/dist/setup.nsi"
 
 # Convert paths to Windows format for NSIS (makensis is a Windows exe)
 WIN_DIST_DIR=$(cygpath -w "${DIST_DIR}" | sed 's/\\/\\\\/g')
@@ -73,11 +73,11 @@ Section "Install"
 
     File /r "${WIN_DIST_DIR}\\*"
 
-    CreateDirectory "\$SMPROGRAMS\LogicAnalyzer"
-    CreateShortCut "\$SMPROGRAMS\LogicAnalyzer\LogicAnalyzer.lnk" "\$INSTDIR\run.bat" "" "\$INSTDIR\LogicAnalyzer.exe"
-    CreateShortCut "\$SMPROGRAMS\LogicAnalyzer\Uninstall.lnk" "\$INSTDIR\uninstall.exe"
+    CreateDirectory "\$SMPROGRAMS\U3LogicAnalyzer"
+    CreateShortCut "\$SMPROGRAMS\U3LogicAnalyzer\LogicAnalyzer.lnk" "\$INSTDIR\LogicAnalyzer.exe" "" "\$INSTDIR\LogicAnalyzer.exe"
+    CreateShortCut "\$SMPROGRAMS\U3LogicAnalyzer\Uninstall.lnk" "\$INSTDIR\uninstall.exe"
 
-    CreateShortCut "\$DESKTOP\LogicAnalyzer.lnk" "\$INSTDIR\run.bat" "" "\$INSTDIR\LogicAnalyzer.exe"
+    CreateShortCut "\$DESKTOP\U3LogicAnalyzer.lnk" "\$INSTDIR\LogicAnalyzer.exe" "" "\$INSTDIR\LogicAnalyzer.exe"
 
     WriteUninstaller "\$INSTDIR\uninstall.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\LogicAnalyzer" \
@@ -87,18 +87,18 @@ Section "Install"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\LogicAnalyzer" \
         "DisplayVersion" "${VERSION}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\LogicAnalyzer" \
-        "Publisher" "Q2H2"
+        "Publisher" "WeAct Studio"
 SectionEnd
 
 Section "Uninstall"
     Delete "\$INSTDIR\uninstall.exe"
     RMDir /r "\$INSTDIR"
 
-    Delete "\$SMPROGRAMS\LogicAnalyzer\LogicAnalyzer.lnk"
-    Delete "\$SMPROGRAMS\LogicAnalyzer\Uninstall.lnk"
-    RMDir "\$SMPROGRAMS\LogicAnalyzer"
+    Delete "\$SMPROGRAMS\U3LogicAnalyzer\LogicAnalyzer.lnk"
+    Delete "\$SMPROGRAMS\U3LogicAnalyzer\Uninstall.lnk"
+    RMDir "\$SMPROGRAMS\U3LogicAnalyzer"
 
-    Delete "\$DESKTOP\LogicAnalyzer.lnk"
+    Delete "\$DESKTOP\U3LogicAnalyzer.lnk"
 
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\LogicAnalyzer"
 SectionEnd
@@ -107,7 +107,7 @@ NSIEOF
 # --- 生成安装包 ---
 echo ">>> 步骤 3/3: 生成安装包..."
 cd "${DIST_DIR}"
-makensis setup.nsi
+makensis "${NSIS_SCRIPT}"
 
 echo ""
 echo "============================================"

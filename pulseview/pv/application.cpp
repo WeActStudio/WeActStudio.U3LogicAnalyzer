@@ -64,8 +64,8 @@ Application::Application(int &argc, char* argv[]) :
 	QApplication(argc, argv)
 {
 	setApplicationVersion(PV_VERSION_STRING);
-	setApplicationName("LogicAnalyzer");
-	setOrganizationName("LogicAnalyzer");
+	setApplicationName("U3LogicAnalyzer");
+	setOrganizationName("WeAct Studio");
 	// setOrganizationDomain("sigrok.org");
 }
 

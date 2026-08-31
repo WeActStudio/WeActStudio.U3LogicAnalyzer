@@ -85,6 +85,8 @@ Channels::Channels(Session &session, QString device_name, QWidget *parent) :
 	adc_channel_label_(nullptr),
 	adc_precision_label_(nullptr),
 	threshold_label_(nullptr),
+	device_name_label_(nullptr),
+	serial_number_label_(nullptr),
 	logic_props_box_(nullptr),
 	analog_props_box_(nullptr),
 	check_box_mapper_(this),
@@ -160,7 +162,16 @@ void Channels::init_ui()
 	}
 
 	if (device_mode_ != DeviceMode::OTHER) {
-		QGroupBox* options_box = new QGroupBox("配置", this);
+
+		device_name_label_ = new QLabel();
+		device_name_label_->setText(QString::fromStdString(device->model()));
+		layout_.addRow(tr("Model:"), device_name_label_);
+		
+		serial_number_label_ = new QLabel();
+		serial_number_label_->setText(QString::fromStdString(device->serial_number()));
+		layout_.addRow(tr("SN:"), serial_number_label_);
+
+		QGroupBox* options_box = new QGroupBox(tr("Options"), this);
 		options_box->setAlignment(Qt::AlignHCenter);
 		QFormLayout* options_layout = new QFormLayout();
 		QVBoxLayout* vbox_layout = new QVBoxLayout();
@@ -315,6 +326,8 @@ void Channels::init_channel_radios(QVBoxLayout* layout)
 
 void Channels::init_threshold_selectors(QFormLayout* layout)
 {
+	const shared_ptr<sigrok::Device> device = session_.device()->device();
+
 	bool is_ch569 = (device_mode_ == DeviceMode::CH569_USB3 ||
 	                 device_mode_ == DeviceMode::CH569_USB2);
 	bool is_ch32h417 = (device_mode_ == DeviceMode::CH32H417_USB3_LOGIC ||
@@ -346,7 +359,12 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 		mode_selector_ = new QComboBox();
 		mode_selector_->setMinimumWidth(100);
 		mode_selector_->addItem(tr("Logic Analyzer"));
-		mode_selector_->addItem(tr("ADC"));
+		for (auto& channel : device->channels()) {
+			if (channel->type() == sigrok::ChannelType::ANALOG) {
+				mode_selector_->addItem(tr("ADC"));
+				break;
+			}
+		}
 		connect(mode_selector_, SIGNAL(currentIndexChanged(int)),
 			this, SLOT(on_mode_changed(int)));
 		layout->addRow(tr("Device Mode"), mode_selector_);
@@ -448,7 +466,7 @@ void Channels::populate_group(shared_ptr<ChannelGroup> group,
 		for (const shared_ptr<SignalBase>& sig : sigs) {
 			assert(sig);
 
-			QCheckBox* checkbox = new QCheckBox(sig->display_name());
+			QCheckBox* checkbox = new QCheckBox(sig->internal_name());
 			analog_checkboxes_.push_back(checkbox);
 
 			check_box_mapper_.setMapping(checkbox, checkbox);
@@ -462,7 +480,7 @@ void Channels::populate_group(shared_ptr<ChannelGroup> group,
 			grid = new QGridLayout();
 			form_layout->addRow(grid);
 
-			analog_props_box_ = new QGroupBox("通道", this);
+			analog_props_box_ = new QGroupBox(tr("Channels"), this);
 			analog_props_box_->setAlignment(Qt::AlignHCenter);
 			analog_props_box_->setLayout(form_layout);
 			analog_props_box_->setVisible(false);
@@ -502,7 +520,7 @@ void Channels::populate_group(shared_ptr<ChannelGroup> group,
 	for (const shared_ptr<SignalBase>& sig : sigs) {
 		assert(sig);
 
-		QCheckBox* checkbox = new QCheckBox(sig->display_name());
+		QCheckBox* checkbox = new QCheckBox(sig->internal_name());
 
 		if (sig->type() == SignalBase::LogicChannel) {
 			logic_checkboxes_.push_back(checkbox);
@@ -528,7 +546,7 @@ void Channels::populate_group(shared_ptr<ChannelGroup> group,
 		return;
 	}
 
-	QGroupBox* props_box = new QGroupBox("通道", this);
+	QGroupBox* props_box = new QGroupBox(tr("Channels"), this);
 	props_box->setAlignment(Qt::AlignHCenter);
 	props_box->setLayout(form_layout);
 
@@ -1009,7 +1027,7 @@ void Channels::showEvent(QShowEvent* event)
 		const shared_ptr<SignalBase> sig = entry.second;
 		assert(sig);
 		cb->setChecked(sig->enabled());
-		cb->setText(sig->display_name());
+		cb->setText(sig->internal_name());
 	}
 
 	updating_channels_ = false;

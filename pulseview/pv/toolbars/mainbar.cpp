@@ -425,6 +425,7 @@ namespace pv
 			// 	run_stop_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 			// 	run_stop_button_->setText(tr("Start"));
 			// connect(run_stop_button_, SIGNAL(clicked()), this, SIGNAL(run_stop_button_clicked()));
+			channels_button_ex_->setToolTip(tr("Configure Channels"));
 			channels_button_ex_->setIcon(QIcon(":/icons/channels.png"));
 			channels_button_ex_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 			channels_button_ex_->setToolButtonStyle((Qt::ToolButtonStyle)Qt::ToolButtonTextUnderIcon);
@@ -513,6 +514,9 @@ namespace pv
 			// configure_button_.setEnabled(ui_enabled);
 			// channels_button_.setEnabled(ui_enabled);
 			channels_button_ex_->setEnabled(ui_enabled);
+			help_button_->setEnabled(ui_enabled);
+			open_button_->setEnabled(ui_enabled);
+			save_button_->setEnabled(ui_enabled);
 			// Check if demo device - sample rate/count should stay disabled
 			const shared_ptr<devices::Device> device = device_selector_.selected_device();
 			shared_ptr<devices::HardwareDevice> hw_device =
@@ -1421,6 +1425,9 @@ namespace pv
 					break;
 				}
 			}
+
+			commit_channel_number(channel_number_);
+
 			if (is_rate_setting_default_)
 			{
 				sample_rate_.set_current_index(sample_rate_default_index_);
@@ -1433,7 +1440,6 @@ namespace pv
 				sample_count_.set_current_index(sample_count_default_index_);
 				commit_sample_count();
 			}
-			commit_channel_number(channel_number_);
 			// end
 		}
 

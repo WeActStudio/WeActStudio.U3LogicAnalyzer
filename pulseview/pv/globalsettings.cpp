@@ -88,7 +88,7 @@ QString GlobalSettings::default_style_;
 QPalette GlobalSettings::default_palette_;
 
 GlobalSettings::GlobalSettings() :
-	QSettings(QApplication::applicationDirPath()+"/config.ini", QSettings::IniFormat)
+	QSettings()
 {
 	beginGroup("Settings");
 }
@@ -153,7 +153,7 @@ void GlobalSettings::set_defaults_where_needed()
 		3 * QFontMetrics(QApplication::font()).height());
 
 	if (!contains(Key_View_DefaultLogicHeight))
-		setValue(Key_View_DefaultLogicHeight, 20);
+		setValue(Key_View_DefaultLogicHeight, 25);
 
 	if (!contains(Key_View_ShowHoverMarker))
 		setValue(Key_View_ShowHoverMarker, false);

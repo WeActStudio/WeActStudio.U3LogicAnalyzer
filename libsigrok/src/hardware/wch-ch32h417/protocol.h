@@ -126,6 +126,7 @@ struct ch32h417_profile {
 	uint16_t pid;
 	const char *vendor;
 	const char *model;
+	const char *SN_start;
 	uint32_t dev_caps;
 };
 

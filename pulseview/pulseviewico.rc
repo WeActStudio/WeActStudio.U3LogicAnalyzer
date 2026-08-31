@@ -11,10 +11,12 @@ BEGIN
     BEGIN
         BLOCK "080404B0"
         BEGIN
-            VALUE "FileDescription", "U3LogicAnalyzer.exe\0"
+            VALUE "FileDescription", "U3LogicAnalyzer\0"
             VALUE "FileVersion", "0.4.0.0\0"
-            VALUE "ProductName", "U3LogicAnalyzer.exe\0"
+            VALUE "ProductName", "U3LogicAnalyzer\0"
             VALUE "ProductVersion", "0.4.0.0\0"
+            VALUE "CompanyName", "WeAct Studio"
+            VALUE "LegalCopyright", "Copyright (C) 2026"
         END
     END
     BLOCK "VarFileInfo"
