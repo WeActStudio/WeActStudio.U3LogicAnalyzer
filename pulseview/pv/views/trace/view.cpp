@@ -2374,7 +2374,7 @@ void View::capture_state_updated(int state)
 {
 	GlobalSettings settings;
 	if (state == Session::Running) {
-		update_scale_offset(true);
+		// update_scale_offset(true);
 
 		set_time_unit(util::TimeUnit::Samples);
 

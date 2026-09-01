@@ -82,6 +82,7 @@ public:
 
 	void set_default_channel();
 	void set_default_bank_threshold(float threshold_1, float threshold_2);
+	void set_default_pre_trigger(uint8_t pre_trigger);
 	void set_usb2_mode(bool is_usb2);
 	bool is_usb2() const { return is_usb2_; }
 
@@ -97,6 +98,7 @@ Q_SIGNALS:
 	void threshold_value_change_1(float threshold);
 	void threshold_value_change_2(float threshold);
 	void threshold_value_change_ch32h417(float threshold);
+	void pre_trigger_changed(uint8_t value);
 	void mode_changed(int mode);
 	void adc_channel_changed(int channel);
 	void adc_precision_changed(int precision);
@@ -153,6 +155,8 @@ private:
 	QLabel* serial_number_label_;
 	QGroupBox* logic_props_box_;
 	QGroupBox* analog_props_box_;
+
+	QDoubleSpinBox* pre_trigger_selector_;
 
 	vector<QCheckBox*> logic_checkboxes_;
 	vector<QCheckBox*> analog_checkboxes_;

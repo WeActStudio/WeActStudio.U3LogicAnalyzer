@@ -960,6 +960,29 @@ namespace pv
 			thresholdValue_ch32h417_ = thresholdValue;
 		}
 
+		void MainBar::on_update_pre_trigger(uint8_t value)
+		{
+			const shared_ptr<devices::Device> device = device_selector_.selected_device();
+			if (!device)
+				return;
+
+			const shared_ptr<sigrok::Device> sr_dev = device->device();
+
+			pre_trigger_ = value;
+
+			try
+			{
+				sr_dev->config_set(ConfigKey::CAPTURE_RATIO,
+								   Glib::Variant<guint64>::create(value));
+
+				qDebug() << "Device pre-trigger set to:" << value;
+			}
+			catch (Error &error)
+			{
+				qDebug() << tr("Failed to configure pre-trigger:") << error.what();
+			}
+		}
+
 		void MainBar::on_mode_changed(int mode)
 		{
 			const shared_ptr<devices::Device> device = device_selector_.selected_device();
@@ -1202,6 +1225,7 @@ namespace pv
 			settings.setValue("sample_count_index", QString::number(sample_count_.get_current_index()));
 			settings.setValue("sample_rate_index", QString::number(sample_rate_.get_current_index()));
 			settings.setValue("channel_number", QString::number(channel_number_));
+			settings.setValue("pre_trigger", QString::number(pre_trigger_));
 			settings.endGroup();
 		}
 
@@ -1247,6 +1271,7 @@ namespace pv
 				sample_count_default_index_ = settings.value("Settings/sample_count_index").toUInt();
 				sample_rate_default_index_ = settings.value("Settings/sample_rate_index").toUInt();
 				is_repeat_acq_default_ = settings.value("Settings/repeat_acquisition").toInt();
+				pre_trigger_default_ = settings.value("Settings/pre_trigger").toUInt();
 				is_count_setting_default_ = true;
 				is_rate_setting_default_ = true;
 			}
@@ -1336,6 +1361,7 @@ namespace pv
 			connect(channels_, SIGNAL(threshold_value_change_1(float)), this, SLOT(on_update_threshold_value_1(float)));
 			connect(channels_, SIGNAL(threshold_value_change_2(float)), this, SLOT(on_update_threshold_value_2(float)));
 			connect(channels_, SIGNAL(threshold_value_change_ch32h417(float)), this, SLOT(on_update_threshold_value_ch32h417(float)));
+			connect(channels_, SIGNAL(pre_trigger_changed(uint8_t)), this, SLOT(on_update_pre_trigger(uint8_t)));
 			connect(channels_, SIGNAL(mode_changed(int)), this, SLOT(on_mode_changed(int)));
 			connect(channels_, SIGNAL(adc_channel_changed(int)), this, SLOT(on_adc_channel_changed(int)));
 			connect(channels_, SIGNAL(adc_precision_changed(int)), this, SLOT(on_adc_precision_changed(int)));
@@ -1440,6 +1466,9 @@ namespace pv
 				sample_count_.set_current_index(sample_count_default_index_);
 				commit_sample_count();
 			}
+
+			channels_->set_default_pre_trigger(pre_trigger_default_);
+			on_update_pre_trigger(pre_trigger_default_);
 			// end
 		}
 

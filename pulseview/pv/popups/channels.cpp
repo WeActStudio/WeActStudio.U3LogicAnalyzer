@@ -91,7 +91,8 @@ Channels::Channels(Session &session, QString device_name, QWidget *parent) :
 	analog_props_box_(nullptr),
 	check_box_mapper_(this),
 	channel_max_(16),
-	skip_hardware_command_(false)
+	skip_hardware_command_(false),
+	pre_trigger_selector_(nullptr)
 {
 	// ch569初始化阈值映射表
 	threshold_value_map_ = {
@@ -112,12 +113,12 @@ Channels::Channels(Session &session, QString device_name, QWidget *parent) :
 
 	init_ui();
 
-	setMinimumSize(500, 400);
+	setMinimumSize(500, 450);
 }
 
 QSize Channels::sizeHint() const
 {
-	return QSize(500, 400);
+	return QSize(500, 450);
 }
 
 
@@ -161,6 +162,8 @@ void Channels::init_ui()
 		signal_map[sig->channel()] = sig;
 	}
 
+	layout_.setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+	
 	if (device_mode_ != DeviceMode::OTHER) {
 
 		device_name_label_ = new QLabel();
@@ -332,7 +335,8 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 	                 device_mode_ == DeviceMode::CH569_USB2);
 	bool is_ch32h417 = (device_mode_ == DeviceMode::CH32H417_USB3_LOGIC ||
 	                 device_mode_ == DeviceMode::CH32H417_USB2_LOGIC);
-
+	
+	layout->setLabelAlignment(Qt::AlignCenter | Qt::AlignVCenter);
 	if (is_ch569) {
 		// CH569有两组阈值
 		QStringList thresholds = {"0.5V", "0.8V", "0.9V", "1.3V", "1.6V"};
@@ -396,6 +400,17 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 			this, &Channels::on_voltage_level_changed);
 		threshold_label_ = new QLabel(tr("Voltage Level"));
 		layout->addRow(threshold_label_, voltage_level_spinbox_);
+
+		pre_trigger_selector_ = new QDoubleSpinBox();
+		pre_trigger_selector_->setRange(0, 100);
+		pre_trigger_selector_->setSingleStep(1);
+		pre_trigger_selector_->setDecimals(0);
+		pre_trigger_selector_->setSuffix("%");
+		pre_trigger_selector_->setStyleSheet(voltage_level_spinbox_->styleSheet());
+		connect(pre_trigger_selector_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+			this, &Channels::pre_trigger_changed);
+		pre_trigger_selector_->setValue(0);
+		layout->addRow(tr("Pre-trigger"), pre_trigger_selector_);
 
 		adc_channel_selector_ = new QComboBox();
 		adc_channel_selector_->setMinimumWidth(100);
@@ -765,6 +780,13 @@ void Channels::set_default_bank_threshold(float threshold_1, float threshold_2)
 	}
 }
 
+void Channels::set_default_pre_trigger(uint8_t pre_trigger)
+{
+	if (pre_trigger_selector_) {
+		pre_trigger_selector_->setValue(pre_trigger);
+	}
+}
+
 // ============================================================================
 // 模式切换 (CH32H417)
 // ============================================================================
@@ -797,6 +819,7 @@ void Channels::on_mode_changed(int index)
 		}
 		if (voltage_level_spinbox_) voltage_level_spinbox_->setVisible(true);
 		if (threshold_label_) threshold_label_->setVisible(true);
+		if (pre_trigger_selector_) pre_trigger_selector_->setVisible(true);
 		if (adc_channel_selector_) adc_channel_selector_->setVisible(false);
 		if (adc_channel_label_) adc_channel_label_->setVisible(false);
 		if (adc_precision_selector_) adc_precision_selector_->setVisible(false);
@@ -827,6 +850,7 @@ void Channels::on_mode_changed(int index)
 		}
 		if (voltage_level_spinbox_) voltage_level_spinbox_->setVisible(false);
 		if (threshold_label_) threshold_label_->setVisible(false);
+		if (pre_trigger_selector_) pre_trigger_selector_->setVisible(false);
 		if (adc_channel_selector_) adc_channel_selector_->setVisible(true);
 		if (adc_channel_label_) adc_channel_label_->setVisible(true);
 		if (adc_precision_selector_) adc_precision_selector_->setVisible(true);

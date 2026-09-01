@@ -702,9 +702,9 @@ static gpointer data_read_thread(gpointer arg)
 	uint8_t *buffer;
 	size_t unitsize;
 	unsigned int num_samples;
-	int trigger_offset, pre_trigger_samples;
+	int trigger_offset, pre_trigger_samples, cur_sample_count, processed_samples;
 	int no_data_count = 0;
-	const int no_data_timeout_ms = 500; /* 500ms无数据超时 */
+	int64_t no_data_timeout_ms = 500; /* 500ms无数据超时 */
 
 	pipe_num = (devc->mode == MODE_LOGIC_ANALYZER) ? PIPE_LOGIC_DATA : PIPE_ADC_DATA;
 
@@ -721,20 +721,27 @@ static gpointer data_read_thread(gpointer arg)
 
 	sr_dbg("Data read thread started, pipe=%lu, buffer_size=%zu",
 		   pipe_num, devc->buffer_size);
-
+	
+	int64_t last_query_time = g_get_monotonic_time();
+	int64_t current_time = last_query_time;
 	while (!devc->acq_aborted) {
+		processed_samples = 0;
+		current_time = g_get_monotonic_time();
+
 		/* 查询缓冲数据 */
 		if (!ch375_query_buf_upload_ex(devc->device_index, pipe_num,
 									   &transfer_count, &total_data_len)) {
 			/* 查询失败，短暂等待后重试 */
+			sr_warn("Failed to query buffer upload, retrying in 1ms");
 			g_usleep(1000);
 			continue;
 		}
 
 		if (transfer_count == 0) {
 			/* 没有数据，检查是否设备已停止 */
-			no_data_count++;
-			if (no_data_count >= no_data_timeout_ms) {
+			/* 计算无数据时间 */
+			int64_t no_data_time_ms = (current_time - last_query_time) / 1000;
+			if (no_data_time_ms >= no_data_timeout_ms) {
 				send_stop_command(sdi);
 				/* 超时无数据，设备可能已停止采集 */
 				sr_info("No data for %d ms, device may have stopped", no_data_timeout_ms);
@@ -752,6 +759,7 @@ static gpointer data_read_thread(gpointer arg)
 
 		/* 有数据，重置计数器 */
 		no_data_count = 0;
+		last_query_time = current_time;
 
 		/* 读取数据 */
 		length = devc->buffer_size;
@@ -768,72 +776,103 @@ static gpointer data_read_thread(gpointer arg)
 
 		sr_dbg("Read %lu bytes from pipe %lu", length, pipe_num);
 
-		num_samples = length / unitsize;
+		cur_sample_count = length / unitsize;
 
 		/* 触发处理 */
+	check_trigger:
 		g_mutex_lock(&devc->mutex);
+
 		if (devc->trigger_fired) {
-			/* 触发后发送数据 */
 			if (!devc->limit_samples || devc->sent_samples < devc->limit_samples) {
-				if (devc->limit_samples &&
-					devc->sent_samples + num_samples > devc->limit_samples)
+				/* Send the incoming transfer to the session bus. */
+				num_samples = cur_sample_count - processed_samples;
+				if (devc->limit_samples && devc->sent_samples + num_samples > devc->limit_samples)
 					num_samples = devc->limit_samples - devc->sent_samples;
-				devc->send_data_proc(sdi, buffer,
-								num_samples * unitsize, unitsize);
+
+				devc->send_data_proc(sdi, (uint8_t *)buffer + processed_samples * unitsize,
+					num_samples * unitsize, unitsize);
 				devc->sent_samples += num_samples;
+				processed_samples += num_samples;
 			}
-		} else if (devc->stl) {
-			/* 检测触发 */
-			devc->stl->unitsize = unitsize;
+		} else {
 			trigger_offset = soft_trigger_logic_check(devc->stl,
-													  buffer, length,
-													  &pre_trigger_samples);
-
+				buffer + processed_samples * unitsize,
+				length - processed_samples * unitsize,
+				&pre_trigger_samples);
 			if (trigger_offset > -1) {
-				/* 发送预触发数据 */
-				devc->send_data_proc(sdi, buffer,
-									trigger_offset * unitsize, unitsize);
-				std_session_send_df_trigger(sdi);
-				devc->trigger_fired = TRUE;
-				devc->sent_samples = pre_trigger_samples;
-
-				/* 发送触发后数据 */
-				num_samples = (length / unitsize) - trigger_offset;
+				std_session_send_df_frame_begin(sdi);
+				devc->sent_samples += pre_trigger_samples;
+				num_samples = cur_sample_count - processed_samples - trigger_offset;
 				if (devc->limit_samples &&
-					devc->sent_samples + num_samples > devc->limit_samples)
+						devc->sent_samples + num_samples > devc->limit_samples)
 					num_samples = devc->limit_samples - devc->sent_samples;
 
-				if (num_samples > 0) {
-					devc->send_data_proc(sdi,
-										 	buffer + trigger_offset * unitsize,
-										 	num_samples * unitsize, unitsize);
-					devc->sent_samples += num_samples;
-				}
+				devc->send_data_proc(sdi, (uint8_t *)buffer
+						+ processed_samples * unitsize
+						+ trigger_offset * unitsize,
+						num_samples * unitsize, unitsize);
+				devc->sent_samples += num_samples;
+				processed_samples += trigger_offset + num_samples;
+
+				devc->trigger_fired = TRUE;
 			}
 		}
 		g_mutex_unlock(&devc->mutex);
 
 		/* 检查采样限制 */
-		if (devc->limit_samples && devc->sent_samples >= devc->limit_samples) {
+		const int frame_ended = devc->limit_samples && (devc->sent_samples >= devc->limit_samples);
+		const int final_frame = devc->limit_frames && (devc->num_frames >= (devc->limit_frames - 1));
+
+		if (frame_ended) {
 			devc->num_frames++;
 			devc->sent_samples = 0;
 			devc->trigger_fired = FALSE;
+			std_session_send_df_frame_end(sdi);
 
-			if (devc->stl)
-				devc->stl->cur_stage = 0;
-
-				if (devc->limit_frames && devc->num_frames >= devc->limit_frames) {
-				// g_thread_try_new("stop_cmd", stop_command_thread_func, (gpointer)sdi, NULL);
-				send_stop_command(sdi);
-
-				g_mutex_lock(&devc->mutex);
-				devc->acq_aborted = TRUE;
-				g_mutex_unlock(&devc->mutex);
-				g_free(buffer);
-				sr_dbg("data_read_thread EXIT (frame limit)");
-				return NULL;	
+			/* There may be another trigger in the remaining data, go back and check for it */
+			if (processed_samples < cur_sample_count) {
+				/* Reset the trigger stage */
+				if (devc->stl)
+					devc->stl->cur_stage = 0;
+				else {
+					std_session_send_df_frame_begin(sdi);
+					devc->trigger_fired = TRUE;
+				}
+				if (!final_frame)
+					goto check_trigger;
 			}
 		}
+		if (frame_ended && final_frame) {
+			send_stop_command(sdi);
+
+			g_mutex_lock(&devc->mutex);
+			devc->acq_aborted = TRUE;
+			g_mutex_unlock(&devc->mutex);
+			g_free(buffer);
+			sr_dbg("data_read_thread EXIT (frame limit)");
+			return NULL;
+		}
+
+		// if (devc->limit_samples && devc->sent_samples >= devc->limit_samples) {
+		// 	devc->num_frames++;
+		// 	devc->sent_samples = 0;
+		// 	devc->trigger_fired = FALSE;
+
+		// 	if (devc->stl)
+		// 		devc->stl->cur_stage = 0;
+
+		// 	if (devc->limit_frames && devc->num_frames >= devc->limit_frames) {
+		// 		// g_thread_try_new("stop_cmd", stop_command_thread_func, (gpointer)sdi, NULL);
+		// 		send_stop_command(sdi);
+
+		// 		g_mutex_lock(&devc->mutex);
+		// 		devc->acq_aborted = TRUE;
+		// 		g_mutex_unlock(&devc->mutex);
+		// 		g_free(buffer);
+		// 		sr_dbg("data_read_thread EXIT (frame limit)");
+		// 		return NULL;	
+		// 	}
+		// }
 	}
 
 	g_free(buffer);

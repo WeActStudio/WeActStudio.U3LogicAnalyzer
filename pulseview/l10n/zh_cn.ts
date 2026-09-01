@@ -1631,6 +1631,10 @@ Please keep in mind that the application may need a restart to display correctly
         <translation>型号:</translation>
     </message>
     <message>
+        <source>Pre-trigger</source>
+        <translation>预触发</translation>
+    </message>
+    <message>
         <source>Options</source>
         <translation>选项</translation>
     </message>

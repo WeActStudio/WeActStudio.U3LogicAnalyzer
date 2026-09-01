@@ -200,6 +200,7 @@ private Q_SLOTS:
 	void on_update_threshold_value_1(float thresholdValue);
 	void on_update_threshold_value_2(float thresholdValue);
 	void on_update_threshold_value_ch32h417(float thresholdValue);  // CH32H417专用阈值处理
+	void on_update_pre_trigger(uint8_t value);
 	void on_mode_changed(int mode);
 	void on_adc_channel_changed(int channel);  // ADC通道切换处理
 	void on_adc_precision_changed(int precision);  // ADC精度切换处理
@@ -270,6 +271,7 @@ private:
 	float thresholdValue_1_ = 1.0f;
 	float thresholdValue_2_ = 1.0f;
 	float thresholdValue_ch32h417_ = 2.3f;
+	uint8_t pre_trigger_ = 0;
 	uint64_t hardware_version_ = 0;
 
 public:
@@ -279,6 +281,7 @@ public:
 	float threshold_bank_2_default_ = 1.0;
 	float threshold_ch32h417_default_ = 2.3f;
 	uint8_t channel_number_default_ = 16;
+	uint8_t pre_trigger_default_ = 0;
 	uint64_t sample_count_default_index_ = 0;
 	uint64_t sample_rate_default_index_ = 0;
 	QStringList decoder_list_default_;

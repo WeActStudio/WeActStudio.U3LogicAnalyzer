@@ -191,8 +191,8 @@ void GlobalSettings::set_defaults_where_needed()
 	if (!contains(Key_ThresholdLevel))
 		setValue(Key_ThresholdLevel, 2.3);
 
-	setValue(Key_View_ShowSamplingPoints, false);   //force 
-	setValue(Key_View_ShowHoverMarker, false);      //force 
+	// setValue(Key_View_ShowSamplingPoints, false);   //force 
+	// setValue(Key_View_ShowHoverMarker, false);      //force 
 }
 
 void GlobalSettings::set_bright_theme_default_colors()
