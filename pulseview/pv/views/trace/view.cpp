@@ -1670,7 +1670,6 @@ bool View::eventFilter(QObject *object, QEvent *event)
 
 		if (restoring_state_) {
 			set_v_offset(saved_v_offset_);
-			restoring_state_ = false;
 		}
 	}
 
@@ -2396,7 +2395,7 @@ void View::capture_state_updated(int state)
 
 		// Enable sticky scrolling if the setting is enabled
 		sticky_scrolling_ = !restoring_state_ &&
-			settings.value(GlobalSettings::Key_View_StickyScrolling, true).toBool();
+			settings.value(GlobalSettings::Key_View_StickyScrolling, false).toBool();
 
 		// Reset all traces to segment 0
 		current_segment_ = 0;
@@ -2428,6 +2427,8 @@ void View::capture_state_updated(int state)
 			zoom_fit(false);  // We're stopped, so the GUI state doesn't matter
 		}
 		update_signals_height();
+
+		restoring_state_ = false;
 	}
 }
 
