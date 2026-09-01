@@ -1670,6 +1670,7 @@ bool View::eventFilter(QObject *object, QEvent *event)
 
 		if (restoring_state_) {
 			set_v_offset(saved_v_offset_);
+			restoring_state_ = false;
 		}
 	}
 
@@ -2373,7 +2374,7 @@ void View::capture_state_updated(int state)
 {
 	GlobalSettings settings;
 	if (state == Session::Running) {
-		// update_scale_offset(true);
+		update_scale_offset(false);
 
 		set_time_unit(util::TimeUnit::Samples);
 
@@ -2421,7 +2422,7 @@ void View::capture_state_updated(int state)
 		// Only perform zoom-to-fit if the user hasn't altered the viewport and
 		// we didn't restore settings in the meanwhile
 		if (zoom_to_fit_after_acq &&
-			!restoring_state_ &&
+			// !restoring_state_ &&
 			(scale_ == scale_at_acq_start_) &&
 			(sticky_scrolling_ || (offset_ == offset_at_acq_start_))) {
 			zoom_fit(false);  // We're stopped, so the GUI state doesn't matter

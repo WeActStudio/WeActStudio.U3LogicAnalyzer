@@ -24,7 +24,7 @@ namespace pv {
 namespace views {
 namespace trace {
 
-const QColor TriggerMarker::Color(0x00, 0x00, 0xB0);
+const QColor TriggerMarker::Color(0xB0, 0x00, 0x00);
 
 TriggerMarker::TriggerMarker(View &view, const pv::util::Timestamp& time) :
 	TimeItem(view),
