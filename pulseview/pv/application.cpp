@@ -65,8 +65,8 @@ Application::Application(int &argc, char* argv[]) :
 {
 	setApplicationVersion(PV_VERSION_STRING);
 	setApplicationName("U3LogicAnalyzer");
-	setOrganizationName("WeAct Studio");
-	// setOrganizationDomain("sigrok.org");
+	setOrganizationName("WeActStudio");
+	setOrganizationDomain("WeActStudio.com");
 }
 
 const QStringList Application::get_languages() const
