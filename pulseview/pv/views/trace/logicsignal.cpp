@@ -220,10 +220,11 @@ void LogicSignal::paint_mid(QPainter &p, ViewItemPaintParams &pp)
 {
 	QLineF *line;
 
-	vector< pair<uint64_t, bool> > edges;
+	vector< pair<int64_t, bool> > edges;
 
 	assert(base_);
 	assert(owner_);
+
 	const int y = get_visual_y();
 
 	if (!base_->enabled())
@@ -232,6 +233,7 @@ void LogicSignal::paint_mid(QPainter &p, ViewItemPaintParams &pp)
 	const float low_offset = y + low_level_offset_;
 	const float high_offset = y + high_level_offset_;
 	const float fill_height = low_offset - high_offset;
+
 	shared_ptr<LogicSegment> segment = get_logic_segment_to_paint();
 	if (!segment || (segment->get_sample_count() == 0))
 		return;
@@ -254,9 +256,9 @@ void LogicSignal::paint_mid(QPainter &p, ViewItemPaintParams &pp)
 		(int64_t)0), last_sample);
 	const uint64_t end_sample = min(max(ceil(end).convert_to<int64_t>(),
 		(int64_t)0), last_sample);
+
 	segment->get_subsampled_edges(edges, start_sample, end_sample,
 		samples_per_pixel / Oversampling, base_->logic_bit_index());
-
 	assert(edges.size() >= 2);
 
 	const float first_sample_x =
@@ -418,15 +420,19 @@ vector<LogicSegment::EdgePair> LogicSignal::get_nearest_level_changes(uint64_t s
 
 	if (sample_pos == 0)
 		return vector<LogicSegment::EdgePair>();
-	shared_ptr<LogicSegment> segment = get_logic_segment_to_paint();
-	if (!segment || (segment->get_sample_count() == 0)){
-		return vector<LogicSegment::EdgePair>();
-	}
 
-	const float min_length = 1.0f;
+	shared_ptr<LogicSegment> segment = get_logic_segment_to_paint();
+	if (!segment || (segment->get_sample_count() == 0))
+		return vector<LogicSegment::EdgePair>();
+
+	const View *view = owner_->view();
+	assert(view);
+	const double samples_per_pixel = base_->get_samplerate() * view->scale();
 
 	vector<LogicSegment::EdgePair> edges;
-	segment->get_surrounding_edges(edges, sample_pos, min_length, base_->index());
+
+	segment->get_surrounding_edges(edges, sample_pos,
+		samples_per_pixel / Oversampling, base_->index());
 
 	if (edges.empty())
 		return vector<LogicSegment::EdgePair>();
@@ -435,7 +441,7 @@ vector<LogicSegment::EdgePair> LogicSignal::get_nearest_level_changes(uint64_t s
 }
 
 void LogicSignal::paint_caps(QPainter &p, QLineF *const lines,
-	vector< pair<uint64_t, bool> > &edges, bool level,
+	vector< pair<int64_t, bool> > &edges, bool level,
 	double samples_per_pixel, double pixels_offset, float x_offset,
 	float y_offset)
 {

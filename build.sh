@@ -270,7 +270,7 @@ if [ $PACKAGE -eq 1 ]; then
                        sre_constants.py sre_parse.py stat.py string string.py \
                        struct.py subprocess.py sysconfig.py tempfile.py \
                        textwrap.py threading.py token.py tokenize.py \
-                       _weakrefset.py sysconfig _pydecimal.py \
+                       _weakrefset.py sysconfig _pydecimal.py _py_warnings.py numbers.py contextlib.py contextvars.py \
                        types.py typing.py uuid.py warnings.py weakref.py; do
                 cp -r "$PYTHON_SRC/$dir" "$DIST_DIR/python-portable/lib/python3.14/" 2>/dev/null || true
             done

@@ -189,141 +189,138 @@ void CalcVertexes(double startX, double startY, double endX, double endY, double
 
 void Viewport::paintEvent(QPaintEvent*)
 {
-	typedef void (ViewItem::*LayerPaintFunc)(
-		QPainter &p, ViewItemPaintParams &pp);
-	LayerPaintFunc layer_paint_funcs[] = {
-		&ViewItem::paint_back, &ViewItem::paint_mid,
-		&ViewItem::paint_fore, nullptr};
+    typedef void (ViewItem::*LayerPaintFunc)(
+        QPainter &p, ViewItemPaintParams &pp);
+    LayerPaintFunc layer_paint_funcs[] = {
+        &ViewItem::paint_back, &ViewItem::paint_mid,
+        &ViewItem::paint_fore, nullptr};
+    vector< shared_ptr<ViewItem> > row_items(view_.list_by_type<ViewItem>());
+    assert(none_of(row_items.begin(), row_items.end(),
+        [](const shared_ptr<ViewItem> &r) { return !r; }));
+    stable_sort(row_items.begin(), row_items.end(),
+        [](const shared_ptr<ViewItem> &a, const shared_ptr<ViewItem> &b) {
+            return a->drag_point(QRect()).y() < b->drag_point(QRect()).y(); });
+    const vector< shared_ptr<TimeItem> > time_items(view_.time_items());
+    assert(none_of(time_items.begin(), time_items.end(),
+        [](const shared_ptr<TimeItem> &t) { return !t; }));
 
-	vector< shared_ptr<ViewItem> > row_items(view_.list_by_type<ViewItem>());
-	assert(none_of(row_items.begin(), row_items.end(),
-		[](const shared_ptr<ViewItem> &r) { return !r; }));
-
-	stable_sort(row_items.begin(), row_items.end(),
-		[](const shared_ptr<ViewItem> &a, const shared_ptr<ViewItem> &b) {
-			return a->drag_point(QRect()).y() < b->drag_point(QRect()).y(); });
-
-	const vector< shared_ptr<TimeItem> > time_items(view_.time_items());
-	assert(none_of(time_items.begin(), time_items.end(),
-		[](const shared_ptr<TimeItem> &t) { return !t; }));
-
-	QPainter p(this);
-
-	// Disable antialiasing for high-DPI displays
-	bool use_antialiasing =
-		window()->windowHandle()->screen()->devicePixelRatio() < 2.0;
-	p.setRenderHint(QPainter::Antialiasing, use_antialiasing);
-	for (LayerPaintFunc *paint_func = layer_paint_funcs;
-			*paint_func; paint_func++) {
-		ViewItemPaintParams time_pp(rect(), view_.scale(), view_.offset());
-		for (const shared_ptr<TimeItem>& t : time_items)
-			(t.get()->*(*paint_func))(p, time_pp);
-		
-		ViewItemPaintParams row_pp(rect(), view_.scale(), view_.offset());
-		for (const shared_ptr<ViewItem>& r : row_items)
-			(r.get()->*(*paint_func))(p, row_pp);
-	}
-	p.end();
-	if (bezier_start_ !=  QPointF(0,0) && bezier_end_ != QPointF(0,0)) {
-		QPainter painter(this);
-		painter.setPen(QPen(Qt::yellow, 1));
-		painter.setRenderHint(QPainter::Antialiasing);
-
-		painter.setPen(Qt::yellow);
-		painter.drawEllipse(bezier_start_, 2, 2);
-		painter.drawEllipse(bezier_end_, 2, 2);
-
-		QPointF midPoint((bezier_start_.x() + bezier_end_.x()) / 2, (bezier_start_.y() + bezier_end_.y()) / 2);
-
-		double dx = bezier_end_.x() - bezier_start_.x();
-		double dy = bezier_end_.y() - bezier_start_.y();
-
-		double distance = qMin(qAbs(dx), qAbs(dy)) / 2;
-
-		// 计算两个控制点的位置
-		QPointF controlPoint1(midPoint.x() - dy / std::sqrt(dx * dx + dy * dy) * distance,
-							midPoint.y() + dx / std::sqrt(dx * dx + dy * dy) * distance);
-		QPointF controlPoint2(midPoint.x() + dy / std::sqrt(dx * dx + dy * dy) * distance,
-							midPoint.y() - dx / std::sqrt(dx * dx + dy * dy) * distance);
-
-		// 创建贝塞尔曲线路径
-		QPainterPath path;
-		path.moveTo(bezier_start_);
-		path.cubicTo(controlPoint1, controlPoint2, bezier_end_);
-
-		// 绘制贝塞尔曲线
-		painter.setPen(QPen(Qt::yellow, 1.5)); // 曲线颜色和宽度
-		painter.drawPath(path);
+    QPainter p(this);
 	
-		int typical_width = painter.boundingRect(0, 0, INT_MAX, INT_MAX,
-			Qt::AlignLeft | Qt::AlignTop, bezier_width_).width();
-		typical_width = typical_width + 50;
-		const double width = this->width();
-		const double height = view_.viewport()->height();
-		const double left = view_.hover_point().x();
-		const double top = view_.hover_point().y();
-		const double right = left + typical_width;
-		const double bottom = top + 20;
-		QPointF org_pos = QPointF(right > width ? left - typical_width : left, bottom > height ? top - 20 : top);
-		QRectF measure_rect = QRectF(org_pos.x(), org_pos.y(), (double)typical_width, 20.0);
-		QRectF measure1_rect = QRectF(org_pos.x(), org_pos.y(), (double)typical_width, 20.0);
-		painter.setPen(Qt::NoPen);
-		painter.setBrush(LightBlue);
-		painter.drawRect(measure_rect);
-		painter.setPen(Orange);	
-		painter.drawText(measure1_rect, Qt::AlignRight | Qt::AlignVCenter,
-				tr("Width: ") + bezier_width_);			
-		painter.end();
-	} else if (measure_end_ != QPointF(0,0)) {
-		QPainter p(this);
-		p.setPen(QPen(Qt::yellow, 1));
-		QLineF l1(measure_start_, measure_end_);
-		p.drawLine(l1);
-		//arrow
-		double x1, y1, x2, y2;
-		CalcVertexes(measure_start_.x(), measure_start_.y(), measure_end_.x(), measure_end_.y(), x1, y1, x2, y2);
-		p.drawLine(measure_end_.x(), measure_end_.y(), x1, y1); 
-		p.drawLine(measure_end_.x(), measure_end_.y(), x2, y2); 
-		CalcVertexes(measure_end_.x(), measure_end_.y(), measure_start_.x(), measure_start_.y(), x1, y1, x2, y2);
-		p.drawLine(measure_start_.x(), measure_start_.y(), x1, y1); 
-		p.drawLine(measure_start_.x(), measure_start_.y(), x2, y2);
-		int typical_width = p.boundingRect(0, 0, INT_MAX, INT_MAX,
-			Qt::AlignLeft | Qt::AlignTop, width_).width();
-		typical_width = std::max(typical_width, p.boundingRect(0, 0, INT_MAX, INT_MAX,
-			Qt::AlignLeft | Qt::AlignTop, period_).width());
-		typical_width = std::max(typical_width, p.boundingRect(0, 0, INT_MAX, INT_MAX,
-			Qt::AlignLeft | Qt::AlignTop, freq_).width());
-		typical_width = std::max(typical_width, p.boundingRect(0, 0, INT_MAX, INT_MAX,
-			Qt::AlignLeft | Qt::AlignTop, duty_cycle_).width());
-		typical_width = typical_width + 100;
-		const double width = this->width();
-		const double height = view_.viewport()->height();
-		const double left = view_.hover_point().x();
-		const double top = view_.hover_point().y();
-		const double right = left + typical_width;
-		const double bottom = top + 80;
-		QPointF org_pos = QPointF(right > width ? left - typical_width : left, bottom > height ? top - 80 : top);
-		QRectF measure_rect = QRectF(org_pos.x(), org_pos.y(), (double)typical_width, 80.0);
-		QRectF measure1_rect = QRectF(org_pos.x(), org_pos.y(), (double)typical_width, 20.0);
-		QRectF measure2_rect = QRectF(org_pos.x(), org_pos.y() + 20, (double)typical_width, 20.0);
-		QRectF measure3_rect = QRectF(org_pos.x(), org_pos.y() + 40, (double)typical_width, 20.0);
-		QRectF measure4_rect = QRectF(org_pos.x(), org_pos.y() + 60, (double)typical_width, 20.0);
-		p.setBrush(Qt::yellow);
-		p.drawEllipse(measure_mid_, 2, 2); 
-		p.setPen(Qt::NoPen);
-		p.setBrush(LightBlue);
-		p.drawRect(measure_rect);
-		p.setPen(Orange);
-		p.drawText(measure1_rect, Qt::AlignRight | Qt::AlignVCenter,
-				tr("Width: ") + width_);
-		p.drawText(measure2_rect, Qt::AlignRight | Qt::AlignVCenter,
-				tr("Period: ") + period_);
-		p.drawText(measure3_rect, Qt::AlignRight | Qt::AlignVCenter,
-				tr("Frequency: ") + freq_);
-		p.drawText(measure4_rect, Qt::AlignRight | Qt::AlignVCenter,
-				tr("Duty Cycle: ") + duty_cycle_);
-		p.end();
+    // Disable antialiasing for high‑DPI displays
+    bool use_antialiasing =
+        window()->windowHandle()->screen()->devicePixelRatio() < 2.0;
+    p.setRenderHint(QPainter::Antialiasing, use_antialiasing);
+
+    for (LayerPaintFunc *paint_func = layer_paint_funcs;
+            *paint_func; paint_func++) {
+        ViewItemPaintParams time_pp(rect(), view_.scale(), view_.offset());
+        for (const shared_ptr<TimeItem>& t : time_items)
+            (t.get()->*(*paint_func))(p, time_pp);
+        
+        ViewItemPaintParams row_pp(rect(), view_.scale(), view_.offset());
+        for (const shared_ptr<ViewItem>& r : row_items)
+            (r.get()->*(*paint_func))(p, row_pp);
     }
+
+    if (bezier_start_ !=  QPointF(0,0) && bezier_end_ != QPointF(0,0)) {
+        p.setRenderHint(QPainter::Antialiasing);
+
+        p.setPen(QPen(Qt::yellow, 1));
+        p.drawEllipse(bezier_start_, 2, 2);
+        p.drawEllipse(bezier_end_, 2, 2);
+
+        QPointF midPoint((bezier_start_.x() + bezier_end_.x()) / 2,
+                         (bezier_start_.y() + bezier_end_.y()) / 2);
+        double dx = bezier_end_.x() - bezier_start_.x();
+        double dy = bezier_end_.y() - bezier_start_.y();
+        double distance = qMin(qAbs(dx), qAbs(dy)) / 2.0;
+        double len = std::sqrt(dx*dx + dy*dy);
+
+        if(len > 1e-9) // 防止除零
+        {
+            QPointF controlPoint1(midPoint.x() - dy / len * distance,
+                                  midPoint.y() + dx / len * distance);
+            QPointF controlPoint2(midPoint.x() + dy / len * distance,
+                                  midPoint.y() - dx / len * distance);
+
+            QPainterPath path;
+            path.moveTo(bezier_start_);
+            path.cubicTo(controlPoint1, controlPoint2, bezier_end_);
+            p.setPen(QPen(Qt::yellow, 1.5));
+            p.drawPath(path);
+        }
+
+        int typical_width = p.boundingRect(0, 0, INT_MAX, INT_MAX,
+            Qt::AlignLeft | Qt::AlignTop, bezier_width_).width();
+        typical_width = typical_width + 50;
+        const double width = this->width();
+        const double height = view_.viewport()->height();
+        const double left = view_.hover_point().x();
+        const double top = view_.hover_point().y();
+        const double right = left + typical_width;
+        const double bottom = top + 20;
+        QPointF org_pos = QPointF(right > width ? left - typical_width : left,
+                                   bottom > height ? top - 20 : top);
+        QRectF measure_rect = QRectF(org_pos.x(), org_pos.y(), (double)typical_width, 20.0);
+
+        p.setPen(Qt::NoPen);
+        p.setBrush(LightBlue);
+        p.drawRect(measure_rect);
+        p.setPen(Orange);
+        p.drawText(measure_rect, Qt::AlignRight | Qt::AlignVCenter,
+            tr("Width: ") + bezier_width_);
+    }
+    else if (measure_end_ != QPointF(0,0)) {
+        p.setPen(QPen(Qt::yellow, 1));
+        QLineF l1(measure_start_, measure_end_);
+        p.drawLine(l1);
+
+        double x1, y1, x2, y2;
+        CalcVertexes(measure_start_.x(), measure_start_.y(), measure_end_.x(), measure_end_.y(), x1, y1, x2, y2);
+        p.drawLine(measure_end_.x(), measure_end_.y(), x1, y1);
+        p.drawLine(measure_end_.x(), measure_end_.y(), x2, y2);
+        CalcVertexes(measure_end_.x(), measure_end_.y(), measure_start_.x(), measure_start_.y(), x1, y1, x2, y2);
+        p.drawLine(measure_start_.x(), measure_start_.y(), x1, y1);
+        p.drawLine(measure_start_.x(), measure_start_.y(), x2, y2);
+
+        int typical_width = p.boundingRect(0, 0, INT_MAX, INT_MAX,
+            Qt::AlignLeft | Qt::AlignTop, width_).width();
+        typical_width = std::max(typical_width, p.boundingRect(0, 0, INT_MAX, INT_MAX,
+            Qt::AlignLeft | Qt::AlignTop, period_).width());
+        typical_width = std::max(typical_width, p.boundingRect(0, 0, INT_MAX, INT_MAX,
+            Qt::AlignLeft | Qt::AlignTop, freq_).width());
+        typical_width = std::max(typical_width, p.boundingRect(0, 0, INT_MAX, INT_MAX,
+            Qt::AlignLeft | Qt::AlignTop, duty_cycle_).width());
+        typical_width = typical_width + 100;
+
+        const double width = this->width();
+        const double height = view_.viewport()->height();
+        const double left = view_.hover_point().x();
+        const double top = view_.hover_point().y();
+        const double right = left + typical_width;
+        const double bottom = top + 80;
+        QPointF org_pos = QPointF(right > width ? left - typical_width : left,
+                                   bottom > height ? top - 80 : top);
+
+        QRectF measure_rect = QRectF(org_pos.x(), org_pos.y(), (double)typical_width, 80.0);
+        QRectF measure1_rect = QRectF(org_pos.x(), org_pos.y(), (double)typical_width, 20.0);
+        QRectF measure2_rect = QRectF(org_pos.x(), org_pos.y() + 20, (double)typical_width, 20.0);
+        QRectF measure3_rect = QRectF(org_pos.x(), org_pos.y() + 40, (double)typical_width, 20.0);
+        QRectF measure4_rect = QRectF(org_pos.x(), org_pos.y() + 60, (double)typical_width, 20.0);
+
+        p.setBrush(Qt::yellow);
+        p.drawEllipse(measure_mid_, 2, 2);
+        p.setPen(Qt::NoPen);
+        p.setBrush(LightBlue);
+        p.drawRect(measure_rect);
+        p.setPen(Orange);
+        p.drawText(measure1_rect, Qt::AlignRight | Qt::AlignVCenter, tr("Width: ") + width_);
+        p.drawText(measure2_rect, Qt::AlignRight | Qt::AlignVCenter, tr("Period: ") + period_);
+        p.drawText(measure3_rect, Qt::AlignRight | Qt::AlignVCenter, tr("Frequency: ") + freq_);
+        p.drawText(measure4_rect, Qt::AlignRight | Qt::AlignVCenter, tr("Duty Cycle: ") + duty_cycle_);
+    }
+
+    p.end(); // 只在函数末尾一次 end()
 }
 
 void Viewport::mouseDoubleClickEvent(QMouseEvent *event)

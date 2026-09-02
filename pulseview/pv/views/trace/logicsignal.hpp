@@ -114,7 +114,7 @@ Q_SIGNALS:
 	int change_signal_height();
 protected:
 	void paint_caps(QPainter &p, QLineF *const lines,
-		vector< pair<uint64_t, bool> > &edges,
+		vector< pair<int64_t, bool> > &edges,
 		bool level, double samples_per_pixel, double pixels_offset,
 		float x_offset, float y_offset);
 

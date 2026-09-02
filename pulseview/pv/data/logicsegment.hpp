@@ -54,7 +54,8 @@ class LogicSegment : public Segment, public enable_shared_from_this<Segment>
 	Q_OBJECT
 
 public:
-	typedef pair<uint64_t, bool> EdgePair;
+	typedef pair<int64_t, bool> EdgePair;
+
 	static const unsigned int ScaleStepCount = 10;
 	static const int MipMapScalePower;
 	static const int MipMapScaleFactor;

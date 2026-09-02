@@ -1089,7 +1089,7 @@ const QWidget* View::hover_widget() const
 	return hover_widget_;
 }
 
-uint64_t View::get_nearest_level_change(const QPoint &p)
+int64_t View::get_nearest_level_change(const QPoint &p)
 {
 	// Is snapping disabled?
 	if (snap_distance_ == 0)
@@ -1100,49 +1100,51 @@ uint64_t View::get_nearest_level_change(const QPoint &p)
 			signal(s), delta(numeric_limits<int64_t>::max()), sample(-1), is_dense(false) {}
 		shared_ptr<Signal> signal;
 		int64_t delta;
-		uint64_t sample;
+		int64_t sample;
 		bool is_dense;
 	};
 
 	vector<entry_t> list;
+
 	// Create list of signals to consider
-	if (signal_under_mouse_cursor_){
+	if (signal_under_mouse_cursor_)
 		list.emplace_back(signal_under_mouse_cursor_);
-	}
-	else{
+	else
 		for (shared_ptr<Signal> s : signals_) {
 			if (!s->enabled())
 				continue;
 
 			list.emplace_back(s);
 		}
-	}
+
 	// Get data for listed signals
 	for (entry_t &e : list) {
 		// Calculate sample number from cursor position
-		// const double samples_per_pixel = e.signal->base()->get_samplerate() * scale();
-		const double samples_per_pixel = session_.get_samplerate() * scale();
-		const uint64_t x_offset = offset().convert_to<double>() / scale();
-		const uint64_t sample_num = max(((x_offset + p.x()) * samples_per_pixel), 0.0);
-		vector<data::LogicSegment::EdgePair> edges;
-		edges = e.signal->get_nearest_level_changes(sample_num);
+		const double samples_per_pixel = e.signal->base()->get_samplerate() * scale();
+		const int64_t x_offset = offset().convert_to<double>() / scale();
+		const int64_t sample_num = max(((x_offset + p.x()) * samples_per_pixel), 0.0);
+
+		vector<data::LogicSegment::EdgePair> edges =
+			e.signal->get_nearest_level_changes(sample_num);
+
 		if (edges.empty())
 			continue;
+
 		// Check first edge
-		const uint64_t first_sample_delta = (sample_num - edges.front().first);
-		const uint64_t first_delta = first_sample_delta / samples_per_pixel;
+		const int64_t first_sample_delta = abs(sample_num - edges.front().first);
+		const int64_t first_delta = first_sample_delta / samples_per_pixel;
 		e.delta = first_delta;
 		e.sample = edges.front().first;
+
 		// Check second edge if available
 		if (edges.size() == 2) {
 			// Note: -1 because this is usually the right edge and sample points are left-aligned
-			const uint64_t second_sample_delta = sample_num - (edges.back().first - 1);
-			const uint64_t second_delta = second_sample_delta / samples_per_pixel;
+			const int64_t second_sample_delta = abs(sample_num - edges.back().first - 1);
+			const int64_t second_delta = second_sample_delta / samples_per_pixel;
+
 			// If both edges are too close, we mark this signal as being dense
-			if ((first_delta + second_delta) <= snap_distance_){
-				// e.is_dense = true;
-				e.is_dense = false;
-			}
+			if ((first_delta + second_delta) <= snap_distance_)
+				e.is_dense = true;
 
 			if (second_delta < first_delta) {
 				e.delta = second_delta;
@@ -1181,9 +1183,10 @@ uint64_t View::get_nearest_level_change(const QPoint &p)
 	if (match) {
 		// Somewhat ugly hack to make TimeItem::drag_by() work
 		signal_under_mouse_cursor_ = match->signal;
-		
+
 		return match->sample;
 	}
+
 	return -1;
 }
 
@@ -1713,7 +1716,8 @@ void View::renew_bezier_measure()
 	}
 	if (signal_under_mouse_cursor_ != nullptr && session_.get_capture_state() == Session::Stopped && signal_under_mouse_cursor_->get_logic_segment_to_paint() != nullptr)
 	{
-		int64_t nearest = get_nearest_level_change(hover_point_);
+		// int64_t nearest = get_nearest_level_change(hover_point_);
+		int64_t nearest = 0;
 		if (nearest != -1)
 		{
 			pv::util::Timestamp t;		
@@ -1800,7 +1804,8 @@ void View::renew_measure()
 {
 	if (signal_under_mouse_cursor_ != nullptr && session_.get_capture_state() == Session::Stopped)
 	{
-		int64_t nearest = get_nearest_level_change(hover_point_);
+		// int64_t nearest = get_nearest_level_change(hover_point_);
+		int64_t nearest = 0;
 		if (nearest != -1)
 		{
 			QPointF startPoint, midPoint, endPoint;

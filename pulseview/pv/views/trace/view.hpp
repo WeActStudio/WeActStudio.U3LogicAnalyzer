@@ -336,7 +336,7 @@ public:
 	 * @param p The current position of the mouse cursor
 	 * @return The sample number of the nearest level change or -1 if none
 	 */
-	uint64_t get_nearest_level_change(const QPoint &p);
+	int64_t get_nearest_level_change(const QPoint &p);
 
 	void restack_all_trace_tree_items();
 

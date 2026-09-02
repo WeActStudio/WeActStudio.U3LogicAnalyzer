@@ -158,9 +158,8 @@ void GlobalSettings::set_defaults_where_needed()
 	if (!contains(Key_View_ShowHoverMarker))
 		setValue(Key_View_ShowHoverMarker, false);
 
-	// if (!contains(Key_View_SnapDistance))
-	// 	setValue(Key_View_SnapDistance, 1000);
-	setValue(Key_View_SnapDistance, 4000);
+	if (!contains(Key_View_SnapDistance))
+		setValue(Key_View_SnapDistance, 1000);
 
 	if (!contains(Key_View_CursorShowInterval))
 		setValue(Key_View_CursorShowInterval, true);

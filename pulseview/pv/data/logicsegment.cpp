@@ -830,83 +830,122 @@ bool LogicSegment::find_nearest_edge_right(uint64_t origin_sample, int sig_index
 }
 
 bool LogicSegment::find_nearest_edge_left(uint64_t origin_sample, int sig_index,
-	EdgePair &result)
+                                          EdgePair &result)
 {
-	if (origin_sample == 0 || origin_sample >= sample_count_.load())
-		return false;
+    if (origin_sample == 0 || origin_sample >= sample_count_.load())
+        return false;
 
-	lock_guard<recursive_mutex> lock(mutex_);
+    lock_guard<recursive_mutex> lock(mutex_);
+    const uint64_t sig_mask = 1ULL << sig_index;
+    const bool origin_level = (get_unpacked_sample(origin_sample) & sig_mask) != 0;
 
-	const uint64_t sig_mask = 1ULL << sig_index;
-	const bool origin_level = (get_unpacked_sample(origin_sample) & sig_mask) != 0;
+    // ========== 修复：origin_sample 本身就是跳变边沿，直接返回紧邻左边沿 ==========
+    if (origin_sample > 0)
+    {
+        bool prev_level = (get_unpacked_sample(origin_sample - 1) & sig_mask) != 0;
+        if (prev_level != origin_level)
+        {
+            result = EdgePair(origin_sample, origin_level);
+            return true;
+        }
+    }
 
-	unsigned int level = 0;
-	uint64_t offset = origin_sample >> ((level + 1) * MipMapScalePower);
+    unsigned int level = 0;
+    uint64_t offset = origin_sample >> ((level + 1) * MipMapScalePower);
 
-	while (true) {
-		if (!mip_map_[level].data) {
-			for (int64_t i = (int64_t)origin_sample - 1; i >= 0; i--) {
-				const bool sample = (get_unpacked_sample((uint64_t)i) & sig_mask) != 0;
-				if (sample != origin_level) {
-					result = EdgePair((uint64_t)i + 1, origin_level);
-					return true;
-				}
-			}
-			return false;
-		}
+    while (true)
+    {
+        if (!mip_map_[level].data)
+        {
+            // mipmap未就绪，暴力逐样本向左扫描
+            for (int64_t i = static_cast<int64_t>(origin_sample) - 1; i >= 0; --i)
+            {
+                const bool sample = (get_unpacked_sample(static_cast<uint64_t>(i)) & sig_mask) != 0;
+                if (sample != origin_level)
+                {
+                    result = EdgePair(static_cast<uint64_t>(i) + 1, origin_level);
+                    return true;
+                }
+            }
+            return false;
+        }
 
-		if (mip_map_[level].length == 0)
-			return false;
-		if (offset >= mip_map_[level].length)
-			offset = mip_map_[level].length - 1;
+        if (mip_map_[level].length == 0)
+            return false;
 
-		if ((get_subsample(level, offset) & sig_mask) != 0) {
-			if (level > 0) {
-				level--;
-				offset = offset * MipMapScaleFactor + MipMapScaleFactor - 1;
-				if (offset >= mip_map_[level].length)
-					offset = mip_map_[level].length > 0 ?
-						mip_map_[level].length - 1 : 0;
-				continue;
-			} else {
-				const uint64_t block_start = offset * MipMapScaleFactor;
-				const uint64_t block_end = min(block_start + MipMapScaleFactor,
-					sample_count_.load());
-				const uint64_t scan_upper = min(block_end, origin_sample);
-				for (int64_t i = (int64_t)scan_upper - 1;
-						i >= (int64_t)block_start; i--) {
-					if (i < 0) break;
-					const bool sample = (get_unpacked_sample((uint64_t)i) & sig_mask) != 0;
-					if (sample != origin_level) {
-						result = EdgePair((uint64_t)i + 1, origin_level);
-						return true;
-					}
-				}
-				if (offset == 0)
-					return false;
-				offset--;
-				if ((offset + 1) % MipMapScaleFactor == 0 &&
-					level + 1 < ScaleStepCount &&
-					mip_map_[level + 1].data) {
-					level++;
-					offset = offset >> MipMapScalePower;
-				}
-				continue;
-			}
-		} else {
-			if (offset == 0)
-				return false;
-			offset--;
-			if ((offset + 1) % MipMapScaleFactor == 0 &&
-				level + 1 < ScaleStepCount &&
-				mip_map_[level + 1].data) {
-				level++;
-				offset = offset >> MipMapScalePower;
-			}
-		}
-	}
+        if (offset >= mip_map_[level].length)
+            offset = mip_map_[level].length - 1;
 
-	return false;
+        if ((get_subsample(level, offset) & sig_mask) != 0)
+        {
+            if (level > 0)
+            {
+                level--;
+                offset = offset * MipMapScaleFactor + MipMapScaleFactor - 1;
+
+                // ========== 修复：下沉后mipmap无数据直接退出，防止越界get_subsample ==========
+                if (mip_map_[level].length == 0)
+                    return false;
+
+                if (offset >= mip_map_[level].length)
+                    offset = mip_map_[level].length - 1;
+                continue;
+            }
+            else
+            {
+                // level == 0，原始粒度，块内扫描
+                const uint64_t block_start = offset * MipMapScaleFactor;
+                const uint64_t block_end = min(block_start + MipMapScaleFactor,
+                                                    sample_count_.load());
+                const uint64_t scan_upper = min(block_end, origin_sample);
+
+                // NOTE: mipmap diff accumulator uses continuous 'prev' across block boundaries,
+                // so a transition at block_start-1 -> block_start is reflected in this block's diff.
+                // Therefore we must also scan block_start - 1 to find the closest edge.
+                int64_t scan_low = static_cast<int64_t>(block_start) - 1;
+                if (scan_low < 0)
+                    scan_low = 0;
+                int64_t i = static_cast<int64_t>(scan_upper) - 1;
+                for (; i >= scan_low; --i)
+                {
+                    const bool sample = (get_unpacked_sample(static_cast<uint64_t>(i)) & sig_mask) != 0;
+                    if (sample != origin_level)
+                    {
+                        result = EdgePair(static_cast<uint64_t>(i) + 1, origin_level);
+                        return true;
+                    }
+                }
+
+                if (offset == 0)
+                    return false;
+
+                offset--;
+                if (((offset + 1) % MipMapScaleFactor == 0) &&
+                    (level + 1 < ScaleStepCount) &&
+                    mip_map_[level + 1].data)
+                {
+                    level++;
+                    offset = offset >> MipMapScalePower;
+                }
+                continue;
+            }
+        }
+        else
+        {
+            if (offset == 0)
+                return false;
+
+            offset--;
+            if (((offset + 1) % MipMapScaleFactor == 0) &&
+                (level + 1 < ScaleStepCount) &&
+                mip_map_[level + 1].data)
+            {
+                level++;
+                offset = offset >> MipMapScalePower;
+            }
+        }
+    }
+    return false;
 }
 
 void LogicSegment::get_surrounding_edges(vector<EdgePair> &dest,
