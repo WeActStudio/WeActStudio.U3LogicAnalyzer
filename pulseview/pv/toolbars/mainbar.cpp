@@ -2630,6 +2630,7 @@ namespace pv
 
 			QDialog dialog(this);
 			dialog.setWindowTitle(tr("About"));
+			dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
 			// 设置更大的字体
 			QFont font = dialog.font();
