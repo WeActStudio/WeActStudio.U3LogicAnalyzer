@@ -307,13 +307,13 @@ namespace pv
 			// QAction *action_feedback = menu_help_view->addAction(tr("feedback"));
 			QAction *action_update = menu_help_view->addAction(tr("FW Update"));
 			// QAction *action_use_guide = menu_help_view->addAction(tr("User Guide"));
-			// QAction *action_about = menu_help_view->addAction(tr("About"));
+			QAction *action_about = menu_help_view->addAction(tr("About"));
 			connect(action_settings, SIGNAL(triggered(bool)), this, SIGNAL(settings_triggered()));
 			connect(action_version_info, SIGNAL(triggered(bool)), this, SLOT(on_action_version_info_triggered()));
 			// connect(action_feedback, SIGNAL(triggered(bool)), this, SLOT(on_action_feedback_triggered()));
 			connect(action_update, SIGNAL(triggered(bool)), this, SLOT(on_action_update_triggered()));
 			// connect(action_use_guide, SIGNAL(triggered(bool)), this, SLOT(on_action_use_guide_triggered()));
-			// connect(action_about, SIGNAL(triggered(bool)), this, SLOT(on_action_about_triggered()));
+			connect(action_about, SIGNAL(triggered(bool)), this, SLOT(on_action_about_triggered()));
 			// Open button
 			vector<QAction *> open_actions;
 			open_actions.push_back(action_open_);
@@ -2242,7 +2242,9 @@ namespace pv
 
 		void MainBar::on_action_version_info_triggered()
 		{
-			QString softwareVersion = "0.4 based on pulseview 0.5.0-git-7e5c839";
+			Application* a = qobject_cast<Application*>(QApplication::instance());
+			auto version_info = a->get_version_info();
+			QString softwareVersion = version_info[0].second;
 			QString firmwareVersion;
 			QString fpgaVersion;
 			QString text;
@@ -2614,15 +2616,17 @@ namespace pv
 
 		void MainBar::on_action_about_triggered()
 		{
-			QString appName = "U3LogicAnalyzer";
-			QString appVersion = "v0.4";
-			QString website = "<a href='https://oshwhub.com/q2h2/project_bszkxrnf' style='color:#afe2ff;'>访问我们：https://oshwhub.com/q2h2/project_bszkxrnf</a>";
+			Application* a = qobject_cast<Application*>(QApplication::instance());
+			auto version_info = a->get_version_info();
+			QString appName = version_info[0].first;
+			QString appVersion = version_info[0].second;
 			QString text = QString(
-						   "<b>%1 (%2)</b><br/><br/>"
-						   "%3")
+						   "<b>%1 (%2)</b><br/>"
+						   "<a href=\"https://oshwhub.com/q2h2\">Modified from: Q2H2</a><br/><br/>"
+						   "<a href=\"https://%3\">%3</a>")
 						   .arg(appName)
 						   .arg(appVersion)
-						   .arg(website);
+						   .arg(QApplication::organizationDomain());
 
 			QDialog dialog(this);
 			dialog.setWindowTitle(tr("About"));

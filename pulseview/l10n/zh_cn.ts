@@ -408,6 +408,10 @@ Do you want to save the session?</source>
         <translation>取消</translation>
     </message>
     <message>
+        <source>Save</source>
+        <translation>保存</translation>
+    </message>
+    <message>
         <source>Warning</source>
         <translation>警告</translation>
     </message>
@@ -2131,7 +2135,7 @@ Please keep in mind that the application may need a restart to display correctly
     </message>
     <message>
         <source>About</source>
-        <translation type="vanished">关于</translation>
+        <translation>关于</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="311"/>

@@ -63,7 +63,7 @@ static gint sort_pds(gconstpointer a, gconstpointer b)
 Application::Application(int &argc, char* argv[]) :
 	QApplication(argc, argv)
 {
-	setApplicationVersion(PV_VERSION_STRING);
+	setApplicationVersion(QString("%1 base on sigrok pulseview").arg(PV_VERSION_STRING));
 	setApplicationName("U3LogicAnalyzer");
 	setOrganizationName("WeActStudio");
 	setOrganizationDomain("WeActStudio.com");
@@ -180,7 +180,7 @@ void Application::collect_version_info(pv::DeviceManager &device_manager)
 {
 	// Library versions and features
 	QString version_str;
-	version_info_.emplace_back("LogicAnalyzer", "0.4 base on pulseview 0.5.0-git-7e5c839");
+	version_info_.emplace_back(Application::applicationName(), QApplication::applicationVersion());
 	if (hd_version_ == 0){
 		version_str = "null-null";
 	}else{
@@ -288,31 +288,38 @@ void Application::renew_version_info()
 {
 	//low bit is fpga
 	QString version_str;
-	version_str = QString::number((hd_version_ >> 16)&0xff); 
-	version_str += ".";
-	version_str += QString::number((hd_version_ >> 24)&0xff);     
-	version_str += "-";
-	version_str += QString::number((hd_version_ >> 0)&0xff);
-	version_str += ".";
-	version_str += QString::number((hd_version_ >> 8)&0xff);
 	for (pair<QString, QString>& entry : version_info_){
 		if (entry.first == "CH569-FPGA"){
+			version_str = QString::number((hd_version_ >> 16)&0xff); 
+			version_str += ".";
+			version_str += QString::number((hd_version_ >> 24)&0xff);     
+			version_str += "-";
+			version_str += QString::number((hd_version_ >> 0)&0xff);
+			version_str += ".";
+			version_str += QString::number((hd_version_ >> 8)&0xff);
+			entry.second = version_str;
+			break;
+		}
+		else if(entry.first == "CH32H417 Logic Analyzer"){
+			version_str = QString::number(hd_version_&0xff); 
+			version_str += ".";
+			version_str += QString::number((hd_version_ >> 8)&0xff);     
 			entry.second = version_str;
 			break;
 		}
 	}
-	UpdateFwVersion_ = new QProcess;
-	QString workpath = QApplication::applicationDirPath() + "/res";
-    UpdateFwVersion_->setWorkingDirectory(workpath);
-    QString openPath = QApplication::applicationDirPath() + "/res/UpdateFwVersion.exe";
-	QStringList arg;
-	arg << QString::number((hd_version_ >> 16)&0xff) << QString::number((hd_version_ >> 24)&0xff);
-	UpdateFwVersion_->start(openPath, arg);
-	if (UpdateFwVersion_->waitForStarted()) {
-        qDebug() << "UpdateFwVersion start success" << UpdateFwVersion_->state();
-    } else {
-        qDebug() << "UpdateFwVersion start fail" << UpdateFwVersion_->state();
-    }
+	// UpdateFwVersion_ = new QProcess;
+	// QString workpath = QApplication::applicationDirPath() + "/res";
+    // UpdateFwVersion_->setWorkingDirectory(workpath);
+    // QString openPath = QApplication::applicationDirPath() + "/res/UpdateFwVersion.exe";
+	// QStringList arg;
+	// arg << QString::number((hd_version_ >> 16)&0xff) << QString::number((hd_version_ >> 24)&0xff);
+	// UpdateFwVersion_->start(openPath, arg);
+	// if (UpdateFwVersion_->waitForStarted()) {
+    //     qDebug() << "UpdateFwVersion start success" << UpdateFwVersion_->state();
+    // } else {
+    //     qDebug() << "UpdateFwVersion start fail" << UpdateFwVersion_->state();
+    // }
 	print_version_info();
 }
 

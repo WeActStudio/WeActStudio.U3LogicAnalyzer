@@ -74,7 +74,7 @@ class MainWindow : public QMainWindow
 	Q_OBJECT
 
 private:
-	static const QString WindowTitle;
+	static QString WindowTitle;
 
 public:
 	static bool checkSystemRequirements();

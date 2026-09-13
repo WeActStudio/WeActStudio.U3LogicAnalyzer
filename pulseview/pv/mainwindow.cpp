@@ -88,7 +88,7 @@ namespace pv {
 
 using toolbars::MainBar;
 #define GB (1024*1024*1024)
-const QString MainWindow::WindowTitle = tr("U3LogicAnalyzer");
+QString MainWindow::WindowTitle;
 
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -98,6 +98,8 @@ MainWindow::MainWindow(QWidget *parent) :
 	icon_green_(":/icons/status-green.svg"),
 	icon_grey_(":/icons/status-grey.svg")
 {
+	WindowTitle = Application::applicationName();
+
 	installEventFilter(this);
     qApp->installEventFilter(this);
 
