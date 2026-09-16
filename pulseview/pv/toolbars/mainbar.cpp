@@ -800,7 +800,7 @@ namespace pv
 				string driver_name = hw_dev_for_min_time->hardware_device()->driver()->name();
 				is_demo_min_time = (driver_name == "demo");
 			}
-			double min_time = is_demo_min_time ? 0.002 : 0.5;
+			double min_time = is_demo_min_time ? 0.002 : 0.1;
 			sample_count_.show_125_list(min_time * 10000, max_time * 10000); // commit sample count
 
 			if (sr_dev->config_check(ConfigKey::LIMIT_SAMPLES, Capability::GET))
@@ -1989,7 +1989,7 @@ namespace pv
 
 		void MainBar::on_capture_state_changed(int state)
 		{
-			set_capture_state((pv::Session::capture_state)state);
+			set_capture_state(session_.is_repeat_acquisition_? pv::Session::Running : (pv::Session::capture_state)state);
 		}
 
 		void MainBar::on_sample_count_changed()

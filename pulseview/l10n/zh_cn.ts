@@ -1296,7 +1296,7 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="307"/>
         <source>Use colored trace &amp;background</source>
-        <translation>使用彩色通道背景</translation>
+        <translation>使用彩色通道背景 ( &amp;B )</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="311"/>
@@ -1316,7 +1316,7 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="323"/>
         <source>Always keep &amp;newest samples at the right edge during capture</source>
-        <translation>采集过程中始终跟踪右侧最新数据 ( &amp;Q )</translation>
+        <translation>采集过程中始终跟踪右侧最新数据 ( &amp;N )</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="327"/>
@@ -1326,7 +1326,7 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="331"/>
         <source>Show data &amp;sampling points</source>
-        <translation>显示数据采样点</translation>
+        <translation>显示数据采样点 ( &amp;S )</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="335"/>

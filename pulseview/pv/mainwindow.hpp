@@ -124,6 +124,8 @@ private:
 
 	virtual bool restoreState(const QByteArray &state, int version = 0);
 
+	void show_session_info_with_auto_close(const QString info_text);
+
 Q_SIGNALS:
 	void show_error();
 	void save_session();

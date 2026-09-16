@@ -241,10 +241,10 @@ void GlobalSettings::apply_theme()
 		QPalette dark_palette;
 		// dark_palette.setColor(QPalette::Window, QColor(53, 53, 53));
 		dark_palette.setColor(QPalette::Window, QColor(0x26, 0x26, 0x26));
-		dark_palette.setColor(QPalette::WindowText, Qt::white);
-		dark_palette.setColor(QPalette::Base, QColor(42, 42, 42));
-		dark_palette.setColor(QPalette::Dark, QColor(35, 35, 35));
-		dark_palette.setColor(QPalette::Highlight, QColor(42, 130, 218));
+		// dark_palette.setColor(QPalette::WindowText, Qt::white);
+		// dark_palette.setColor(QPalette::Base, QColor(42, 42, 42));
+		// dark_palette.setColor(QPalette::Dark, QColor(35, 35, 35));
+		// dark_palette.setColor(QPalette::Highlight, QColor(42, 130, 218));
 		qApp->setPalette(dark_palette);
 		is_dark_theme_ = true;
 	}

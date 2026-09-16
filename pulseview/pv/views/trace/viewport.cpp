@@ -51,6 +51,7 @@ namespace pv {
 namespace views {
 namespace trace {
 const QColor LightBlue = QColor(17, 133, 209, 200);
+const QColor Gray = QColor(200, 200, 200, 200);
 const QColor Orange = QColor(238, 178, 17, 255);
 Viewport::Viewport(View &parent) :
 	ViewWidget(parent),
@@ -222,10 +223,13 @@ void Viewport::paintEvent(QPaintEvent*)
             (r.get()->*(*paint_func))(p, row_pp);
     }
 
+	GlobalSettings settings;
+	QColor color_show = settings.current_theme_is_dark() ? Qt::yellow : Qt::red;
+
     if (bezier_start_ !=  QPointF(0,0) && bezier_end_ != QPointF(0,0)) {
         p.setRenderHint(QPainter::Antialiasing);
 
-        p.setPen(QPen(Qt::yellow, 1));
+        p.setPen(QPen(color_show, 1));
         p.drawEllipse(bezier_start_, 2, 2);
         p.drawEllipse(bezier_end_, 2, 2);
 
@@ -246,7 +250,7 @@ void Viewport::paintEvent(QPaintEvent*)
             QPainterPath path;
             path.moveTo(bezier_start_);
             path.cubicTo(controlPoint1, controlPoint2, bezier_end_);
-            p.setPen(QPen(Qt::yellow, 1.5));
+            p.setPen(QPen(color_show, 1.5));
             p.drawPath(path);
         }
 
@@ -264,14 +268,14 @@ void Viewport::paintEvent(QPaintEvent*)
         QRectF measure_rect = QRectF(org_pos.x(), org_pos.y(), (double)typical_width, 20.0);
 
         p.setPen(Qt::NoPen);
-        p.setBrush(LightBlue);
+        p.setBrush(settings.current_theme_is_dark() ? LightBlue : Gray);
         p.drawRect(measure_rect);
-        p.setPen(Orange);
+        p.setPen(settings.current_theme_is_dark() ? Orange : Qt::black);
         p.drawText(measure_rect, Qt::AlignRight | Qt::AlignVCenter,
             tr("Width: ") + bezier_width_);
     }
     else if (measure_end_ != QPointF(0,0)) {
-        p.setPen(QPen(Qt::yellow, 1));
+        p.setPen(QPen(color_show, 1));
         QLineF l1(measure_start_, measure_end_);
         p.drawLine(l1);
 
@@ -308,16 +312,16 @@ void Viewport::paintEvent(QPaintEvent*)
         QRectF measure3_rect = QRectF(org_pos.x(), org_pos.y() + 40, (double)typical_width, 20.0);
         QRectF measure4_rect = QRectF(org_pos.x(), org_pos.y() + 60, (double)typical_width, 20.0);
 
-        p.setBrush(Qt::yellow);
+        p.setBrush(color_show);
         p.drawEllipse(measure_mid_, 2, 2);
         p.setPen(Qt::NoPen);
-        p.setBrush(LightBlue);
+        p.setBrush(settings.current_theme_is_dark() ? LightBlue : Gray);
         p.drawRect(measure_rect);
-        p.setPen(Orange);
-        p.drawText(measure1_rect, Qt::AlignRight | Qt::AlignVCenter, tr("Width: ") + width_);
-        p.drawText(measure2_rect, Qt::AlignRight | Qt::AlignVCenter, tr("Period: ") + period_);
-        p.drawText(measure3_rect, Qt::AlignRight | Qt::AlignVCenter, tr("Frequency: ") + freq_);
-        p.drawText(measure4_rect, Qt::AlignRight | Qt::AlignVCenter, tr("Duty Cycle: ") + duty_cycle_);
+        p.setPen(settings.current_theme_is_dark() ? Orange : Qt::black);
+        p.drawText(measure1_rect, Qt::AlignRight | Qt::AlignVCenter, tr("Width: ") + width_ + " ");
+        p.drawText(measure2_rect, Qt::AlignRight | Qt::AlignVCenter, tr("Period: ") + period_ + " ");
+        p.drawText(measure3_rect, Qt::AlignRight | Qt::AlignVCenter, tr("Frequency: ") + freq_ + " ");
+        p.drawText(measure4_rect, Qt::AlignRight | Qt::AlignVCenter, tr("Duty Cycle: ") + duty_cycle_ + " ");
     }
 
     p.end(); // 只在函数末尾一次 end()

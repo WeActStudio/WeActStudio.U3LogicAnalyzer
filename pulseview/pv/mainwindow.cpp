@@ -222,6 +222,21 @@ void MainWindow::show_session_info(const QString info_text)
 	box->show();
 }
 
+void MainWindow::show_session_info_with_auto_close(const QString info_text)
+{
+    QMessageBox * box = new QMessageBox(this);
+    box->setText(info_text);
+    box->setStandardButtons(QMessageBox::Ok);
+    box->setIcon(QMessageBox::Information);
+    box->setModal(false);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+
+    // 1000ms = 1秒后自动关闭，可修改数值
+    QTimer::singleShot(1000, box, &QMessageBox::close);
+
+    box->show();
+}
+
 shared_ptr<views::ViewBase> MainWindow::get_active_view() const
 {
 	// If there's only one view, use it...
@@ -622,15 +637,17 @@ void MainWindow::show_device_detach()
 	// 非模态显示
 	dialog->setModal(false);
 
+	if (last_focused_session_->main_bar()->channels_ &&
+		is_wch_device(last_focused_session_->main_bar()->channels_->device_name_)) {
+		save_sessions();
+		last_focused_session_->main_bar()->set_setting_default();
+	}
+
 	connect(saveBtn, &QPushButton::clicked, [=](){
 		qDebug() << last_focused_session_->main_bar()->channels_->device_name_;
 		qDebug() << last_focused_session_->main_bar()->channels_;
-		if (last_focused_session_->main_bar()->channels_ &&
-			is_wch_device(last_focused_session_->main_bar()->channels_->device_name_)) {
-			save_sessions();
-			last_focused_session_->main_bar()->action_save()->triggered();
-			last_focused_session_->main_bar()->set_setting_default();
-		}
+		
+		last_focused_session_->main_bar()->action_save()->triggered();
 		do_device_detach_switch();
 		attach_process_done = true;
 		dialog->deleteLater();
@@ -1018,10 +1035,10 @@ void MainWindow::setup_ui()
 	setWindowIcon(icon);
 
 	// Set up keyboard shortcuts that affect all views at once
-	view_sticky_scrolling_shortcut_ = new QShortcut(QKeySequence(Qt::Key_S), this, SLOT(on_view_sticky_scrolling_shortcut()));
+	view_sticky_scrolling_shortcut_ = new QShortcut(QKeySequence(Qt::Key_Q), this, SLOT(on_view_sticky_scrolling_shortcut()));
 	view_sticky_scrolling_shortcut_->setAutoRepeat(false);
 
-	view_show_sampling_points_shortcut_ = new QShortcut(QKeySequence(Qt::Key_Period), this, SLOT(on_view_show_sampling_points_shortcut()));
+	view_show_sampling_points_shortcut_ = new QShortcut(QKeySequence(Qt::Key_S), this, SLOT(on_view_show_sampling_points_shortcut()));
 	view_show_sampling_points_shortcut_->setAutoRepeat(false);
 
 	view_show_analog_minor_grid_shortcut_ = new QShortcut(QKeySequence(Qt::Key_G), this, SLOT(on_view_show_analog_minor_grid_shortcut()));
@@ -1046,7 +1063,7 @@ void MainWindow::setup_ui()
 	repeat_acquisition_button_->setToolTip(tr("Repeat Acquisition"));
 	repeat_acquisition_button_->setText(tr("Repeat Acquisition"));
 
-	run_stop_shortcut_ = new QShortcut(QKeySequence(Qt::Key_Space), run_stop_button_, SLOT(click()));
+	run_stop_shortcut_ = new QShortcut(QKeySequence(Qt::Key_Space), this, SLOT(on_run_stop_clicked()));
 	run_stop_shortcut_->setAutoRepeat(false);
 
 	settings_button_ = new QToolButton();
@@ -1076,7 +1093,7 @@ void MainWindow::setup_ui()
 	close_application_shortcut_ = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_Q), this, SLOT(close()));
 	close_application_shortcut_->setAutoRepeat(false);
 
-	close_current_tab_shortcut_ = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_W), this, SLOT(on_close_current_tab()));
+	// close_current_tab_shortcut_ = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_W), this, SLOT(on_close_current_tab()));
 
 	
 	// connect(new_session_button_, SIGNAL(clicked(bool)),
@@ -1131,7 +1148,7 @@ void MainWindow::update_acq_button(Session *session)
 	run_stop_button_->setText((state == pv::Session::Stopped) ?
 		run_caption : tr("Stop"));
 	if (last_focused_session_ && last_focused_session_->main_bar()) {
-		last_focused_session_->main_bar()->update_runstop_status(state);
+		last_focused_session_->main_bar()->update_runstop_status(session->is_repeat_acquisition_?Session::Running : state);
 	}
 }
 
@@ -1300,6 +1317,11 @@ void MainWindow::on_run_stop_clicked()
 			return;
 		switch (session->get_capture_state()) {
 		case Session::Stopped:
+			if(session->is_repeat_acquisition_)
+			{
+				session->stop_capture();
+				break;
+			}
 			session->is_repeat_acquisition_ = last_focused_session_->main_bar()->capture_mode_ == Session::Repeat;
 			if (session->is_repeat_acquisition_)
 				qDebug() << "Repeat acquisition is already";
@@ -1557,6 +1579,8 @@ void MainWindow::on_view_colored_bg_shortcut()
 
 	bool state = settings.value(GlobalSettings::Key_View_ColoredBG).toBool();
 	settings.setValue(GlobalSettings::Key_View_ColoredBG, !state);
+
+	show_session_info_with_auto_close(QString(QCoreApplication::translate("pv::dialogs::Settings","Use colored trace &background")) + " : " +  (!state ? "Enabled" : "Disabled"));
 }
 
 void MainWindow::on_view_sticky_scrolling_shortcut()
@@ -1565,6 +1589,8 @@ void MainWindow::on_view_sticky_scrolling_shortcut()
 
 	bool state = settings.value(GlobalSettings::Key_View_StickyScrolling).toBool();
 	settings.setValue(GlobalSettings::Key_View_StickyScrolling, !state);
+
+	show_session_info_with_auto_close(QString(QCoreApplication::translate("pv::dialogs::Settings","Always keep &newest samples at the right edge during capture")) + " : " +  (!state ? "Enabled" : "Disabled"));
 }
 
 void MainWindow::on_view_show_sampling_points_shortcut()
@@ -1573,6 +1599,8 @@ void MainWindow::on_view_show_sampling_points_shortcut()
 
 	bool state = settings.value(GlobalSettings::Key_View_ShowSamplingPoints).toBool();
 	settings.setValue(GlobalSettings::Key_View_ShowSamplingPoints, !state);
+
+	show_session_info_with_auto_close(QString(QCoreApplication::translate("pv::dialogs::Settings","Show data &sampling points")) + " : " +  (!state ? "Enabled" : "Disabled"));
 }
 
 void MainWindow::on_view_show_analog_minor_grid_shortcut()
@@ -1581,6 +1609,8 @@ void MainWindow::on_view_show_analog_minor_grid_shortcut()
 
 	bool state = settings.value(GlobalSettings::Key_View_ShowAnalogMinorGrid).toBool();
 	settings.setValue(GlobalSettings::Key_View_ShowAnalogMinorGrid, !state);
+
+	show_session_info_with_auto_close(QString(QCoreApplication::translate("pv::dialogs::Settings","Show analog minor grid in addition to div grid")) + " : " +  (!state ? "Enabled" : "Disabled"));
 }
 
 void MainWindow::on_close_current_tab()
@@ -1603,7 +1633,8 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         {
 			#ifdef _WIN32
             // 排除顶层之外的子widget，只处理独立顶层窗口
-            if(w->isTopLevel())
+			GlobalSettings settings;
+            if(w->isTopLevel() && settings.current_theme_is_dark())
             {
                 HWND hwnd = reinterpret_cast<HWND>(w->winId());
                 if(hwnd)
@@ -1612,7 +1643,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                     HRESULT hr = DwmSetWindowAttribute(hwnd, 20, &useDark, sizeof(useDark));
 					if(SUCCEEDED(hr))
 					{
-						MARGINS margins = {0,0,0,1};
+						MARGINS margins = {0,0,0,0};
 						DwmExtendFrameIntoClientArea(hwnd, &margins);
 					}
                 }

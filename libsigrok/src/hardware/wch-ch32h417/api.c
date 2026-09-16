@@ -94,26 +94,41 @@ static const uint64_t logic_samplerates_usb3[] = {
 	SR_MHZ(68.75),
 	SR_MHZ(50),
 	SR_MHZ(40),
-	SR_MHZ(25),
+	SR_MHZ(30),
 	SR_MHZ(20),
-	SR_MHZ(10),
-	SR_MHZ(6.25),
+	SR_MHZ(16),
+	SR_MHZ(12),
+	SR_MHZ(8),
+	SR_MHZ(6),
+	SR_MHZ(4),
+	SR_MHZ(3),
+	SR_MHZ(2),
 };
 
 /* 逻辑分析仪采样率 - USB 2.0 16通道 (最高20MHz) */
 static const uint64_t logic_samplerates_usb2_16ch[] = {
 	SR_MHZ(20),
-	SR_MHZ(10),
-	SR_MHZ(6.25),
+	SR_MHZ(16),
+	SR_MHZ(12),
+	SR_MHZ(8),
+	SR_MHZ(6),
+	SR_MHZ(4),
+	SR_MHZ(3),
+	SR_MHZ(2),
 };
 
 /* 逻辑分析仪采样率 - USB 2.0 8通道 (最高40MHz) */
 static const uint64_t logic_samplerates_usb2_8ch[] = {
 	SR_MHZ(40),
-	SR_MHZ(25),
+	SR_MHZ(30),
 	SR_MHZ(20),
-	SR_MHZ(10),
-	SR_MHZ(6.25),
+	SR_MHZ(16),
+	SR_MHZ(12),
+	SR_MHZ(8),
+	SR_MHZ(6),
+	SR_MHZ(4),
+	SR_MHZ(3),
+	SR_MHZ(2),
 };
 
 /* ADC采样率 */
@@ -421,16 +436,25 @@ static int dev_open(struct sr_dev_inst *sdi)
 		{
 			if (devc->num_channels == 16) {
 				devc->samplerates = logic_samplerates_usb2_16ch;
-				devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_16ch);
+				if(str_startswith(devc->profile->SN_start, "b5"))
+					devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_16ch);
+				else
+					devc->num_samplerates = 1;
 			} else {
 				devc->samplerates = logic_samplerates_usb2_8ch;
-				devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_8ch);
+				if(str_startswith(devc->profile->SN_start, "b5"))
+					devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_8ch);
+				else
+					devc->num_samplerates = 1;
 			}
 		}
 		else
 		{
 			devc->samplerates = logic_samplerates_usb3;
-			devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb3);
+			if(str_startswith(devc->profile->SN_start, "b5"))
+				devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb3);
+			else
+				devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb3) - 11;
 		}
 		devc->cur_samplerate = devc->samplerates[0];
 	}
@@ -604,16 +628,25 @@ static int config_set(uint32_t key, GVariant *data,
 			{
 				if (devc->num_channels == 16) {
 					devc->samplerates = logic_samplerates_usb2_16ch;
-					devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_16ch);
+					if(str_startswith(devc->profile->SN_start, "b5"))
+						devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_16ch);
+					else
+						devc->num_samplerates = 1;
 				} else {
 					devc->samplerates = logic_samplerates_usb2_8ch;
-					devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_8ch);
+					if(str_startswith(devc->profile->SN_start, "b5"))
+						devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_8ch);
+					else
+						devc->num_samplerates = 1;
 				}
 			}
 			else
 			{
 				devc->samplerates = logic_samplerates_usb3;
-				devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb3);
+				if(str_startswith(devc->profile->SN_start, "b5"))
+					devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb3);
+				else
+					devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb3) - 11;
 			}
 		}
 		else

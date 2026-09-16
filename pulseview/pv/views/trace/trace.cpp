@@ -324,7 +324,11 @@ void Trace::hover_point_changed(const QPoint &hp)
 }
 
 void Trace::paint_back(QPainter &p, ViewItemPaintParams &pp)
-{
+{	
+	const View *view = owner_->view();
+	assert(view);
+	const pair<int, int> extents = v_extents();
+
 	if (base_->type() == base_->LogicChannel) {
 		GlobalSettings settings;
 		QPen pen;
@@ -340,23 +344,25 @@ void Trace::paint_back(QPainter &p, ViewItemPaintParams &pp)
 		}
 
 		p.setPen(pen);
-		const pair<int, int> extents = v_extents();
+		
 		const int top = get_visual_y() + extents.first;
 		const int btm = get_visual_y() + extents.second;
 		float y = top + ((btm - top) / 2.0);
 		p.drawLine(pp.left(), y, pp.right(), y);
-	} else{
-		const View *view = owner_->view();
-		assert(view);
-		if (view->colored_bg())
-			p.setBrush(base_->bgcolor());
-		else
-			p.setBrush(pp.next_bg_color_state() ? BrightGrayBGColor : DarkGrayBGColor);
-		p.setPen(QPen(Qt::NoPen));
-		const pair<int, int> extents = v_extents();
-		p.drawRect(pp.left(), get_visual_y() + extents.first,
-		pp.width(), extents.second - extents.first);
 	}
+
+	if (view->colored_bg())
+		p.setBrush(base_->bgcolor());
+	else
+	{
+		if (base_->type() == base_->LogicChannel)
+			return;
+		p.setBrush(pp.next_bg_color_state() ? BrightGrayBGColor : DarkGrayBGColor);
+	}
+	p.setPen(QPen(Qt::NoPen));
+
+	p.drawRect(pp.left(), get_visual_y() + extents.first,
+	pp.width(), extents.second - extents.first);
 }
 
 void Trace::paint_axis(QPainter &p, ViewItemPaintParams &pp, int y)

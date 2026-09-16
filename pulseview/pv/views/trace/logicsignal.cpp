@@ -105,18 +105,8 @@ LogicSignal::LogicSignal(pv::Session &session, shared_ptr<data::SignalBase> base
 	high_fill_color_ = QColor::fromRgba(settings.value(
 		GlobalSettings::Key_View_FillSignalHighAreaColor).value<uint32_t>());
 
-	if (settings.value(GlobalSettings::Key_General_Theme).toInt() == 1){
-		EdgeColor = QColor(0xFF, 0xFB, 0xF0);
-		HighColor = QColor(0xFF, 0xFB, 0xF0);
-		LowColor = QColor(0xFF, 0xFB, 0xF0);
-		SamplingPointColor = QColor(0xFF, 0xFF, 0xF0);
-	}else{
-		EdgeColor = QColor(0x00, 0x00, 0x00);
-		HighColor = QColor(0x00, 0x00, 0x00);
-		LowColor = QColor(0x00, 0x00, 0x00);
-		SamplingPointColor = QColor(0x77, 0x77, 0x77);
-	}
-	EdgeColor.setAlpha(255); HighColor.setAlpha(255); LowColor.setAlpha(255); SamplingPointColor.setAlpha(255);
+	refresh_theme_colors();
+
 	update_logic_level_offsets();
 
 	/* Populate this channel's trigger setting with whatever we
@@ -142,6 +132,26 @@ std::map<QString, QVariant> LogicSignal::save_settings() const
 		}
 	}
 	return result;
+}
+
+void LogicSignal::refresh_theme_colors()
+{
+    GlobalSettings settings;
+    if (settings.value(GlobalSettings::Key_General_Theme).toInt() == 1){
+        EdgeColor = QColor(0xFF, 0xFB, 0xF0);
+        HighColor = QColor(0xFF, 0xFB, 0xF0);
+        LowColor = QColor(0xFF, 0xFB, 0xF0);
+        SamplingPointColor = QColor(0xFF, 0xFF, 0xF0);
+    }else{
+        EdgeColor = QColor(0x00, 0x00, 0x00);
+        HighColor = QColor(0x00, 0x00, 0x00);
+        LowColor = QColor(0x00, 0x00, 0x00);
+        SamplingPointColor = QColor(0x77, 0x77, 0x77);
+    }
+    EdgeColor.setAlpha(255);
+    HighColor.setAlpha(255);
+    LowColor.setAlpha(255);
+    SamplingPointColor.setAlpha(255);
 }
 
 int LogicSignal::signal_height()
@@ -763,6 +773,11 @@ void LogicSignal::on_setting_changed(const QString &key, const QVariant &value)
 
 	if (key == GlobalSettings::Key_View_FillSignalHighAreaColor)
 		high_fill_color_ = QColor::fromRgba(value.value<uint32_t>());
+
+	if (key == GlobalSettings::Key_General_Theme)
+	{
+		refresh_theme_colors();
+	}
 }
 
 void LogicSignal::on_trigger()

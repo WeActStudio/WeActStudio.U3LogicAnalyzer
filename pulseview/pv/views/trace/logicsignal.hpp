@@ -132,6 +132,8 @@ protected:
 
 	virtual void update_logic_level_offsets();
 
+	void refresh_theme_colors();
+
 protected Q_SLOTS:
 	void on_setting_changed(const QString &key, const QVariant &value);
 
