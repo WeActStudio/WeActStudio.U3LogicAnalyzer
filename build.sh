@@ -305,10 +305,18 @@ if [ $PACKAGE -eq 1 ]; then
 #         echo "To distribute: copy the entire dist/LogicAnalyzer/ folder."
 #         echo "To run: double-click run.bat or LogicAnalyzer.exe"
     # 7. Copy driver directory
+    echo "  Driver directory..."
     cp -r "$SCRIPT_DIR/driver" "$DIST_DIR/driver/"
 
     # 8. Copy license file
+    echo "  License file..."
     cp "$SCRIPT_DIR/LICENSE" "$DIST_DIR/"
+
+    # 9. Run clean__pycache__.sh
+    if [ $IS_WINDOWS -eq 1 ]; then
+        echo "  Clean __pycache__..."
+        "$SCRIPT_DIR/clean__pycache__.sh"
+    fi
 
     elif [ $IS_MACOS -eq 1 ]; then
         APP="$DIST_DIR/LogicAnalyzer.app"

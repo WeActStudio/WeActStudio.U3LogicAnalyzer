@@ -1792,9 +1792,8 @@ void View::renew_bezier_measure()
 					t = offset_ + hover_point_.x() * scale_;
 				}
 				pv::util::Timestamp diff = abs(t - t_start);
-				viewport_->bezier_width_ = Ruler::format_time_with_distance(
-						diff, diff, pv::util::SIPrefix::unspecified, (time_unit()),
-							6, false);
+				viewport_->bezier_width_ = util::format_time_si(
+						diff, pv::util::SIPrefix::unspecified, 3, ("s"), false);
 			}
 		}
 	}
@@ -1858,16 +1857,13 @@ void View::renew_measure()
 					// paint
 					//width - use unspecified prefix to auto-select appropriate unit
 					pv::util::Timestamp diff = abs(t2 - t1);
-					viewport_->width_ = Ruler::format_time_with_distance(
-						diff, diff, pv::util::SIPrefix::unspecified, (time_unit()),
-							6, false);
+					viewport_->width_ = util::format_time_si(
+						diff, pv::util::SIPrefix::unspecified, 3, ("s"), false);
 					diff = t3 - t1;
-					viewport_->period_ = Ruler::format_time_with_distance(
-						diff, diff, pv::util::SIPrefix::unspecified, (time_unit()),
-							6, false);
+					viewport_->period_ = util::format_time_si(
+						diff, pv::util::SIPrefix::unspecified, 3, ("s"), false);
 					viewport_->freq_ = util::format_value_si(
-						1 / diff.convert_to<double>(), pv::util::SIPrefix::unspecified,
-						6, ("Hz"), false);
+						1 / diff.convert_to<double>(), pv::util::SIPrefix::unspecified, 6, ("Hz"), false);
 					char str[64] = "";
 					sprintf(str, "%.2f%%", (double)(t2-t1) / (double)(t3-t1) * 100.00);
 					viewport_->duty_cycle_ = QString::fromUtf8(str);

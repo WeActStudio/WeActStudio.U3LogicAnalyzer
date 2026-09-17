@@ -725,6 +725,7 @@ namespace pv
 			catch (Error &error)
 			{
 				// Do nothing
+				qDebug() << tr("Failed to get sample rate value:") << error.what();	
 			}
 		}
 

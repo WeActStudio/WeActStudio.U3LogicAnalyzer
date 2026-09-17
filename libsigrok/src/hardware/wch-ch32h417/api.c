@@ -101,8 +101,6 @@ static const uint64_t logic_samplerates_usb3[] = {
 	SR_MHZ(8),
 	SR_MHZ(6),
 	SR_MHZ(4),
-	SR_MHZ(3),
-	SR_MHZ(2),
 };
 
 /* 逻辑分析仪采样率 - USB 2.0 16通道 (最高20MHz) */
@@ -113,8 +111,6 @@ static const uint64_t logic_samplerates_usb2_16ch[] = {
 	SR_MHZ(8),
 	SR_MHZ(6),
 	SR_MHZ(4),
-	SR_MHZ(3),
-	SR_MHZ(2),
 };
 
 /* 逻辑分析仪采样率 - USB 2.0 8通道 (最高40MHz) */
@@ -127,8 +123,6 @@ static const uint64_t logic_samplerates_usb2_8ch[] = {
 	SR_MHZ(8),
 	SR_MHZ(6),
 	SR_MHZ(4),
-	SR_MHZ(3),
-	SR_MHZ(2),
 };
 
 /* ADC采样率 */
