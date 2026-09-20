@@ -471,31 +471,34 @@ void LogicSignal::paint_caps(QPainter &p, QLineF *const lines,
 
 shared_ptr<pv::data::LogicSegment> LogicSignal::get_logic_segment_to_paint() const
 {
-	shared_ptr<pv::data::LogicSegment> segment;
+    shared_ptr<pv::data::LogicSegment> segment;
 
-	auto logic_data = base_->logic_data();
+    auto logic_data = base_->logic_data();
     if (!logic_data) {
         return segment;
     }
 
-	const deque< shared_ptr<pv::data::LogicSegment> > &segments =
-		base_->logic_data()->logic_segments();
+    const vector< shared_ptr<pv::data::Segment> > segments =
+        logic_data->segments();
 
-	if (!segments.empty()) {
-		if (segment_display_mode_ == ShowLastSegmentOnly)
-			segment = segments.back();
+    if (!segments.empty()) {
+        if (segment_display_mode_ == ShowLastSegmentOnly) {
+            auto last_seg = segments.back();
+            segment = dynamic_pointer_cast<pv::data::LogicSegment>(last_seg);
+        }
 
-		if ((segment_display_mode_ == ShowSingleSegmentOnly) ||
-			(segment_display_mode_ == ShowLastCompleteSegmentOnly)) {
-			try {
-				segment = segments.at(current_segment_);
-			} catch (out_of_range&) {
-				qDebug() << "Current logic segment out of range for signal" << base_->name() << ":" << current_segment_;
-			}
-		}
-	}
+        if ((segment_display_mode_ == ShowSingleSegmentOnly) ||
+            (segment_display_mode_ == ShowLastCompleteSegmentOnly)) {
+            try {
+                auto seg = segments.at(current_segment_);
+                segment = dynamic_pointer_cast<pv::data::LogicSegment>(seg);
+            } catch (out_of_range&) {
+                // qDebug() << "Current logic segment out of range for signal" << base_->name() << ":" << current_segment_;
+            }
+        }
+    }
 
-	return segment;
+    return segment;
 }
 
 void LogicSignal::init_trigger_actions(QWidget *parent)

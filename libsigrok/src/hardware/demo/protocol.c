@@ -276,10 +276,10 @@ static void set_logic_data(uint64_t bits, uint8_t *data, size_t len)
 	}
 }
 
-/* UART data: "hello logic-analyzer" at 115200 baud */
-static const char uart_data[] = "hello logic-analyzer";
+/* UART data: "Hello WeAct Studio U3LogicAnalyzer !" at 115200 baud */
+static const char uart_data[] = "Hello WeAct Studio U3LogicAnalyzer !";
 #define UART_BAUDRATE 115200
-#define UART_LEAD_IDLE_BITS 20    /* Idle time before message starts (in bit times) */
+#define UART_LEAD_IDLE_BITS 50    /* Idle time before message starts (in bit times) */
 #define UART_IDLE_BITS 10000       /* Idle time after each message (in bit times) */
 
 static void logic_generator(struct sr_dev_inst *sdi, uint64_t size)
@@ -299,7 +299,7 @@ static void logic_generator(struct sr_dev_inst *sdi, uint64_t size)
 
 	switch (devc->logic_pattern) {
 	case PATTERN_SIGROK:
-		/* Generate UART data on D0: "hello logic-analyzer" at 115200 baud */
+		/* Generate UART data on D0: "Hello WeAct Studio U3LogicAnalyzer !" at 115200 baud */
 		memset(devc->logic_data, 0x00, size);
 		samples_per_bit = devc->cur_samplerate / UART_BAUDRATE;
 		if (samples_per_bit == 0)

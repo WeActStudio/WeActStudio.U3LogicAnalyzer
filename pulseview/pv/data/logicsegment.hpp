@@ -49,7 +49,7 @@ namespace pv {
 namespace data {
 class Logic;
 
-class LogicSegment : public Segment, public enable_shared_from_this<Segment>
+class LogicSegment : public Segment, public enable_shared_from_this<LogicSegment>
 {
 	Q_OBJECT
 

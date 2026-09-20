@@ -47,6 +47,7 @@ StandardBar::StandardBar(Session &session, QWidget *parent,
 	action_view_zoom_in_(new QAction(this)),
 	action_view_zoom_out_(new QAction(this)),
 	action_view_zoom_fit_(new QAction(this)),
+	zoom_fit_button_(new QToolButton(this)),
 	action_view_show_cursors_(new QAction(this)),
 	segment_display_mode_selector_(new QToolButton(this)),
 	action_sdm_last_(new QAction(this)),
@@ -80,6 +81,9 @@ StandardBar::StandardBar(Session &session, QWidget *parent,
 	action_view_zoom_fit_->setShortcut(QKeySequence(Qt::Key_F));
 	connect(action_view_zoom_fit_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionViewZoomFit_triggered(bool)));
+	zoom_fit_button_->setDefaultAction(action_view_zoom_fit_);
+	zoom_fit_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+	zoom_fit_button_->setText(tr("Zoom to &Fit"));
 
 	action_view_show_cursors_->setCheckable(true);
 	action_view_show_cursors_->setIcon(QIcon(":/icons/show-cursors.png"));
@@ -163,6 +167,7 @@ void StandardBar::add_toolbar_widgets()
 	// addAction(action_view_zoom_in_);
 	// addAction(action_view_zoom_out_);
 	// addAction(action_view_zoom_fit_);
+	addWidget(zoom_fit_button_);
 	// addSeparator();
 	// addAction(action_view_show_cursors_);
 	addWidget(show_cursors_);

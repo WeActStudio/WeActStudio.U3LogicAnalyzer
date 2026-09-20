@@ -45,6 +45,7 @@ using std::function;
 using std::map;
 using std::shared_ptr;
 using std::vector;
+using std::string;
 
 namespace sigrok {
 class ChannelGroup;
@@ -116,6 +117,7 @@ private Q_SLOTS:
 	void on_set_threshold_value_1(int index);
 	void on_set_threshold_value_2(int index);
 	void on_voltage_level_changed(double value);
+	void on_input_level_changed(double value);
 	void checkbox_toggled(bool state);
 
 private:
@@ -139,6 +141,8 @@ private:
 	bool updating_channels_;
 
 	DeviceMode device_mode_;
+	string model_;
+	bool is_weact_logic_v2_;
 	bool is_usb2_;
 	int current_mode_;
 

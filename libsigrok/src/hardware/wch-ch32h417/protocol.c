@@ -938,6 +938,45 @@ static void finish_acquisition(struct sr_dev_inst *sdi)
 	sr_dbg("finish_acquisition function done");
 }
 
+static void ch32h417_flush_cmd_endpoint(unsigned long index)
+{
+	uint8_t buffer[PACKET_SIZE_IN];
+	unsigned long io_length;
+
+	/* 设置超时 0mS */
+	if (!ch375_set_timeout_ex(index, 1, 1, 1, 1)) {
+		sr_warn("Failed to set timeout ex for device at index %d", index);
+	}
+	g_usleep(1000);
+
+	uint8_t retry_count = 0;
+	while(1)
+	{
+		io_length = PACKET_SIZE_IN;
+		if(!ch375_read_endpoint(index, PIPE_CMD, buffer, &io_length))
+			break;
+		else{
+			if(io_length == 0)
+				break;
+			sr_warn("Device has data not read, ignore it. Data: %02x", buffer[0]);
+		}
+		retry_count++;
+		if(retry_count > 10)
+		{
+			sr_err("Timeout while flushing command endpoint for device at index %d", index);
+			break;
+		}
+		g_usleep(1000);
+	}
+
+	/* 恢复超时 */
+	if (!ch375_set_timeout_ex(index, USB_TIMEOUT, USB_TIMEOUT, USB_TIMEOUT, USB_TIMEOUT)) {
+		sr_warn("Failed to set timeout ex for device at index %d", index);
+	}
+
+	g_usleep(1000);
+}
+
 /*
  * 开始采集
  */
@@ -952,6 +991,10 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 	devc->sent_samples = 0;
 	devc->acq_aborted = FALSE;
 	devc->num_frames = 0;
+
+	/* 清空端点0 */
+	sr_info("Flushing cmd endpoint...");
+	ch32h417_flush_cmd_endpoint(devc->device_index);
 
 	/* 启动缓冲缓冲上传 */
 	if (!ch375_set_buf_upload_ex(devc->device_index, 0, PIPE_LOGIC_DATA, devc->buffer_size)) {
@@ -988,24 +1031,24 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 		}
 
 		/* 测试验证命令 */
-		{
-			uint8_t width, div, level;
-			int test_failed = 0;
+		// {
+		// 	uint8_t width, div, level;
+		// 	int test_failed = 0;
 
-			/* 测试 A4: 获取逻辑分析仪参数 */
-			ret = ch32h417_get_logic_params(sdi, &width, &div);
-			if (ret == SR_OK) {
-				sr_info("Verify A4: width=0x%02x, div=%d (expect width=0x%02x)",
-					width, div, devc->sample_width);
-				if (width != devc->sample_width) {
-					sr_warn("A4 verification: width mismatch!");
-					test_failed = 1;
-				}
-			} else {
-				sr_err("A4 command failed!");
-				test_failed = 1;
-			}
-		}
+		// 	/* 测试 A4: 获取逻辑分析仪参数 */
+		// 	ret = ch32h417_get_logic_params(sdi, &width, &div);
+		// 	if (ret == SR_OK) {
+		// 		sr_info("Verify A4: width=0x%02x, div=%d (expect width=0x%02x)",
+		// 			width, div, devc->sample_width);
+		// 		if (width != devc->sample_width) {
+		// 			sr_warn("A4 verification: width mismatch!");
+		// 			test_failed = 1;
+		// 		}
+		// 	} else {
+		// 		sr_err("A4 command failed!");
+		// 		test_failed = 1;
+		// 	}
+		// }
 
 		/* 开始逻辑分析仪采集 */
 		ret = ch32h417_start_logic(sdi);

@@ -39,7 +39,7 @@ namespace data {
 
 class Analog;
 
-class AnalogSegment : public Segment, public enable_shared_from_this<Segment>
+class AnalogSegment : public Segment, public enable_shared_from_this<AnalogSegment>
 {
 	Q_OBJECT
 

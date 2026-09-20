@@ -103,7 +103,7 @@
         <translation type="obsolete">设备模式</translation>
     </message>
     <message>
-        <source>Voltage Level</source>
+        <source>Threshold Level</source>
         <translation type="obsolete">阈值电平</translation>
     </message>
     <message>
@@ -1662,9 +1662,18 @@ Please keep in mind that the application may need a restart to display correctly
         <translation>ADC通道</translation>
     </message>
     <message>
+        <source>Input Level</source>
+        <translation>输入电平</translation>
+    </message>
+    <message>
         <location filename="../pv/popups/channels.cpp" line="379"/>
-        <source>Voltage Level</source>
+        <source>Threshold Level</source>
         <translation>阈值电平</translation>
+    </message>
+    <message>
+        <location filename="../pv/popups/channels.cpp" line="379"/>
+        <source>Buffer Board</source>
+        <translation>缓冲板</translation>
     </message>
     <message>
         <location filename="../pv/popups/channels.cpp" line="280"/>
@@ -2087,7 +2096,7 @@ Please keep in mind that the application may need a restart to display correctly
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2017"/>
         <source>Total Sampling Count: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>总采样数：%1</translation>
     </message>
     <message>
         <source>Failed to get sample rate:</source>

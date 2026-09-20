@@ -156,6 +156,8 @@ int ch375_init(void);
 void ch375_cleanup(void);
 int ch375_is_loaded(void);
 
+unsigned long ch375_get_version(void);
+
 /* 设备管理 */
 void* ch375_open_device(unsigned long index);
 void ch375_close_device(unsigned long index);

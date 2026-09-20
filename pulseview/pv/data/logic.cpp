@@ -52,6 +52,7 @@ void Logic::set_num_channels(unsigned int num_channels)
 
 void Logic::push_segment(shared_ptr<LogicSegment> &segment)
 {
+	lock_guard<mutex> lock(segments_mutex_);
 	segments_.push_back(segment);
 
 	if (segment->samplerate() > 1)
@@ -72,6 +73,7 @@ deque< shared_ptr<LogicSegment> >& Logic::logic_segments()
 
 vector< shared_ptr<Segment> > Logic::segments() const
 {
+	lock_guard<mutex> lock(segments_mutex_);
 	return vector< shared_ptr<Segment> >(segments_.begin(), segments_.end());
 }
 
@@ -82,6 +84,7 @@ uint32_t Logic::get_segment_count() const
 
 void Logic::clear()
 {
+	lock_guard<mutex> lock(segments_mutex_);
 	if (!segments_.empty()) {
 		segments_.clear();
 
@@ -101,6 +104,7 @@ double Logic::get_samplerate() const
 
 uint64_t Logic::max_sample_count() const
 {
+	lock_guard<mutex> lock(segments_mutex_);
 	uint64_t l = 0;
 	for (const shared_ptr<LogicSegment>& s : segments_) {
 		assert(s);

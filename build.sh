@@ -318,6 +318,18 @@ if [ $PACKAGE -eq 1 ]; then
         "$SCRIPT_DIR/clean__pycache__.sh"
     fi
 
+    # 10. Copy Qt translations
+    echo "  Qt translations..."
+    QT_TRANSLATIONS_SRC="/mingw64/qt5-static/share/qt5/translations"
+    LANGUAGES="zh_CN en de es"
+
+    if [ -d "$QT_TRANSLATIONS_SRC" ]; then
+        mkdir -p "$DIST_DIR/share/qt5/translations"
+        for lang in $LANGUAGES; do
+            cp "$QT_TRANSLATIONS_SRC"/*_${lang}.qm "$DIST_DIR/share/qt5/translations/" 2>/dev/null
+        done
+    fi
+
     elif [ $IS_MACOS -eq 1 ]; then
         APP="$DIST_DIR/LogicAnalyzer.app"
         MACOS_DIR="$APP/Contents/MacOS"

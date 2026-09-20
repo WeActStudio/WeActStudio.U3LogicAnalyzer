@@ -92,7 +92,9 @@ Channels::Channels(Session &session, QString device_name, QWidget *parent) :
 	check_box_mapper_(this),
 	channel_max_(16),
 	skip_hardware_command_(false),
-	pre_trigger_selector_(nullptr)
+	pre_trigger_selector_(nullptr),
+	is_weact_logic_v2_(false),
+	model_()
 {
 	// ch569初始化阈值映射表
 	threshold_value_map_ = {
@@ -166,8 +168,11 @@ void Channels::init_ui()
 	
 	if (device_mode_ != DeviceMode::OTHER) {
 
+		model_ = device->model();
+		is_weact_logic_v2_ = model_.find("WeAct Studio Logic Analyzer V2") != string::npos;
+		
 		device_name_label_ = new QLabel();
-		device_name_label_->setText(QString::fromStdString(device->model()));
+		device_name_label_->setText(QString::fromStdString(model_));
 		layout_.addRow(tr("Model:"), device_name_label_);
 		
 		serial_number_label_ = new QLabel();
@@ -371,13 +376,23 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 		}
 		connect(mode_selector_, SIGNAL(currentIndexChanged(int)),
 			this, SLOT(on_mode_changed(int)));
-		layout->addRow(tr("Device Mode"), mode_selector_);
+
+		if(mode_selector_->count() > 1)
+			layout->addRow(tr("Device Mode"), mode_selector_);
 
 		voltage_level_spinbox_ = new QDoubleSpinBox();
-		voltage_level_spinbox_->setRange(0.8, 2.3);
+		if(is_weact_logic_v2_)
+		{
+			voltage_level_spinbox_->setRange(1.0, 3.3);
+			voltage_level_spinbox_->setValue(3.3);
+		}
+		else
+		{
+			voltage_level_spinbox_->setRange(0.8, 2.3);
+			voltage_level_spinbox_->setValue(2.3);
+		}
 		voltage_level_spinbox_->setSingleStep(0.1);
 		voltage_level_spinbox_->setDecimals(1);
-		voltage_level_spinbox_->setValue(2.3);
 		voltage_level_spinbox_->setSuffix("V");
 		voltage_level_spinbox_->setStyleSheet(
 			"QDoubleSpinBox {"
@@ -397,9 +412,13 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 			"}"
 		);
 		connect(voltage_level_spinbox_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-			this, &Channels::on_voltage_level_changed);
-		threshold_label_ = new QLabel(tr("Voltage Level"));
-		layout->addRow(threshold_label_, voltage_level_spinbox_);
+			this, is_weact_logic_v2_? &Channels::on_input_level_changed : &Channels::on_voltage_level_changed);
+		
+		threshold_label_ = new QLabel(tr("Threshold Level") + ": " + QString::number(voltage_level_spinbox_->value()/2, 'f', 2) + "V" + \
+										", " + QString::number(voltage_level_spinbox_->value()/2*1.394, 'f', 2) + "V" + "(" + tr("Buffer Board") + ")");
+		if(is_weact_logic_v2_)
+			layout->addRow(threshold_label_);
+		layout->addRow(is_weact_logic_v2_?tr("Input Level") :tr("Threshold Level"), voltage_level_spinbox_);
 
 		pre_trigger_selector_ = new QDoubleSpinBox();
 		pre_trigger_selector_->setRange(0, 100);
@@ -755,7 +774,10 @@ void Channels::set_default_bank_threshold(float threshold_1, float threshold_2)
 	    device_mode_ == DeviceMode::CH32H417_USB2_LOGIC) {
 		if (voltage_level_spinbox_) {
 			voltage_level_spinbox_->setValue(threshold_1);
-			on_voltage_level_changed(threshold_1);
+			if(is_weact_logic_v2_)
+				on_input_level_changed(threshold_1);
+			else
+				on_voltage_level_changed(threshold_1);
 		}
 		return;
 	}
@@ -1095,9 +1117,21 @@ void Channels::on_voltage_level_changed(double value)
 		}
 	}
 
-	qDebug() << "Voltage level changed to:" << value << "V, raw value:" << raw_value;
+	qDebug() << "Threshold Level changed to:" << value << "V, raw value:" << raw_value;
 	threshold_value_raw_changed(raw_value);
 	threshold_value_change_ch32h417(static_cast<float>(value));
+}
+
+void Channels::on_input_level_changed(double value)
+{
+	uint16_t raw_value = static_cast<uint16_t>(round(value * 10)) | 0x8000;
+
+	qDebug() << "Input level changed to:" << value << "V, raw value:" << raw_value;
+	threshold_value_raw_changed(raw_value);
+	threshold_value_change_ch32h417(static_cast<float>(value));
+
+	threshold_label_->setText(tr("Threshold Level") + ": " + QString::number(voltage_level_spinbox_->value()/2, 'f', 2) + "V" + \
+										", " + QString::number(voltage_level_spinbox_->value()/2*1.394, 'f', 2) + "V" + "(" + tr("Buffer Board") + ")");
 }
 
 // ============================================================================

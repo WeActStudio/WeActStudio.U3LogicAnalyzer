@@ -38,6 +38,7 @@ Analog::Analog() :
 
 void Analog::push_segment(shared_ptr<AnalogSegment> &segment)
 {
+	lock_guard<mutex> lock(segments_mutex_);
 	segments_.push_back(segment);
 
 	if ((samplerate_ == 1) && (segment->samplerate() > 1))
@@ -53,6 +54,7 @@ const deque< shared_ptr<AnalogSegment> >& Analog::analog_segments() const
 
 vector< shared_ptr<Segment> > Analog::segments() const
 {
+	lock_guard<mutex> lock(segments_mutex_);
 	return vector< shared_ptr<Segment> >(
 		segments_.begin(), segments_.end());
 }
@@ -64,6 +66,7 @@ uint32_t Analog::get_segment_count() const
 
 void Analog::clear()
 {
+	lock_guard<mutex> lock(segments_mutex_);
 	if (!segments_.empty()) {
 		segments_.clear();
 
@@ -83,6 +86,7 @@ double Analog::get_samplerate() const
 
 uint64_t Analog::max_sample_count() const
 {
+	lock_guard<mutex> lock(segments_mutex_);
 	uint64_t l = 0;
 	for (const shared_ptr<AnalogSegment>& s : segments_) {
 		assert(s);

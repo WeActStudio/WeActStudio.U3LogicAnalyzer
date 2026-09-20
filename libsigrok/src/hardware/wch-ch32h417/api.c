@@ -142,6 +142,39 @@ static const char *mode_names[] = {
 
 static char serial_number[256] = {0};
 
+static void ch32h417_flush_cmd_endpoint(unsigned long index)
+{
+	uint8_t buffer[PACKET_SIZE_IN];
+	unsigned long io_length;
+
+	/* 设置超时 0mS */
+	if (!ch375_set_timeout_ex(index, 1, 1, 1, 1)) {
+		sr_warn("Failed to set timeout ex for device at index %d", index);
+	}
+	g_usleep(1000);
+
+	uint8_t retry_count = 0;
+	while(1)
+	{
+		io_length = PACKET_SIZE_IN;
+		if(!ch375_read_endpoint(index, PIPE_CMD, buffer, &io_length))
+			break;
+		else{
+			if(io_length == 0)
+				break;
+			sr_warn("Device has data not read, ignore it. Data: %02x", buffer[0]);
+		}
+		retry_count++;
+		if(retry_count > 10)
+		{
+			sr_err("Timeout while flushing command endpoint for device at index %d", index);
+			break;
+		}
+		g_usleep(1000);
+	}
+	g_usleep(1000);
+}
+
 /* 初始化CH375设备通信参数 */
 static void ch375_init_comm_params(struct dev_context *devc)
 {
@@ -149,6 +182,9 @@ static void ch375_init_comm_params(struct dev_context *devc)
 	if (!ch375_set_io_mode(devc->device_index, 0)) {
 		sr_warn("Failed to set IO mode to sync for device at index %d", devc->device_index);
 	}
+
+	/* 清空端点 PIPE_CMD */
+	ch32h417_flush_cmd_endpoint(devc->device_index);
 
 	/* 设置超时 */
 	if (!ch375_set_timeout_ex(devc->device_index, USB_TIMEOUT, USB_TIMEOUT, USB_TIMEOUT, USB_TIMEOUT)) {
@@ -687,15 +723,24 @@ static int config_set(uint32_t key, GVariant *data,
 	case SR_CONF_THRESHOLD_VALUE_1:
 	{
 		uint64_t value = g_variant_get_uint64(data);
-		if (value > 1024) {
-			sr_err("DAC value out of range: %" PRIu64 " (must be 0-1024)", value);
-			return SR_ERR_ARG;
+		if(((value>>8) & 0x80) == 0x80)
+		{
+			if((value & 0xff) > 33)
+			{
+				sr_err("threshold_value_1 Input Level value out of range: %" PRIu64 " (must be 10-33)", value & 0xff);
+				return SR_ERR_ARG;
+			}
+			devc->threshold_value_1 = (uint16_t)value;
+			sr_info("Setting threshold_value_1 to %x", devc->threshold_value_1);
 		}
-		devc->threshold_value_1 = (uint16_t)value;
-		sr_info("Setting threshold_value_1 to %d", devc->threshold_value_1);
-		if (devc->threshold_value_1 > 1024) {
-			sr_warn("Setting threshold_value_1 more than 1024");
-			return SR_OK;
+		else
+		{
+			if (value > 1024) {
+				sr_err("DAC value out of range: %" PRIu64 " (must be 0-1024)", value);
+				return SR_ERR_ARG;
+			}
+			devc->threshold_value_1 = (uint16_t)value;
+			sr_info("Setting threshold_value_1 to %d", devc->threshold_value_1);
 		}
 		return ch32h417_set_threshold_value(sdi, devc->threshold_value_1);
 	}
@@ -736,6 +781,18 @@ static int config_list(uint32_t key, GVariant **data,
 		break;
 	case SR_CONF_PATTERN_MODE:
 		*data = g_variant_new_strv(ARRAY_AND_SIZE(mode_names));
+		break;
+	case SR_CONF_THRESHOLD_VALUE_1:
+		if (!devc)
+			return SR_ERR_NA;
+		if(str_startswith(devc->profile->SN_start, "b5"))
+		{
+			*data = std_gvar_min_max_step_thresholds(1.0, 3.3, 0.1);
+		}
+		else
+		{
+			*data = std_gvar_min_max_step_thresholds(0.8, 2.3, 0.1);
+		}
 		break;
 	default:
 		return SR_ERR_NA;

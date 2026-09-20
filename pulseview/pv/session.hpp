@@ -342,6 +342,7 @@ private:
 	bool data_saved_;
 	bool frame_began_;
 	bool is_stop_capture_;
+	bool is_first_trigger_;
 	QElapsedTimer acq_time_;
 
 	MetadataObjManager metadata_obj_manager_;

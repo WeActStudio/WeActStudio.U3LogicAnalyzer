@@ -8,6 +8,7 @@ CLEAN=0
 PACKAGE=0
 IS_WINDOWS=0
 IS_MACOS=0
+JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 # Platform detection
 if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ -n "$MSYSTEM" ]]; then

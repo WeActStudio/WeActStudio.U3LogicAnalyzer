@@ -42,6 +42,7 @@
 #include <pv/widgets/devicetoolbutton.hpp>
 #include <pv/widgets/popuptoolbutton.hpp>
 #include <pv/widgets/sweeptimingwidget.hpp>
+#include <pv/widgets/hovertoolbutton.hpp>
 #include <thread>
 #include <mutex>
 #include <QFile>
@@ -239,9 +240,10 @@ private:
 	QAction *const action_connect_;
 
 	QToolButton *run_stop_button_;
-	QToolButton *model_change_button_;
-	QToolButton *new_view_button_, *open_button_, *save_button_;
-	QToolButton *help_button_;
+	pv::widgets::HoverToolButton *model_change_button_;
+	pv::widgets::HoverToolButton *new_view_button_;
+	QToolButton *open_button_, *save_button_;
+	pv::widgets::HoverToolButton *help_button_;
 	QToolButton *device_status_icon_;
 
 	pv::widgets::DeviceToolButton device_selector_;

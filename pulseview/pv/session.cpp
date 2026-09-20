@@ -137,6 +137,7 @@ Session::Session(DeviceManager &device_manager, QString name) :
 	setObjectName(name_);
 	done_ = 0;
 	out_of_memory_ = false;
+	is_first_trigger_ = false;
 	connect(this, SIGNAL(notify_acq_done()), this, SLOT(on_notify_acq_done()));
 }
 
@@ -902,6 +903,7 @@ Session::capture_state Session::get_capture_state() const
 	lock_guard<mutex> lock(sampling_mutex_);
 	return capture_state_;
 }
+
 void Session::start_capture(function<void (const QString)> error_handler)
 {
 	if (!device_) {
@@ -925,12 +927,26 @@ void Session::start_capture(function<void (const QString)> error_handler)
 		}
 	}
 
-	// Clear signal data
-	for (const shared_ptr<data::SignalData>& d : all_signal_data_)
-		d->clear();
+	// for (const shared_ptr<views::ViewBase>& vb : views_) {
+	// 	shared_ptr<views::trace::View> tv = dynamic_pointer_cast<views::trace::View>(vb);
+	// 	if (tv) {
+	// 		if(device_->session()->trigger())
+	// 			tv->set_segment_display_mode(views::trace::Trace::ShowLastCompleteSegmentOnly);
+	// 		else
+	// 			tv->set_segment_display_mode(views::trace::Trace::ShowLastSegmentOnly);
+	// 	}
+	// }
 
-	trigger_list_.clear();
-	segment_sample_count_.clear();
+	// Clear signal data
+	if(device_->session()->trigger() == nullptr)
+	{
+		for (const shared_ptr<data::SignalData>& d : all_signal_data_)
+			d->clear();
+		trigger_list_.clear();
+		segment_sample_count_.clear();
+	}
+
+	is_first_trigger_ = true;
 
 	// Revert name back to default name (e.g. "Session 1") for real devices
 	// as the (possibly saved) data is gone. File devices keep their name.
@@ -941,17 +957,21 @@ void Session::start_capture(function<void (const QString)> error_handler)
 		name_ = default_name_;
 		name_changed();
 	}
-	get_repeat_acquisition(is_repeat_acquisition_);
 	
-	if (sampling_thread_.joinable()) {
-		sampling_thread_.join();
-	}
-	if (is_repeat_acquisition_){
-		if (main_bar_->get_sample_count_index() < 3)
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
-	}
+	// if (sampling_thread_.joinable()) {
+	// 	sampling_thread_.join();
+	// }
+
+	get_repeat_acquisition(is_repeat_acquisition_);
+
+	// if (is_repeat_acquisition_){
+	// 	if (main_bar_->get_sample_count_index() < 3)
+	// 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	// }
+	
 	if (!pre_trigger_ptr_ && is_repeat_acquisition_)
 		pre_trigger_ptr_ = device_->session()->trigger();
+	
 	// Begin the session
 	sampling_thread_ = std::thread(&Session::sample_thread_proc, this, error_handler);
 }
@@ -963,6 +983,7 @@ void Session::stop_capture()
 		pre_trigger_ptr_ = nullptr;
 	}
 	is_repeat_acquisition_ = false;
+
 	if (get_capture_state() != Stopped){
 		device_->stop();
 	}
@@ -1041,7 +1062,9 @@ double Session::get_samplerate() const
 		const vector< shared_ptr<pv::data::Segment> > segments =
 			d->segments();
 		for (const shared_ptr<pv::data::Segment>& s : segments){
-			samplerate = max(samplerate, s->samplerate());
+			if (s && s.use_count() > 0) {
+                samplerate = max(samplerate, s->samplerate());
+            }
 		}
 	}
 	// If there is no sample rate given we use samples as unit
@@ -1514,35 +1537,47 @@ void Session::sample_thread_proc(function<void (const QString)> error_handler)
 	} catch (Error& e) {
 		cur_samplerate_ = 0;
 	}
+
 	out_of_memory_ = false;
+
 	{
 		lock_guard<recursive_mutex> lock(data_mutex_);
 		cur_logic_segment_.reset();
 		cur_analog_segments_.clear();
-		for (shared_ptr<data::SignalBase> sb : signalbases_)
-			sb->clear_sample_data();
+		if(device_->session()->trigger() == nullptr)
+			for (shared_ptr<data::SignalBase> sb : signalbases_)
+				sb->clear_sample_data();
 	}
 	highest_segment_id_ = -1;
 	frame_began_ = false;
+
 	try {
 		device_->start();
 	} catch (Error& e) {
 		mainwindow_show_error(e.what());
-		return;
+		is_repeat_acquisition_ = false;
+		capture_state_ = Running;
+		goto Stopped;
 	}
+
 	set_capture_state(device_->session()->trigger() ?
 		AwaitingTrigger : Running);
+
 	try {
 		device_->run();	
 	} catch (Error& e) {
 		mainwindow_show_error(e.what());
-		return;
+		is_repeat_acquisition_ = false;
+		goto Stopped;
 	} catch (QString& e) {
 		mainwindow_show_error(e);
-		return;
+		is_repeat_acquisition_ = false;
+		goto Stopped;
 	}
-	
+
+	Stopped:
 	set_capture_state(Stopped);
+
 	// Confirm that SR_DF_END was received
 	if (cur_logic_segment_)
 		qDebug() << "WARNING: SR_DF_END was not received.";
@@ -1557,25 +1592,24 @@ void Session::sample_thread_proc(function<void (const QString)> error_handler)
 
 	if (!file_device)
 		data_saved_ = false;
+
 	if (is_repeat_acquisition_)
 		notify_acq_done();
 }
 
 void Session::on_notify_acq_done()
 {
-	for (const shared_ptr<data::SignalData>& d : all_signal_data_)
-		d->clear();
 	if (sampling_thread_.joinable())
 		sampling_thread_.join();
-	usleep(200000);
+
 	start_capture([&](QString message) {
 		qDebug() << "Capture failed";
 	}); 
-	device_->session()->set_trigger(nullptr);
 }
 
 void Session::free_unused_memory()
 {
+	// lock_guard<recursive_mutex> lock(data_mutex_);
 	for (const shared_ptr<data::SignalData>& data : all_signal_data_) {
 		const vector< shared_ptr<data::Segment> > segments = data->segments();
 
@@ -1702,6 +1736,10 @@ void Session::feed_in_meta(shared_ptr<Meta> meta)
 
 void Session::feed_in_trigger(uint64_t trigger_offs)
 {
+	trigger_list_.clear();
+	
+	segment_sample_count_.clear();
+
 	// The channel containing most samples should be most accurate
 	uint64_t sample_count = 0;
 	cur_samplerate_ = device_->read_config<uint64_t>(ConfigKey::SAMPLERATE);
@@ -1787,6 +1825,17 @@ void Session::feed_in_logic(shared_ptr<sigrok::Logic> logic)
 	}
 
 	lock_guard<recursive_mutex> lock(data_mutex_);
+
+	if(device_->session()->trigger() && is_first_trigger_)
+	{
+		for (const shared_ptr<data::SignalData>& d : all_signal_data_)
+			d->clear();
+
+		for (shared_ptr<data::SignalBase> sb : signalbases_)
+			sb->clear_sample_data();
+
+		is_first_trigger_ = false;
+	}
 
 	if (!logic_data_) {
 		// The only reason logic_data_ would not have been created is

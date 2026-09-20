@@ -223,6 +223,16 @@ int main(int argc, char *argv[])
 	bool debug_console = false;
 	int loglevel = -1;
 
+	// Enable high DPI scaling before creating QApplication
+	QApplication::setAttribute(Qt::AA_EnableHighDpiScaling, true);
+	QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps, true);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
+		Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+#endif
+
+	Application a(argc, argv);
+	
 	#ifdef _WIN32
 	QString exeDir = QCoreApplication::applicationDirPath();
 
@@ -257,15 +267,6 @@ int main(int argc, char *argv[])
 	Srf::init();
 #endif
 
-	// Enable high DPI scaling before creating QApplication
-	QApplication::setAttribute(Qt::AA_EnableHighDpiScaling, true);
-	QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps, true);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
-	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
-		Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
-#endif
-
-	Application a(argc, argv);
 	QFont currentFont = a.font();
 	currentFont.setFamily("Microsoft YaHei");
 	a.setFont(currentFont);

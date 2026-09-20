@@ -182,8 +182,10 @@ int ch375_init(void)
     LOAD_FUNC_OPTIONAL(CH375DriverCommand);
     LOAD_FUNC_OPTIONAL(CH375WriteData);
     LOAD_FUNC_OPTIONAL(CH375SetDeviceNotify);
+    
+    unsigned long version = ch375_get_version();
+    sr_info("CH375DLL loaded successfully, version: %08x", version);
 
-    sr_info("CH375DLL loaded successfully");
     return SR_OK;
 }
 
@@ -235,6 +237,15 @@ void ch375_cleanup(void)
 int ch375_is_loaded(void)
 {
     return (ch375_dll_handle != NULL);
+}
+
+unsigned long ch375_get_version(void)
+{
+    if (!pCH375GetVersion) {
+        sr_err("CH375GetVersion not loaded");
+        return 0;
+    }
+    return pCH375GetVersion();
 }
 
 /* ============================================================================

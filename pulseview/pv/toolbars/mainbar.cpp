@@ -128,11 +128,11 @@ namespace pv
 																							action_connect_(new QAction(this)),
 																							run_stop_button_(new QToolButton()),
 																							channels_button_ex_(new QToolButton()),
-																							model_change_button_(new QToolButton()),
-																							new_view_button_(new QToolButton()),
+																							model_change_button_(new pv::widgets::HoverToolButton()),
+																							new_view_button_(new pv::widgets::HoverToolButton()),
 																							open_button_(new QToolButton()),
 																							save_button_(new QToolButton()),
-																							help_button_(new QToolButton()),
+																							help_button_(new pv::widgets::HoverToolButton()),
 																							device_status_icon_(new QToolButton()),
 																							device_selector_(parent, session.device_manager_ptr(), action_connect_),
 																							// configure_button_(this),
@@ -328,7 +328,7 @@ namespace pv
 			help_button_->setPopupMode(QToolButton::MenuButtonPopup);
 			help_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 			help_button_->setText(tr("Help"));
-			connect(help_button_, &QToolButton::clicked, help_button_, &QToolButton::showMenu);
+			// connect(help_button_, &QToolButton::clicked, help_button_, &QToolButton::showMenu);
 
 			widgets::ImportMenu *import_menu = new widgets::ImportMenu(this,
 																	   session.device_manager().context(), open_actions);
@@ -348,7 +348,7 @@ namespace pv
 			model_change_button_->setPopupMode(QToolButton::MenuButtonPopup);
 			model_change_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 			model_change_button_->setText(tr("Model"));
-			connect(model_change_button_, &QToolButton::clicked, model_change_button_, &QToolButton::showMenu);
+			// connect(model_change_button_, &QToolButton::clicked, model_change_button_, &QToolButton::showMenu);
 			// open button
 			open_button_->setMenu(import_menu);
 			open_button_->setDefaultAction(action_open_);
@@ -801,7 +801,7 @@ namespace pv
 				string driver_name = hw_dev_for_min_time->hardware_device()->driver()->name();
 				is_demo_min_time = (driver_name == "demo");
 			}
-			double min_time = is_demo_min_time ? 0.002 : 0.1;
+			double min_time = is_demo_min_time ? 0.004 : 0.01;
 			sample_count_.show_125_list(min_time * 10000, max_time * 10000); // commit sample count
 
 			if (sr_dev->config_check(ConfigKey::LIMIT_SAMPLES, Capability::GET))

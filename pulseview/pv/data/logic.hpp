@@ -30,6 +30,8 @@
 using std::deque;
 using std::shared_ptr;
 using std::vector;
+using std::mutex;
+using std::lock_guard;
 
 namespace pv {
 namespace data {
@@ -78,6 +80,7 @@ private Q_SLOTS:
 private:
 	double samplerate_;
 	unsigned int num_channels_;
+	mutable mutex segments_mutex_;
 	deque< shared_ptr<LogicSegment> > segments_;
 };
 

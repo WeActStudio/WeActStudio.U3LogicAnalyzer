@@ -75,6 +75,7 @@ protected:
 	QAction *const action_view_zoom_in_;
 	QAction *const action_view_zoom_out_;
 	QAction *const action_view_zoom_fit_;
+	QToolButton *const zoom_fit_button_;
 	QAction *const action_view_show_cursors_;
 	QToolButton *const show_cursors_;
 	QToolButton *segment_display_mode_selector_;

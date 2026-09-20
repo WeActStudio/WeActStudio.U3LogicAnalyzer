@@ -155,7 +155,7 @@ void DeviceToolButton::on_menu_hovered(QAction *action)
 	if (QToolTip::isVisible())
 		on_menu_hover_timeout();
 	else
-		QTimer::singleShot(1000, this, SLOT(on_menu_hover_timeout()));
+		QTimer::singleShot(500, this, SLOT(on_menu_hover_timeout()));
 }
 
 void DeviceToolButton::on_menu_hover_timeout()

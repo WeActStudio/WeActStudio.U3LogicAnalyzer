@@ -421,12 +421,13 @@ void Segment::get_raw_samples(uint64_t start, uint64_t count, uint8_t* dest) con
 	assert(start + count <= sample_count_);
 	assert(count > 0);
 	assert(dest != nullptr);
+
+	lock_guard<recursive_mutex> lock(mutex_);  // Because of free_unused_memory()
+	
 	register uint8_t* dest_ptr = dest;
 	if (channel_num_ >= 8) {
 		uint64_t chunk_num = (start * unit_size_) / chunk_size_;
 		uint64_t chunk_offs = (start * unit_size_) % chunk_size_;
-
-		lock_guard<recursive_mutex> lock(mutex_);  // Because of free_unused_memory()
 
 		while (count > 0) {
 			uint8_t* chunk = get_chunk_ptr_internal(chunk_num);

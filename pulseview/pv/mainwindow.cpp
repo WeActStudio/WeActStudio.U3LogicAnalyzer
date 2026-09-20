@@ -98,7 +98,7 @@ MainWindow::MainWindow(QWidget *parent) :
 	icon_green_(":/icons/status-green.svg"),
 	icon_grey_(":/icons/status-grey.svg")
 {
-	WindowTitle = Application::applicationName();
+	WindowTitle = "WeAct Studio " + Application::applicationName() + " " + Application::applicationVersion();
 
 	installEventFilter(this);
     qApp->installEventFilter(this);
@@ -1325,6 +1325,7 @@ void MainWindow::on_run_stop_clicked()
 			session->is_repeat_acquisition_ = last_focused_session_->main_bar()->capture_mode_ == Session::Repeat;
 			if (session->is_repeat_acquisition_)
 				qDebug() << "Repeat acquisition is already";
+			qDebug() << "Start acquisition";
 			session->start_capture([&](QString message) {
 				// show_session_error("Capture failed", message);
 				qDebug() << "Capture failed";
