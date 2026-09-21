@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================================
-# setup_env.sh - CH32H417 LogicAnalyzer 编译+运行环境一键部署
-# 在 MSYS2 MINGW64 shell 中运行
+# setup_env.sh - one-shot setup of the CH32H417 LogicAnalyzer build and runtime environment
+# Run this inside an MSYS2 MINGW64 shell
 # ============================================================================
 set -e
 
@@ -37,6 +37,6 @@ cat <<EOF
 
 现在可以运行:
 
-  ./build.sh         # 编译
-  cd build_cmake/pulseview_build && ./LogicAnalyzer.exe   # 运行
+  ./build.sh         # build
+  cd build_cmake/pulseview_build && ./LogicAnalyzer.exe   # run
 EOF

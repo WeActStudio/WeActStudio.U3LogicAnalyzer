@@ -298,10 +298,10 @@ private:
 	int current_state_;
 	bool allow_skip_ = true;
 
-	vector<vector<uint8_t>> mux_input_buffers_;   // 每个通道的输入缓冲区
-	vector<uint8_t> mux_output_buffer_;           // 输出缓冲区
-	vector<uint8_t> mux_zoom_buffer_;             // zoom缓冲区
-	uint64_t mux_buffer_capacity_;                // 缓冲区容量（样本数）
+	vector<vector<uint8_t>> mux_input_buffers_;   // Input buffer for each channel
+	vector<uint8_t> mux_output_buffer_;           // Output buffer
+	vector<uint8_t> mux_zoom_buffer_;             // Zoom buffer
+	uint64_t mux_buffer_capacity_;                // Buffer capacity in samples
 };
 
 } // namespace data

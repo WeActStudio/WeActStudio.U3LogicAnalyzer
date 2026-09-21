@@ -143,7 +143,7 @@ bool MainWindow::checkSystemRequirements()
 		QDialog dialog(nullptr);
 		dialog.setWindowTitle(tr("Warning"));
 
-		// 设置更大的字体
+		// Use a larger font
 		QFont font = dialog.font();
 		font.setPointSize(font.pointSize() + 2);
 		dialog.setFont(font);
@@ -151,16 +151,16 @@ bool MainWindow::checkSystemRequirements()
 
 		QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
-		// 创建图标和文本布局
+		// Create the icon and text layout
 		QHBoxLayout *contentLayout = new QHBoxLayout();
 
-		// 创建图标标签
+		// Create the icon label
 		QLabel *iconLabel = new QLabel(&dialog);
 		iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Information));
 		iconLabel->setAlignment(Qt::AlignTop);
 		contentLayout->addWidget(iconLabel);
 
-		// 创建文本标签
+		// Create the text label
 		QLabel *label = new QLabel(&dialog);
 		label->setText(tr("Current available memory size is less than 4GB and will affect usage effect. \nDo you want to continue to use?"));
 		label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
@@ -168,7 +168,7 @@ bool MainWindow::checkSystemRequirements()
 
 		layout->addLayout(contentLayout);
 
-		// 创建按钮
+		// Create the button
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 		buttonLayout->addStretch();
 		QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
@@ -177,7 +177,7 @@ bool MainWindow::checkSystemRequirements()
 		buttonLayout->addWidget(cancelBtn);
 		layout->addLayout(buttonLayout);
 
-		// 连接信号
+		// Connect the signal
 		connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
 		connect(cancelBtn, &QPushButton::clicked, &dialog, &QDialog::reject);
 
@@ -231,7 +231,7 @@ void MainWindow::show_session_info_with_auto_close(const QString info_text)
     box->setModal(false);
     box->setAttribute(Qt::WA_DeleteOnClose);
 
-    // 1000ms = 1秒后自动关闭，可修改数值
+    // 1000 ms = closes automatically after 1 second, change the value if needed
     QTimer::singleShot(1000, box, &QMessageBox::close);
 
     box->show();
@@ -591,7 +591,7 @@ void MainWindow::show_device_detach()
 
 	dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
-	// 设置更大的字体
+	// Use a larger font
 	QFont font = dialog->font();
 	font.setPointSize(font.pointSize() + 2);
 	dialog->setFont(font);
@@ -600,17 +600,17 @@ void MainWindow::show_device_detach()
 	layout->setContentsMargins(28, 24, 28, 20);
 	layout->setSpacing(20);
 
-	// 创建图标和文本布局
+	// Create the icon and text layout
 	QHBoxLayout *contentLayout = new QHBoxLayout();
 	contentLayout->setSpacing(18);
 
-	// 创建图标标签
+	// Create the icon label
 	QLabel *iconLabel = new QLabel(dialog);
 	iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Warning));
 	iconLabel->setAlignment(Qt::AlignTop);
 	contentLayout->addWidget(iconLabel);
 
-	// 创建文本标签
+	// Create the text label
 	QLabel *label = new QLabel(dialog);
 	label->setText(tr("device detached!\nDo you want to save the session?"));
 	label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
@@ -619,7 +619,7 @@ void MainWindow::show_device_detach()
 
 	layout->addLayout(contentLayout);
 
-	// 创建按钮
+	// Create the button
 	QHBoxLayout *buttonLayout = new QHBoxLayout();
 	buttonLayout->setSpacing(12);
 	buttonLayout->addStretch();
@@ -631,10 +631,10 @@ void MainWindow::show_device_detach()
 	buttonLayout->addWidget(cancelBtn);
 	layout->addLayout(buttonLayout);
 
-	// 根据内容自动计算大小，禁止窗口缩放
+	// Size to contents and prevent the window from being resized
 	dialog->setFixedSize(dialog->sizeHint());
 
-	// 非模态显示
+	// Show modelessly
 	dialog->setModal(false);
 
 	if (last_focused_session_->main_bar()->channels_ &&
@@ -1205,7 +1205,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 		QDialog dialog(this);
 		dialog.setWindowTitle(tr("Warning"));
 
-		// 设置更大的字体
+		// Use a larger font
 		QFont font = dialog.font();
 		font.setPointSize(font.pointSize() + 2);
 		dialog.setFont(font);
@@ -1213,14 +1213,14 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 		QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
-		// 创建标签
+		// Create the label
 		QLabel *label = new QLabel(&dialog);
 		label->setText(tr("<h3>Unsaved Capture Data</h3><p>Data will be permanently lost on exit.</p>"));
 		label->setTextFormat(Qt::RichText);
 		label->setAlignment(Qt::AlignCenter);
 		layout->addWidget(label);
 
-		// 创建按钮
+		// Create the button
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 		QPushButton *discardBtn = new QPushButton(tr("Discard && Exit"), &dialog);
 		QPushButton *cancelBtn = new QPushButton(tr("Cancel"), &dialog);
@@ -1230,11 +1230,11 @@ void MainWindow::closeEvent(QCloseEvent *event)
 		buttonLayout->addWidget(cancelBtn);
 		layout->addLayout(buttonLayout);
 
-		// 连接信号
+		// Connect the signal
 		connect(discardBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
 		connect(cancelBtn, &QPushButton::clicked, &dialog, &QDialog::reject);
 
-		// 执行对话框
+		// Run the dialog
 		if (dialog.exec() == QDialog::Rejected)
 		{
 			event->ignore();
@@ -1633,7 +1633,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         if (QWidget *w = qobject_cast<QWidget*>(obj))
         {
 			#ifdef _WIN32
-            // 排除顶层之外的子widget，只处理独立顶层窗口
+            // Skip child widgets and only handle standalone top-level windows
 			GlobalSettings settings;
             if(w->isTopLevel() && settings.current_theme_is_dark())
             {

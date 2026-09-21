@@ -34,27 +34,27 @@
 #define USB_VENDOR_ID       0x1a86
 #define USB_PRODUCT_ID      0x5537
 
-/* USB配置 */
+/* USB configuration */
 #define USB_INTERFACE       0
 #define USB_CONFIGURATION   1
 #define USB_TIMEOUT         500
 
 
-#define PIPE_CMD            1       /* 命令 */
-#define PIPE_LOGIC_DATA     2       /* 逻辑分析仪数据 */
-#define PIPE_ADC_DATA       3       /* ADC数据 */
+#define PIPE_CMD            1       /* Command */
+#define PIPE_LOGIC_DATA     2       /* Logic analyzer data */
+#define PIPE_ADC_DATA       3       /* ADC data */
 
-#define PACKET_SIZE_OUT         64      /* 下传命令包固定64字节 */
-#define PACKET_SIZE_IN          32      /* 上传命令包固定32字节 */
+#define PACKET_SIZE_OUT         64      /* Host-to-device command packet, fixed 64 bytes */
+#define PACKET_SIZE_IN          32      /* Device-to-host command packet, fixed 32 bytes */
 
-/* 传输参数 */
+/* Transfer parameters */
 #define NUM_SIMUL_TRANSFERS     64
 #define MAX_EMPTY_TRANSFERS     (NUM_SIMUL_TRANSFERS * 2)
 
-/* 缓冲上传传输大小 (1MB) */
+/* Buffered upload transfer size (1 MB) */
 #define BUFFER_UPLOAD_SIZE      (1024 * 1024)
 
-/* 逻辑分析仪命令 */
+/* Logic analyzer commands */
 #define CMD_SET_LOGIC_PARAMS    0xA0
 #define CMD_SET_LOGIC_LEVEL     0xA1
 #define CMD_START_LOGIC         0xA2
@@ -62,7 +62,7 @@
 #define CMD_GET_LOGIC_PARAMS    0xA4
 #define CMD_GET_LOGIC_LEVEL     0xA5
 
-/* ADC命令 */
+/* ADC commands */
 #define CMD_SET_ADC_PARAMS      0xA6
 #define CMD_SET_ADC_CHANNEL     0xA7
 #define CMD_START_ADC           0xA8
@@ -70,11 +70,11 @@
 #define CMD_GET_ADC_PARAMS      0xAA
 #define CMD_GET_ADC_CHANNEL     0xAB
 
-/* 其他命令 */
+/* Miscellaneous commands */
 #define CMD_GET_VERSION         0xAC
 #define CMD_ENTER_IAP           0xAE
 
-/* 响应命令 */
+/* Response commands */
 #define RESP_SET_LOGIC_PARAMS   0xB0
 #define RESP_SET_LOGIC_LEVEL    0xB1
 #define RESP_GET_LOGIC_PARAMS   0xB4
@@ -85,26 +85,26 @@
 #define RESP_GET_ADC_CHANNEL    0xBB
 #define RESP_GET_VERSION        0xBC
 
-/* 采样位宽 */
+/* Sample width */
 #define SAMPLE_WIDTH_8BIT       0x08
 #define SAMPLE_WIDTH_16BIT      0x10
 
-/* ADC位宽 */
+/* ADC width */
 #define ADC_WIDTH_8BIT          0x08
 #define ADC_WIDTH_10BIT         0x0A
 
-/* 设备能力标志 */
+/* Device capability flags */
 #define DEV_CAPS_16BIT_LOGIC    (1 << 0)
 #define DEV_CAPS_ADC            (1 << 1)
 #define DEV_CAPS_ADC_10BIT      (1 << 2)
 
-/* 工作模式 */
+/* Operating mode */
 enum ch32h417_mode {
 	MODE_LOGIC_ANALYZER,
 	MODE_ADC,
 };
 
-/* 电压电平 */
+/* Voltage levels */
 enum voltage_level {
 	VOLTAGE_3_3V = 0,
 	VOLTAGE_2_5V = 1,
@@ -114,13 +114,13 @@ enum voltage_level {
 	VOLTAGE_1_2V = 5,
 };
 
-/* ADC通道 */
+/* ADC channels */
 enum adc_channel {
 	ADC_CHANNEL_1 = 0,
 	ADC_CHANNEL_2 = 1,
 };
 
-/* 设备配置文件 */
+/* Device profile */
 struct ch32h417_profile {
 	uint16_t vid;
 	uint16_t pid;
@@ -130,19 +130,19 @@ struct ch32h417_profile {
 	uint32_t dev_caps;
 };
 
-/* 设备上下文 */
+/* Device context */
 struct dev_context {
 	const struct ch32h417_profile *profile;
 
-	/* 工作模式 */
+	/* Operating mode */
 	enum ch32h417_mode mode;
 
-	/* 采样率相关 */
+	/* Sample rates */
 	const uint64_t *samplerates;
 	int num_samplerates;
 	uint64_t cur_samplerate;
 
-	/* 逻辑分析仪配置 */
+	/* Logic analyzer configuration */
 	uint64_t limit_samples;
 	uint64_t limit_frames;
 	uint64_t capture_ratio;
@@ -151,47 +151,47 @@ struct dev_context {
 	uint8_t sample_width;      /* 8bit or 16bit */
 	int32_t num_channels;      /* 8 or 16 channels */
 	enum voltage_level voltage_level;
-	uint16_t threshold_value_1;  /* DAC阈值原始值 (0-1024) */
+	uint16_t threshold_value_1;  /* Raw DAC threshold value (0-1024) */
 
-	/* ADC配置 */
+	/* ADC configuration */
 	uint8_t adc_width;         /* 8bit or 10bit */
 	enum adc_channel adc_channel;
 	GSList *enabled_analog_channels;
 
-	/* 触发相关 */
+	/* Trigger */
 	gboolean trigger_fired;
 	gboolean acq_aborted;
 	struct soft_trigger_logic *stl;
 
-	/* 固件版本*/
+	/* Firmware version */
 	uint16_t fw_version;
 
-	/* USB速度 */
+	/* USB speed */
 	gboolean is_usb2;
 
-	/* CH375设备相关 */
-	int device_index;          /* 设备索引 */
-	void *device_handle;       /* 设备句柄 */
+	/* CH375 device */
+	int device_index;          /* Device index */
+	void *device_handle;       /* Device handle */
 	
-	/* 数据读取线程 */
-	GThread *read_thread;      /* 读取线程 */
-	GMutex mutex;              /* 互斥锁 */
-	GCond cond;                /* 条件变量 */
+	/* Data read thread */
+	GThread *read_thread;      /* Read thread */
+	GMutex mutex;              /* Mutex */
+	GCond cond;                /* Condition variable */
 
-	/* 数据缓冲 */
+	/* Data buffer */
 	uint8_t *logic_buffer;
 	float *analog_buffer;
-	size_t buffer_size;        /* 读取缓冲区大小 */
+	size_t buffer_size;        /* Read buffer size */
 
 	void (*send_data_proc)(struct sr_dev_inst *sdi,
 		uint8_t *data, size_t length, size_t sample_width);
 };
 
-/* 协议函数声明 */
+/* Protocol function declarations */
 SR_PRIV int ch32h417_send_command(struct sr_dev_inst *sdi,
 	uint8_t cmd, uint8_t len, const uint8_t *data);
 SR_PRIV int ch32h417_receive_response(struct sr_dev_inst *sdi,
-	uint8_t expected_cmd, uint8_t *data, int *len);
+	uint8_t expected_cmd, uint8_t *data, int data_size, int *len);
 
 SR_PRIV int ch32h417_set_logic_params(const struct sr_dev_inst *sdi);
 SR_PRIV int ch32h417_set_threshold_value(const struct sr_dev_inst *sdi, uint16_t value);

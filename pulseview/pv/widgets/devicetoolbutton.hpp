@@ -95,7 +95,7 @@ private Q_SLOTS:
 	void on_action(QObject *action);
 	void on_menu_hovered(QAction *action);
 	void on_menu_hover_timeout();
-	void on_button_clicked();  // 处理按钮点击，显示下拉菜单
+	void on_button_clicked();  // Handle a button click and show the drop-down menu
 
 Q_SIGNALS:
 	void device_selected();

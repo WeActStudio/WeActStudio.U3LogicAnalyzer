@@ -240,7 +240,7 @@ void Viewport::paintEvent(QPaintEvent*)
         double distance = qMin(qAbs(dx), qAbs(dy)) / 2.0;
         double len = std::sqrt(dx*dx + dy*dy);
 
-        if(len > 1e-9) // 防止除零
+        if(len > 1e-9) // Guard against division by zero
         {
             QPointF controlPoint1(midPoint.x() - dy / len * distance,
                                   midPoint.y() + dx / len * distance);
@@ -324,7 +324,7 @@ void Viewport::paintEvent(QPaintEvent*)
         p.drawText(measure4_rect, Qt::AlignRight | Qt::AlignVCenter, tr("Duty Cycle: ") + duty_cycle_ + " ");
     }
 
-    p.end(); // 只在函数末尾一次 end()
+    p.end(); // Call end() only once, at the end of the function
 }
 
 void Viewport::mouseDoubleClickEvent(QMouseEvent *event)

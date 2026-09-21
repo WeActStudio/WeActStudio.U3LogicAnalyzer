@@ -188,7 +188,7 @@ void IAPDialog::on_start_clicked()
     log(tr("Device index: %1").arg(device_index_));
     log(tr("IAP VID: 0x%1, PID: 0x%2").arg(iap_vid_, 4, 16, QChar('0')).arg(iap_pid_, 4, 16, QChar('0')));
 
-    /* 创建工作线程 */
+    /* Create the worker thread */
     worker_ = new IAPWorker(device_index_, firmware_path_, iap_vid_, iap_pid_);
     worker_thread_ = new QThread();
     worker_->moveToThread(worker_thread_);
@@ -547,7 +547,7 @@ bool IAPWorker::program_flash(const uint8_t *data, size_t len)
         retry_count = 0;
         offset += chunk_size;
 
-        /* 更新进度 (30% - 70%) */
+        /* Update progress (30% - 70%) */
         int progress = 30 + (int)(40 * offset / total);
         update_progress(progress, tr("编程FLASH... %1%").arg(offset * 100 / total));
     }
@@ -595,7 +595,7 @@ bool IAPWorker::verify_flash(uint32_t start_addr, const uint8_t *data, size_t le
         cmd[5] = (verify_addr >> 24) & 0xFF;
         memcpy(cmd + 6, data + offset, chunk_size);
 
-        size_t cmd_len = 6 + chunk_size;  /* 命令头(2)+地址(4)+数据长度 */
+        size_t cmd_len = 6 + chunk_size;  /* Command header (2) + address (4) + data length */
         if (!hid_write(cmd, cmd_len)) {
             log(tr("发送校验命令失败，偏移: %1").arg(offset));
             retry_count++;
@@ -633,7 +633,7 @@ bool IAPWorker::verify_flash(uint32_t start_addr, const uint8_t *data, size_t le
         offset += chunk_size;
         verify_addr += chunk_size;
 
-        /* 更新进度 (70% - 95%) */
+        /* Update progress (70% - 95%) */
         int progress = 70 + (int)(25 * offset / total);
         update_progress(progress, tr("校验FLASH... %1%").arg(offset * 100 / total));
     }
@@ -828,35 +828,35 @@ void IAPWorker::do_work()
         return;
     }
 
-    /* 4. 擦除FLASH */
+    /* 4. Erase flash */
     if (!erase_flash(start_addr)) {
         close_hid();
         Q_EMIT finished(false);
         return;
     }
 
-    /* 5. 编程FLASH */
+    /* 5. Program flash */
     if (!program_flash((const uint8_t*)firmware_data.constData(), firmware_data.size())) {
         close_hid();
         Q_EMIT finished(false);
         return;
     }
 
-    /* 6. 校验FLASH */
+    /* 6. Verify flash */
     if (!verify_flash(start_addr, (const uint8_t*)firmware_data.constData(), firmware_data.size())) {
         close_hid();
         Q_EMIT finished(false);
         return;
     }
 
-    /* 7. 结束升级 */
+    /* 7. Finish the upgrade */
     if (!end_upgrade()) {
         close_hid();
         Q_EMIT finished(false);
         return;
     }
 
-    /* 8. 关闭HID */
+    /* 8. Close HID */
     close_hid();
 
     update_progress(100, tr("升级完成"));

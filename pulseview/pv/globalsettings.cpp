@@ -109,7 +109,7 @@ void GlobalSettings::set_defaults_where_needed()
 		QStringList parts = langTag.split('-');
 		QString lang;
 		if (parts.size() >=2 && parts[1].length() ==2) {
-			// 语言‑地区，丢弃脚本段
+			// language-region, drop the script subtag
 			lang = parts[0] + "_" + parts[1];
 		} else {
 			lang = parts[0];

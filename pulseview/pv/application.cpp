@@ -143,7 +143,7 @@ void Application::switch_language(const QString& language)
 		QWidget* parentWnd = nullptr;
 		const QWidgetList topWindows = qApp->topLevelWidgets();
 
-		// 倒序遍历，拿到最后一个可见、不是QMessageBox的顶层窗口
+		// Walk backwards to find the last visible top-level window that is not a QMessageBox
 		for (auto it = topWindows.rbegin(); it != topWindows.rend(); ++it)
 		{
 			QWidget* w = *it;

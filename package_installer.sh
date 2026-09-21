@@ -1,9 +1,9 @@
 #!/bin/bash
 # ============================================================================
-# package_installer.sh - 生成 Windows 安装包 LogicAnalyzer_Setup.exe
-# 用法:
-#   ./package_installer.sh          # 编译 + 打包 + 生成安装包
-#   ./package_installer.sh --skip-build  # 跳过编译，直接生成安装包
+# package_installer.sh - build the Windows installer LogicAnalyzer_Setup.exe
+# Usage:
+#   ./package_installer.sh               # Build + package + create the installer
+#   ./package_installer.sh --skip-build  # Skip the build, package the existing dist/LogicAnalyzer/
 # ============================================================================
 set -e
 
@@ -19,7 +19,7 @@ for arg in "$@"; do
     esac
 done
 
-# --- 编译 + 打包 ---
+# --- Build + package ---
 if [ $SKIP_BUILD -eq 0 ]; then
     echo ">>> 步骤 1/3: 编译 + 打包..."
     bash "${SCRIPT_DIR}/build.sh" --clean --package
@@ -31,13 +31,13 @@ else
     echo ">>> 跳过编译，使用已有 dist/LogicAnalyzer/"
 fi
 
-# --- 检查 NSIS ---
+# --- Check for NSIS ---
 if ! command -v makensis &>/dev/null; then
     echo ">>> 安装 NSIS..."
     pacman -S --needed --noconfirm mingw-w64-x86_64-nsis
 fi
 
-# --- 生成 NSIS 脚本 ---
+# --- Generate the NSIS script ---
 echo ">>> 步骤 2/3: 生成安装脚本..."
 
 VERSION=0.2
@@ -104,7 +104,7 @@ Section "Uninstall"
 SectionEnd
 NSIEOF
 
-# --- 生成安装包 ---
+# --- Build the installer ---
 echo ">>> 步骤 3/3: 生成安装包..."
 cd "${DIST_DIR}"
 makensis "${NSIS_SCRIPT}"

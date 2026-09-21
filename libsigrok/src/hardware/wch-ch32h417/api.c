@@ -22,26 +22,26 @@
 #include "protocol.h"
 #include <math.h>
 
-/* 支持的设备列表 */
+/* Supported devices */
 static const struct ch32h417_profile supported_devices[] = {
-	/* CH32H417逻辑分析仪 */
+	/* CH32H417 logic analyzer */
 	{USB_VENDOR_ID, USB_PRODUCT_ID, "CH32H417", "CH32H417 Logic Analyzer", "01", 
 	 DEV_CAPS_16BIT_LOGIC | DEV_CAPS_ADC},
 	{USB_VENDOR_ID, USB_PRODUCT_ID, "CH32H417", "WeAct Studio Logic Analyzer V2", "b5", 
 	 DEV_CAPS_16BIT_LOGIC},
 	ALL_ZERO};
 
-/* 扫描选项 */
+/* Scan options */
 static const uint32_t scanopts[] = {
 	SR_CONF_CONN,
 };
 
-/* 驱动选项 */
+/* Driver options */
 static const uint32_t drvopts[] = {
 	SR_CONF_LOGIC_ANALYZER,
 };
 
-/* 设备选项 */
+/* Device options */
 static const uint32_t devopts[] = {
 	SR_CONF_CONTINUOUS,
 	SR_CONF_LIMIT_FRAMES | SR_CONF_GET | SR_CONF_SET,
@@ -57,7 +57,7 @@ static const uint32_t devopts[] = {
 	SR_CONF_USB_VERSION | SR_CONF_GET,
 };
 
-/* ADC通道组设备选项 */
+/* ADC channel group device options */
 static const uint32_t devopts_adc[] = {
 	SR_CONF_SAMPLERATE | SR_CONF_GET | SR_CONF_SET | SR_CONF_LIST,
 	SR_CONF_LIMIT_SAMPLES | SR_CONF_GET | SR_CONF_SET,
@@ -65,7 +65,7 @@ static const uint32_t devopts_adc[] = {
 	SR_CONF_ADC_CHANNEL | SR_CONF_GET | SR_CONF_SET,
 };
 
-/* 触发类型 */
+/* Trigger types */
 static const int32_t trigger_matches[] = {
 	SR_TRIGGER_ZERO,
 	SR_TRIGGER_ONE,
@@ -74,7 +74,7 @@ static const int32_t trigger_matches[] = {
 	SR_TRIGGER_EDGE,
 };
 
-/* 逻辑分析仪采样率 - USB 3.0 (最高200MHz) */
+/* Logic analyzer sample rates - USB 3.0 (up to 200 MHz) */
 static const uint64_t logic_samplerates_usb3[] = {
 	SR_MHZ(200),
 	SR_MHZ(187.5),
@@ -103,7 +103,7 @@ static const uint64_t logic_samplerates_usb3[] = {
 	SR_MHZ(4),
 };
 
-/* 逻辑分析仪采样率 - USB 2.0 16通道 (最高20MHz) */
+/* Logic analyzer sample rates - USB 2.0, 16 channels (up to 20 MHz) */
 static const uint64_t logic_samplerates_usb2_16ch[] = {
 	SR_MHZ(20),
 	SR_MHZ(16),
@@ -113,7 +113,7 @@ static const uint64_t logic_samplerates_usb2_16ch[] = {
 	SR_MHZ(4),
 };
 
-/* 逻辑分析仪采样率 - USB 2.0 8通道 (最高40MHz) */
+/* Logic analyzer sample rates - USB 2.0, 8 channels (up to 40 MHz) */
 static const uint64_t logic_samplerates_usb2_8ch[] = {
 	SR_MHZ(40),
 	SR_MHZ(30),
@@ -125,7 +125,7 @@ static const uint64_t logic_samplerates_usb2_8ch[] = {
 	SR_MHZ(4),
 };
 
-/* ADC采样率 */
+/* ADC sample rates */
 static const uint64_t adc_samplerates[] = {
 	SR_MHZ(20),
 	SR_MHZ(16),
@@ -134,7 +134,7 @@ static const uint64_t adc_samplerates[] = {
 	SR_MHZ(10),
 };
 
-/* 工作模式名称 */
+/* Operating mode names */
 static const char *mode_names[] = {
 	[MODE_LOGIC_ANALYZER] = "Logic Analyzer",
 	[MODE_ADC] = "ADC",
@@ -147,7 +147,7 @@ static void ch32h417_flush_cmd_endpoint(unsigned long index)
 	uint8_t buffer[PACKET_SIZE_IN];
 	unsigned long io_length;
 
-	/* 设置超时 0mS */
+	/* Set the timeout to 0 ms */
 	if (!ch375_set_timeout_ex(index, 1, 1, 1, 1)) {
 		sr_warn("Failed to set timeout ex for device at index %d", index);
 	}
@@ -175,23 +175,23 @@ static void ch32h417_flush_cmd_endpoint(unsigned long index)
 	g_usleep(1000);
 }
 
-/* 初始化CH375设备通信参数 */
+/* Initialize the CH375 device communication parameters */
 static void ch375_init_comm_params(struct dev_context *devc)
 {
-	/* 设置IO模式为同步模式 */
+	/* Set the IO mode to synchronous */
 	if (!ch375_set_io_mode(devc->device_index, 0)) {
 		sr_warn("Failed to set IO mode to sync for device at index %d", devc->device_index);
 	}
 
-	/* 清空端点 PIPE_CMD */
+	/* Flush the PIPE_CMD endpoint */
 	ch32h417_flush_cmd_endpoint(devc->device_index);
 
-	/* 设置超时 */
+	/* Set the timeout */
 	if (!ch375_set_timeout_ex(devc->device_index, USB_TIMEOUT, USB_TIMEOUT, USB_TIMEOUT, USB_TIMEOUT)) {
 		sr_warn("Failed to set timeout ex for device at index %d", devc->device_index);
 	}
 
-	/* 配置缓冲上传管道 */
+	/* Configure the buffered upload pipe */
 	if (!ch375_set_buf_upload_ex(devc->device_index, 1, PIPE_LOGIC_DATA, devc->buffer_size)) {
 		sr_warn("Failed to set upload buffer pipe %d for device at index %d", PIPE_LOGIC_DATA, devc->device_index);
 	}
@@ -203,7 +203,7 @@ static void ch375_init_comm_params(struct dev_context *devc)
 	}
 }
 
-/* 检查设备是否匹配 */
+/* Check whether the device matches */
 static gboolean is_plausible(uint16_t vid, uint16_t pid)
 {
 	int i;
@@ -219,11 +219,11 @@ static gboolean is_plausible(uint16_t vid, uint16_t pid)
 }
 
 /**
- * @brief 解析USB设备路径字符串，提取实例序列号，输出小写
- * @param dev_path 输入字符串，例如 "\\\\?\\usb#vid_1a86&pid_5537#b5e339e33906e19c7f6416064c#{5e7f6bdf‑1ce5‑4d78‑bbcf‑d20c44329f7d}"
- * @param out_sn 输出缓冲区，存放小写序列号
- * @param buf_sz 输出缓冲区大小
- * @return 0成功，‑1失败
+ * @brief Parse a USB device path string and extract the instance serial number in lower case
+  * @param dev_path Input string, e.g. "\\\\?\\usb#vid_1a86&pid_5537#b5e339e33906e19c7f6416064c#{5e7f6bdf-1ce5-4d78-bbcf-d20c44329f7d}"
+ * @param out_sn Output buffer that receives the lower-case serial number
+ * @param buf_sz Output buffer size
+ * @return 0 on success, -1 on failure
  */
 int extract_usb_serial(const char *dev_path, char *out_sn, size_t buf_sz)
 {
@@ -233,19 +233,19 @@ int extract_usb_serial(const char *dev_path, char *out_sn, size_t buf_sz)
     if (!dev_path || !out_sn || buf_sz == 0)
         return -1;
 
-    // 找第一个 #
+    // Find the first '#'
     p1 = strchr(dev_path, '#');
     if (p1 == NULL)
         return -1;
     p1++;
 
-    // 找第二个 #
+    // Find the second '#'
     p2 = strchr(p1, '#');
     if (p2 == NULL)
         return -1;
 	p2++;
 
-	// 找第三个 #
+	// Find the third '#'
     p3 = strchr(p2, '#');
     if (p3 == NULL)
         return -1;
@@ -257,7 +257,7 @@ int extract_usb_serial(const char *dev_path, char *out_sn, size_t buf_sz)
     memcpy(out_sn, p2, len);
     out_sn[len] = '\0';
 
-    // 全部转小写
+    // Convert everything to lower case
     for (size_t i = 0; i < len; i++)
     {
         out_sn[i] = (char)tolower((unsigned char)out_sn[i]);
@@ -266,8 +266,8 @@ int extract_usb_serial(const char *dev_path, char *out_sn, size_t buf_sz)
 }
 
 /**
- * @brief 判断 str 是否以前缀 prefix 开头
- * @return 1:是前缀；0:不是
+ * @brief Check whether str starts with the given prefix
+ * @return 1 if it is a prefix, 0 otherwise
  */
 int str_startswith(const char *str, const char *prefix)
 {
@@ -281,7 +281,7 @@ int str_startswith(const char *str, const char *prefix)
 }
 
 
-/* 扫描设备 */
+/* Scan for devices */
 static GSList *scan(struct sr_dev_driver *di, GSList *options)
 {
 	struct drv_context *drvc;
@@ -317,7 +317,7 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 
 	devices = NULL;
 
-	/* 初始化CH375DLL */
+	/* Initialize CH375DLL */
 	ret = ch375_init();
 	if (ret != SR_OK)
 	{
@@ -375,11 +375,11 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 		sdi->connection_id = g_strdup(connection_id);
 		sdi->serial_num = g_strdup(serial_number);
 
-		/* CH32H417支持8通道或16通道模式 */
-		num_logic_channels = 16; /* 默认16通道，可通过配置切换为8通道 */
+		/* The CH32H417 supports 8- and 16-channel modes */
+		num_logic_channels = 16; /* 16 channels by default, switchable to 8 channels through configuration */
 		num_analog_channels = (prof->dev_caps & DEV_CAPS_ADC) ? 2 : 0;
 
-		/* 创建逻辑通道组 */
+		/* Create the logic channel group */
 		cg = g_malloc0(sizeof(struct sr_channel_group));
 		cg->name = g_strdup("Logic");
 		for (j = 0; j < num_logic_channels; j++)
@@ -391,7 +391,7 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 		}
 		sdi->channel_groups = g_slist_append(NULL, cg);
 
-		/* 创建模拟通道组 */
+		/* Create the analog channel group */
 		for (j = 0; j < num_analog_channels; j++)
 		{
 			snprintf(channel_name, sizeof(channel_name), "A%d", j);
@@ -426,13 +426,13 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	return std_scan_complete(di, devices);
 }
 
-/* 清理设备 */
+/* Clear devices */
 static int dev_clear(const struct sr_dev_driver *di)
 {
 	return std_dev_clear(di);
 }
 
-/* 打开设备 */
+/* Open device */
 static int dev_open(struct sr_dev_inst *sdi)
 {
 	struct dev_context *devc;
@@ -489,7 +489,7 @@ static int dev_open(struct sr_dev_inst *sdi)
 		devc->cur_samplerate = devc->samplerates[0];
 	}
 
-	/* 设置默认采样率 */
+	/* Set the default sample rate */
 	if (devc->cur_samplerate == 0)
 	{
 		devc->cur_samplerate = devc->samplerates[0];
@@ -500,7 +500,7 @@ static int dev_open(struct sr_dev_inst *sdi)
 	return SR_OK;
 }
 
-/* 关闭设备 */
+/* Close device */
 static int dev_close(struct sr_dev_inst *sdi)
 {
 	struct dev_context *devc;
@@ -518,7 +518,7 @@ static int dev_close(struct sr_dev_inst *sdi)
 	return SR_OK;
 }
 
-/* 获取配置 */
+/* Get configuration */
 static int config_get(uint32_t key, GVariant **data,
 					  const struct sr_dev_inst *sdi, const struct sr_channel_group *cg)
 {
@@ -561,15 +561,15 @@ static int config_get(uint32_t key, GVariant **data,
 		*data = g_variant_new_uint64(devc->fw_version);
 		break;
 	case SR_CONF_USB_VERSION:
-		/* 2表示USB2.0，3表示USB3.0 */
+		/* 2 means USB 2.0, 3 means USB 3.0 */
 		*data = g_variant_new_uint64(devc->is_usb2 ? 2 : 3);
 		break;
 	case SR_CONF_ADC_PRECISION:
-		/* 返回ADC精度：8或10 */
+		/* Return the ADC resolution: 8 or 10 */
 		*data = g_variant_new_uint64((devc->adc_width == ADC_WIDTH_8BIT) ? 8 : 10);
 		break;
 	case SR_CONF_ADC_CHANNEL:
-		/* 返回ADC通道：0或1 */
+		/* Return the ADC channel: 0 or 1 */
 		*data = g_variant_new_uint64((devc->adc_channel == ADC_CHANNEL_1) ? 0 : 1);
 		break;
 	case SR_CONF_THRESHOLD_VALUE_1:
@@ -582,7 +582,7 @@ static int config_get(uint32_t key, GVariant **data,
 	return SR_OK;
 }
 
-/* 设置配置 */
+/* Set configuration */
 static int config_set(uint32_t key, GVariant *data,
 					  const struct sr_dev_inst *sdi, const struct sr_channel_group *cg)
 {
@@ -626,7 +626,7 @@ static int config_set(uint32_t key, GVariant *data,
 		devc->sample_width = (num == 16) ? SAMPLE_WIDTH_16BIT : SAMPLE_WIDTH_8BIT;
 		sr_info("Channel count set to %d", devc->num_channels);
 
-		/* USB 2.0时，通道数变化需要更新采样率表 */
+		/* On USB 2.0 a channel count change requires updating the sample rate table */
 		if (devc->is_usb2 && devc->mode == MODE_LOGIC_ANALYZER)
 		{
 			if (devc->num_channels == 16) {
@@ -651,7 +651,7 @@ static int config_set(uint32_t key, GVariant *data,
 
 		devc->mode = (enum ch32h417_mode)mode_idx;
 
-		/* 切换模式时更新采样率列表 */
+		/* Update the sample rate list when switching mode */
 		if (devc->mode == MODE_LOGIC_ANALYZER)
 		{
 			if (devc->is_usb2)
@@ -752,7 +752,7 @@ static int config_set(uint32_t key, GVariant *data,
 	return SR_OK;
 }
 
-/* 配置列表 */
+/* Configuration list */
 static int config_list(uint32_t key, GVariant **data,
 					   const struct sr_dev_inst *sdi, const struct sr_channel_group *cg)
 {
@@ -766,7 +766,7 @@ static int config_list(uint32_t key, GVariant **data,
 	case SR_CONF_DEVICE_OPTIONS:
 		if (cg)
 		{
-			/* ADC通道组 */
+			/* ADC channel group */
 			return STD_CONFIG_LIST(key, data, sdi, cg,
 								   scanopts, drvopts, devopts_adc);
 		}
@@ -801,13 +801,13 @@ static int config_list(uint32_t key, GVariant **data,
 	return SR_OK;
 }
 
-/* 停止采集 */
+/* Stop acquisition */
 static int dev_acquisition_stop(struct sr_dev_inst *sdi)
 {
 	return ch32h417_acquisition_stop(sdi);
 }
 
-/* 驱动注册信息 */
+/* Driver registration info */
 static struct sr_dev_driver ch32h417_driver_info = {
 	.name = "wch-ch32h417",
 	.longname = "WCH CH32H417 Logic Analyzer",

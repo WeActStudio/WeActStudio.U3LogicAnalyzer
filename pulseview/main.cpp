@@ -185,26 +185,26 @@ void usage()
 }
 using namespace std;
 
-/// 设置进程环境：仅当环境变量不存在时才设置；存在则直接跳过
+/// Set a process environment variable, but only when it is not defined yet
 #ifdef _WIN32
 static void setEnvIfNotExist(const QString &key, const QString &defaultValue)
 {
-    // 先读取当前环境
+    // Read the current environment first
     QByteArray existing = qgetenv(key.toLatin1().constData());
     if (!existing.isEmpty())
     {
-        // 环境变量已经有定义，不覆盖
+        // Already defined, do not overwrite
         return;
     }
 
-    // 不存在，则设置默认值
+    // Not defined, set the default value
     BOOL ok = SetEnvironmentVariableW(
         reinterpret_cast<const wchar_t*>(key.utf16()),
         reinterpret_cast<const wchar_t*>(defaultValue.utf16())
     );
     Q_UNUSED(ok);
 
-    // MinGW CRT 同步，保证C getenv()可见
+    // Sync with the MinGW CRT so C code sees it through getenv()
     QString envEntry = QString("%1=%2").arg(key, defaultValue);
     _wputenv(reinterpret_cast<const wchar_t*>(envEntry.utf16()));
 }
@@ -236,18 +236,18 @@ int main(int argc, char *argv[])
 	#ifdef _WIN32
 	QString exeDir = QCoreApplication::applicationDirPath();
 
-    // 设置进程当前工作目录（等价 cd /d %~dp0）
+    // Set the process working directory (equivalent to cd /d %~dp0)
     // SetCurrentDirectoryW(reinterpret_cast<const wchar_t*>(exeDir.utf16()));
 
-    // SIGROKDECODE_DIR：有就不设置；没有则使用 exeDir/decoders
+    // SIGROKDECODE_DIR: keep it if set, otherwise use exeDir/decoders
     // QString sigrokDefault = QDir(exeDir).filePath("decoders");
     // setEnvIfNotExist("SIGROKDECODE_DIR", sigrokDefault);
 
-    // PYTHONHOME：有就不设置；没有则使用 exeDir/python‑portable
+    // PYTHONHOME: keep it if set, otherwise use exeDir/python-portable
     QString pythonHomeDefault = QDir(exeDir).filePath("python-portable");
     setEnvIfNotExist("PYTHONHOME", pythonHomeDefault);
 
-    // PATH：通常希望总是前置exe目录，不做“存在就跳过”；如果你也要条件设置可以套用上面函数
+    // PATH: the exe directory should always be prepended, so do not skip when set; use the helper above if you want conditional behaviour
     wchar_t pathBuf[32768] = {0};
     DWORD pathLen = GetEnvironmentVariableW(L"PATH", pathBuf, 32768);
     QString oldPath;
@@ -256,7 +256,7 @@ int main(int argc, char *argv[])
         oldPath = QString::fromWCharArray(pathBuf);
     }
     QString newPath = exeDir + ";" + oldPath;
-    setEnvIfNotExist("PATH", newPath); // 注意：PATH几乎一定存在，本行不会生效
+    setEnvIfNotExist("PATH", newPath); // Note: PATH is almost always defined, so this line has no effect
 	#endif
 	
 #ifdef ENABLE_FLOW

@@ -839,7 +839,7 @@ bool LogicSegment::find_nearest_edge_left(uint64_t origin_sample, int sig_index,
     const uint64_t sig_mask = 1ULL << sig_index;
     const bool origin_level = (get_unpacked_sample(origin_sample) & sig_mask) != 0;
 
-    // ========== 修复：origin_sample 本身就是跳变边沿，直接返回紧邻左边沿 ==========
+    // ========== Fix: origin_sample is itself a transition edge, return the adjacent left edge directly ==========
     if (origin_sample > 0)
     {
         bool prev_level = (get_unpacked_sample(origin_sample - 1) & sig_mask) != 0;
@@ -857,7 +857,7 @@ bool LogicSegment::find_nearest_edge_left(uint64_t origin_sample, int sig_index,
     {
         if (!mip_map_[level].data)
         {
-            // mipmap未就绪，暴力逐样本向左扫描
+            // Mipmap not ready, scan sample by sample to the left
             for (int64_t i = static_cast<int64_t>(origin_sample) - 1; i >= 0; --i)
             {
                 const bool sample = (get_unpacked_sample(static_cast<uint64_t>(i)) & sig_mask) != 0;
@@ -883,7 +883,7 @@ bool LogicSegment::find_nearest_edge_left(uint64_t origin_sample, int sig_index,
                 level--;
                 offset = offset * MipMapScaleFactor + MipMapScaleFactor - 1;
 
-                // ========== 修复：下沉后mipmap无数据直接退出，防止越界get_subsample ==========
+                // ========== Fix: after descending the mipmap has no data, bail out to avoid an out-of-range get_subsample ==========
                 if (mip_map_[level].length == 0)
                     return false;
 
@@ -893,7 +893,7 @@ bool LogicSegment::find_nearest_edge_left(uint64_t origin_sample, int sig_index,
             }
             else
             {
-                // level == 0，原始粒度，块内扫描
+                // level == 0, raw resolution, scan within the block
                 const uint64_t block_start = offset * MipMapScaleFactor;
                 const uint64_t block_end = min(block_start + MipMapScaleFactor,
                                                     sample_count_.load());

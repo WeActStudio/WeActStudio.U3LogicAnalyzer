@@ -19,8 +19,8 @@
  */
 
 /*
- * CH375DLL动态加载封装实现
- * 使用LoadLibrary动态加载DLL函数
+ * CH375DLL dynamic loading wrapper implementation
+ * Loads the DLL functions at runtime through LoadLibrary
  */
 
 #include <config.h>
@@ -29,11 +29,11 @@
 #include "libsigrok-internal.h"
 #include <glib.h>
 
-/* Windows API头文件 - mingw-w64交叉编译 */
+/* Windows API headers - mingw-w64 cross compilation */
 #ifdef _WIN32
 #include <windows.h>
 #else
-/* 对于mingw-w64交叉编译，仍然使用Windows头文件 */
+/* mingw-w64 cross compilation still uses the Windows headers */
 #include <windef.h>
 #include <winbase.h>
 #include <libloaderapi.h>
@@ -42,12 +42,12 @@
 #define LOG_PREFIX "ch375"
 
 /* ============================================================================
- * DLL句柄和函数指针
+ * DLL handle and function pointers
  * ============================================================================ */
 
 static HMODULE ch375_dll_handle = NULL;
 
-/* 设备管理函数指针 */
+/* Device management function pointers */
 static CH375OpenDevice_func pCH375OpenDevice = NULL;
 static CH375CloseDevice_func pCH375CloseDevice = NULL;
 static CH375GetVersion_func pCH375GetVersion = NULL;
@@ -55,57 +55,57 @@ static CH375GetDrvVersion_func pCH375GetDrvVersion = NULL;
 static CH375GetUsbID_func pCH375GetUsbID = NULL;
 static CH375GetDeviceName_func pCH375GetDeviceName = NULL;
 
-/* 设备描述符函数指针 */
+/* Device descriptor function pointers */
 static CH375GetDeviceDescr_func pCH375GetDeviceDescr = NULL;
 static CH375GetConfigDescr_func pCH375GetConfigDescr = NULL;
 
-/* 设备控制函数指针 */
+/* Device control function pointers */
 static CH375ResetDevice_func pCH375ResetDevice = NULL;
 static CH375SetExclusive_func pCH375SetExclusive = NULL;
 
-/* 超时设置函数指针 */
+/* Timeout setting function pointers */
 static CH375SetTimeout_func pCH375SetTimeout = NULL;
 static CH375SetTimeoutEx_func pCH375SetTimeoutEx = NULL;
 
-/* 端点1直接上下传函数指针 */
+/* Endpoint 1 direct transfer function pointers */
 static CH375WriteRead_func pCH375WriteRead = NULL;
 
-/* 端点读写函数指针 */
+/* Endpoint read/write function pointers */
 static CH375WriteEndP_func pCH375WriteEndP = NULL;
 static CH375ReadEndP_func pCH375ReadEndP = NULL;
 
-/* 端点控制函数指针 */
+/* Endpoint control function pointers */
 static CH375AbortEndPRead_func pCH375AbortEndPRead = NULL;
 static CH375AbortEndPWrite_func pCH375AbortEndPWrite = NULL;
 static CH375ResetInEndP_func pCH375ResetInEndP = NULL;
 static CH375ResetOutEndP_func pCH375ResetOutEndP = NULL;
 
-/* 数据端点读写函数指针 */
+/* Data endpoint read/write function pointers */
 static CH375ReadData_func pCH375ReadData = NULL;
 static CH375WriteData_func pCH375WriteData = NULL;
 static CH375AbortRead_func pCH375AbortRead = NULL;
 static CH375AbortWrite_func pCH375AbortWrite = NULL;
 
-/* 缓冲上传模式函数指针 */
+/* Buffered upload mode function pointers */
 static CH375SetBufUpload_func pCH375SetBufUpload = NULL;
 static CH375QueryBufUpload_func pCH375QueryBufUpload = NULL;
 static CH375SetBufUploadEx_func pCH375SetBufUploadEx = NULL;
 static CH375QueryBufUploadEx_func pCH375QueryBufUploadEx = NULL;
 static CH375ClearBufUpload_func pCH375ClearBufUpload = NULL;
 
-/* 缓冲下传模式函数指针 */
+/* Buffered download mode function pointers */
 static CH375SetBufDownload_func pCH375SetBufDownload = NULL;
 static CH375QueryBufDownload_func pCH375QueryBufDownload = NULL;
 static CH375SetBufDownloadEx_func pCH375SetBufDownloadEx = NULL;
 
-/* 驱动命令函数指针 */
+/* Driver command function pointers */
 static CH375DriverCommand_func pCH375DriverCommand = NULL;
 
-/* 设备事件通知函数指针 */
+/* Device event notification function pointers */
 static CH375SetDeviceNotify_func pCH375SetDeviceNotify = NULL;
 
 /* ============================================================================
- * 动态加载辅助宏
+ * Helper macro for dynamic loading
  * ============================================================================ */
 
 #define LOAD_FUNC(name) \
@@ -123,20 +123,20 @@ static CH375SetDeviceNotify_func pCH375SetDeviceNotify = NULL;
     } while(0)
 
 /* ============================================================================
- * DLL加载/卸载
+ * DLL load/unload
  * ============================================================================ */
 
 int ch375_init(void)
 {
     if (ch375_dll_handle != NULL) {
-        /* 已经加载 */
+        /* Already loaded */
         return SR_OK;
     }
 
-    /* 尝试加载CH375DLL64.DLL */
+    /* Try to load CH375DLL64.DLL */
     ch375_dll_handle = LoadLibraryA("CH375DLL64.DLL");
     if (ch375_dll_handle == NULL) {
-        /* 尝试加载CH375DLL.DLL (32位版本) */
+        /* Try to load CH375DLL.DLL (32-bit build) */
         ch375_dll_handle = LoadLibraryA("CH375DLL.DLL");
         if (ch375_dll_handle == NULL) {
             sr_err("Failed to load CH375DLL64.DLL or CH375DLL.DLL");
@@ -145,7 +145,7 @@ int ch375_init(void)
         sr_warn("Loaded CH375DLL.DLL (32-bit), consider using 64-bit version");
     }
 
-    /* 加载所有必需的函数 */
+    /* Load all required functions */
     LOAD_FUNC(CH375OpenDevice);
     LOAD_FUNC(CH375CloseDevice);
     LOAD_FUNC(CH375GetUsbID);
@@ -157,7 +157,7 @@ int ch375_init(void)
     LOAD_FUNC(CH375ClearBufUpload);
     LOAD_FUNC(CH375AbortEndPRead);
 
-    /* 加载可选函数 */
+    /* Load the optional functions */
     LOAD_FUNC_OPTIONAL(CH375GetVersion);
     LOAD_FUNC_OPTIONAL(CH375GetDrvVersion);
     LOAD_FUNC_OPTIONAL(CH375GetDeviceName);
@@ -195,7 +195,7 @@ void ch375_cleanup(void)
         FreeLibrary(ch375_dll_handle);
         ch375_dll_handle = NULL;
 
-        /* 清空所有函数指针 */
+        /* Clear all function pointers */
         pCH375OpenDevice = NULL;
         pCH375CloseDevice = NULL;
         pCH375GetVersion = NULL;
@@ -249,7 +249,7 @@ unsigned long ch375_get_version(void)
 }
 
 /* ============================================================================
- * 设备管理
+ * Device management
  * ============================================================================ */
 
 void* ch375_open_device(unsigned long index)
@@ -319,7 +319,7 @@ int ch375_reset_device(unsigned long index)
 }
 
 /* ============================================================================
- * 超时设置
+ * Timeout setting
  * ============================================================================ */
 
 int ch375_set_timeout(unsigned long index, unsigned long writeTimeout, unsigned long readTimeout)
@@ -335,14 +335,14 @@ int ch375_set_timeout_ex(unsigned long index, unsigned long writeTimeout, unsign
                          unsigned long auxTimeout, unsigned long interTimeout)
 {
     if (!pCH375SetTimeoutEx) {
-        /* 回退到基本超时设置 */
+        /* Fall back to the basic timeout setter */
         return ch375_set_timeout(index, writeTimeout, readTimeout);
     }
     return pCH375SetTimeoutEx(index, writeTimeout, readTimeout, auxTimeout, interTimeout);
 }
 
 /* ============================================================================
- * 端点1直接上下传 (命令传输)
+ * Endpoint 1 direct transfer (command transfer)
  * ============================================================================ */
 
 int ch375_write_read(unsigned long index, void *iBuffer, void *oBuffer, unsigned long *ioLength)
@@ -360,7 +360,7 @@ int ch375_write_read(unsigned long index, void *iBuffer, void *oBuffer, unsigned
 }
 
 /* ============================================================================
- * 端点读写 (分开写读)
+ * Endpoint read/write (separate write and read)
  * ============================================================================ */
 
 int ch375_write_endpoint(unsigned long index, unsigned long endpoint, void *buffer, unsigned long *length)
@@ -382,7 +382,7 @@ int ch375_read_endpoint(unsigned long index, unsigned long endpoint, void *buffe
 }
 
 /* ============================================================================
- * 端点控制
+ * Endpoint control
  * ============================================================================ */
 
 int ch375_abort_endpoint_read(unsigned long index, unsigned long endpoint)
@@ -418,7 +418,7 @@ int ch375_reset_out_endpoint(unsigned long index, unsigned long endpoint)
 }
 
 /* ============================================================================
- * 缓冲上传模式 (端点2/3数据传输)
+ * Buffered upload mode (endpoint 2/3 data transfer)
  * ============================================================================ */
 
 int ch375_set_buf_upload_ex(unsigned long index, unsigned long enable, unsigned long endpoint, unsigned long transferSize)
@@ -456,7 +456,7 @@ int ch375_clear_buf_upload(unsigned long index, unsigned long endpoint)
 }
 
 /* ============================================================================
- * 缓冲下传模式
+ * Buffered download mode
  * ============================================================================ */
 
 int ch375_set_buf_download_ex(unsigned long index, unsigned long enable, unsigned long endpoint, unsigned long transferSize)
@@ -477,10 +477,10 @@ int ch375_set_buf_download_ex(unsigned long index, unsigned long enable, unsigne
 }
 
 /* ============================================================================
- * IO模式设置
+ * IO mode setting
  * ============================================================================ */
 
-// CH375SetIOMode函数实现（调用CH375DriverCommand）
+// CH375SetIOMode implementation (delegates to CH375DriverCommand)
 int ch375_set_io_mode(unsigned long index, unsigned long sync)
 {
     if (!pCH375DriverCommand) {
@@ -496,7 +496,7 @@ int ch375_set_io_mode(unsigned long index, unsigned long sync)
 }
 
 /* ============================================================================
- * 数据端点读写
+ * Data endpoint read/write
  * ============================================================================ */
 
 int ch375_read_data(unsigned long index, void *buffer, unsigned long *length)
@@ -534,7 +534,7 @@ int ch375_abort_write(unsigned long index)
 }
 
 /* ============================================================================
- * 设备事件通知
+ * Device event notification
  * ============================================================================ */
 
 int ch375_set_device_notify(unsigned long index, char *deviceID, CH375NotifyCallback callback)

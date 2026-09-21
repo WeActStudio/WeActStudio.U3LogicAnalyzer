@@ -22,7 +22,7 @@
 #include "protocol.h"
 #include <math.h>
 
-/* 逻辑分析仪采样率 - USB 3.0 (最高200MHz) */
+/* Logic analyzer sample rates - USB 3.0 (up to 200 MHz) */
 static const uint64_t logic_samplerates_usb3[] = {
 	SR_MHZ(200),	
 	SR_MHZ(187.5),	
@@ -51,7 +51,7 @@ static const uint64_t logic_samplerates_usb3[] = {
 	SR_MHZ(4),
 };
 
-/* 逻辑分析仪USB 2.0 16通道 (最高20MHz) */
+/* Logic analyzer USB 2.0, 16 channels (up to 20 MHz) */
 static const uint64_t logic_samplerates_usb2_16ch[] = {
 	SR_MHZ(20),
 	SR_MHZ(16),
@@ -61,7 +61,7 @@ static const uint64_t logic_samplerates_usb2_16ch[] = {
 	SR_MHZ(4),
 };
 
-/* 逻辑分析仪USB 2.0 8通道 (最高40MHz) */
+/* Logic analyzer USB 2.0, 8 channels (up to 40 MHz) */
 static const uint64_t logic_samplerates_usb2_8ch[] = {
 	SR_MHZ(40),
 	SR_MHZ(30),
@@ -73,7 +73,7 @@ static const uint64_t logic_samplerates_usb2_8ch[] = {
 	SR_MHZ(4),
 };
 
-/* ADC采样率 最高20MHz */
+/* ADC sample rates, up to 20 MHz */
 static const uint64_t adc_samplerates[] = {
 	SR_MHZ(20),	  
 	SR_MHZ(16),	  
@@ -118,13 +118,32 @@ SR_PRIV int ch32h417_send_command(struct sr_dev_inst *sdi,
 	return SR_OK;
 }
 
+/*
+ * Receive a command response
+ *
+ * Response packet layout:
+ *   [0]      Command byte (CMD_* | 0x10)
+ *   [1]      Length field = status byte + number of payload bytes
+ *   [2]      Status byte (0x00 means success)
+ *   [3..]    Payload
+ *
+ * @param data      Caller-provided buffer, may be NULL
+ * @param data_size Caller buffer capacity in bytes; pass 0 when data is NULL
+ * @param len       Returns the payload bytes actually copied into data, may be NULL
+ */
 SR_PRIV int ch32h417_receive_response(struct sr_dev_inst *sdi,
-								   uint8_t expected_cmd, uint8_t *data, int *len)
+								   uint8_t expected_cmd, uint8_t *data,
+								   int data_size, int *len)
 {
 	struct dev_context *devc;
 	unsigned long io_length;
+	uint8_t resp_data_len;
+	int payload_len, avail, copied;
 
 	devc = sdi->priv;
+
+	if (len)
+		*len = 0;
 
 	io_length = PACKET_SIZE_IN;
 
@@ -135,6 +154,8 @@ SR_PRIV int ch32h417_receive_response(struct sr_dev_inst *sdi,
 	}
 
 	resp_len = (int)io_length;
+	if (resp_len < 0 || resp_len > PACKET_SIZE_IN)
+		resp_len = PACKET_SIZE_IN;
 
 	if (resp_len < 2)
 	{
@@ -149,19 +170,55 @@ SR_PRIV int ch32h417_receive_response(struct sr_dev_inst *sdi,
 		return SR_ERR;
 	}
 
-	uint8_t resp_data_len = resp_buffer[1];
-	if (resp_data_len > 0 && resp_buffer[2] != 0x00)
+	resp_data_len = resp_buffer[1];
+
+	if (resp_data_len > 0)
 	{
-		sr_err("Command failed with status 0x%02x", resp_buffer[2]);
-		return SR_ERR;
+		if (resp_len < 3)
+		{
+			sr_err("Response 0x%02x has no status byte (%d bytes)",
+				   expected_cmd, resp_len);
+			return SR_ERR;
+		}
+
+		if (resp_buffer[2] != 0x00)
+		{
+			sr_err("Command failed with status 0x%02x", resp_buffer[2]);
+			return SR_ERR;
+		}
+	}
+
+	/* Payload length = length field minus the status byte */
+	payload_len = (resp_data_len > 0) ? (resp_data_len - 1) : 0;
+
+	/* Never exceed the bytes actually received, to avoid over-reading resp_buffer */
+	avail = (resp_len > 3) ? (resp_len - 3) : 0;
+	if (payload_len > avail)
+	{
+		sr_warn("Response 0x%02x declares %d data bytes, only %d received",
+				expected_cmd, payload_len, avail);
+		payload_len = avail;
+	}
+
+	copied = 0;
+	if (data)
+	{
+		/* Never exceed the caller buffer capacity, to avoid an out-of-bounds write */
+		copied = payload_len;
+		if (copied > data_size)
+		{
+			sr_warn("Response 0x%02x truncated: %d data bytes > buffer %d",
+					expected_cmd, copied, data_size);
+			copied = data_size;
+		}
+		if (copied > 0)
+			memcpy(data, &resp_buffer[3], copied);
 	}
 
 	if (len)
-		*len = resp_data_len;
-	if (data && resp_data_len > 1)
-		memcpy(data, &resp_buffer[3], resp_data_len - 1);
+		*len = copied;
 
-	sr_dbg("Received response 0x%02x, len=%d", resp_buffer[0], resp_data_len);
+	sr_dbg("Received response 0x%02x, len=%d", resp_buffer[0], copied);
 
 	return SR_OK;
 }
@@ -175,10 +232,10 @@ SR_PRIV int ch32h417_set_logic_params(const struct sr_dev_inst *sdi)
 
 	devc = sdi->priv;
 
-	/* 采样位宽 */
+	/* Sample width */
 	params[0] = devc->sample_width;
 
-	/* 分频系数 */
+	/* Clock divider index */
 	int div = 0;
 	while (div < devc->num_samplerates &&
 		   devc->samplerates[div] != devc->cur_samplerate)
@@ -198,21 +255,21 @@ SR_PRIV int ch32h417_set_logic_params(const struct sr_dev_inst *sdi)
 	if (ret != SR_OK)
 		return ret;
 
-	return ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_SET_LOGIC_PARAMS, NULL, NULL);
+	return ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_SET_LOGIC_PARAMS, NULL, 0, NULL);
 }
 
 /*
- * 设置DAC阈值
- * 发送两字节DAC值：buf[0] = 高位, buf[1] = 低位
- * 值范围：0-1024，0对应约3.3V，1024对应约1.2V
+ * Set the DAC threshold
+ * Sends the two-byte DAC value: buf[0] = high byte, buf[1] = low byte
+ * Value range 0-1024: 0 maps to about 3.3 V, 1024 to about 1.2 V
  */
 SR_PRIV int ch32h417_set_threshold_value(const struct sr_dev_inst *sdi, uint16_t value)
 {
 	uint8_t params[2];
 	int ret;
 
-	params[0] = (value >> 8) & 0xFF;  /* 高位 */
-	params[1] = value & 0xFF;          /* 低位 */
+	params[0] = (value >> 8) & 0xFF;  /* high byte */
+	params[1] = value & 0xFF;          /* low byte */
 
 	sr_info("Setting DAC threshold: 0x%04x (%d)", value, value);
 
@@ -220,17 +277,17 @@ SR_PRIV int ch32h417_set_threshold_value(const struct sr_dev_inst *sdi, uint16_t
 	if (ret != SR_OK)
 		return ret;
 
-	return ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_SET_LOGIC_LEVEL, NULL, NULL);
+	return ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_SET_LOGIC_LEVEL, NULL, 0, NULL);
 }
 
 /*
- * 获取逻辑分析仪参数
+ * Get the logic analyzer parameters
  */
 SR_PRIV int ch32h417_get_logic_params(const struct sr_dev_inst *sdi,
 								   uint8_t *width, uint8_t *div)
 {
-	uint8_t data[2];
-	int len;
+	uint8_t data[2] = {0};
+	int len = 0;
 	int ret;
 	gint64 t1, t2;
 
@@ -242,7 +299,7 @@ SR_PRIV int ch32h417_get_logic_params(const struct sr_dev_inst *sdi,
 		return ret;
 
 	t1 = g_get_monotonic_time();
-	ret = ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_GET_LOGIC_PARAMS, data, &len);
+	ret = ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_GET_LOGIC_PARAMS, data, (int)sizeof(data), &len);
 	t2 = g_get_monotonic_time();
 	sr_dbg("ch32h417_get_logic_params: receive_response took %" G_GINT64_FORMAT " us", t2 - t1);
 	if (ret != SR_OK)
@@ -259,20 +316,20 @@ SR_PRIV int ch32h417_get_logic_params(const struct sr_dev_inst *sdi,
 }
 
 /*
- * 获取逻辑分析仪电压电平
+ * Get the logic analyzer threshold level
  */
 SR_PRIV int ch32h417_get_logic_level(const struct sr_dev_inst *sdi,
 								  uint8_t *level)
 {
-	uint8_t data;
-	int len;
+	uint8_t data = 0;
+	int len = 0;
 	int ret;
 
 	ret = ch32h417_send_command((struct sr_dev_inst *)sdi, CMD_GET_LOGIC_LEVEL, 0, NULL);
 	if (ret != SR_OK)
 		return ret;
 
-	ret = ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_GET_LOGIC_LEVEL, &data, &len);
+	ret = ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_GET_LOGIC_LEVEL, &data, 1, &len);
 	if (ret != SR_OK)
 		return ret;
 
@@ -285,9 +342,9 @@ SR_PRIV int ch32h417_get_logic_level(const struct sr_dev_inst *sdi,
 }
 
 /*
- * 设置ADC参数
- * Buf[0]: 0x8=8位ADC, 0x0a=10位ADC
- * Buf[1]: 分频系数 (0=20M, 1=10M, ..., 最多64分频)
+ * Set the ADC parameters
+ * Buf[0]: 0x08 = 8-bit ADC, 0x0a = 10-bit ADC
+ * Buf[1]: clock divider index (0 = 20 MHz, 1 = 10 MHz, ..., divider 64 max)
  */
 SR_PRIV int ch32h417_set_adc_params(const struct sr_dev_inst *sdi)
 {
@@ -299,7 +356,7 @@ SR_PRIV int ch32h417_set_adc_params(const struct sr_dev_inst *sdi)
 
 	params[0] = devc->adc_width;
 
-	/* 计算分频系数 */
+	/* Determine the clock divider index */
 	int div = 0;
 	while (div < ARRAY_SIZE(adc_samplerates) &&
 		   adc_samplerates[div] != devc->cur_samplerate)
@@ -320,12 +377,12 @@ SR_PRIV int ch32h417_set_adc_params(const struct sr_dev_inst *sdi)
 	if (ret != SR_OK)
 		return ret;
 
-	return ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_SET_ADC_PARAMS, NULL, NULL);
+	return ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_SET_ADC_PARAMS, NULL, 0, NULL);
 }
 
 /*
- * 设置ADC通道
- * Buf[0]: 0=通道1, 1=通道2
+ * Set the ADC channel
+ * Buf[0]: 0 = channel 1, 1 = channel 2
  */
 SR_PRIV int ch32h417_set_adc_channel(const struct sr_dev_inst *sdi)
 {
@@ -343,24 +400,24 @@ SR_PRIV int ch32h417_set_adc_channel(const struct sr_dev_inst *sdi)
 	if (ret != SR_OK)
 		return ret;
 
-	return ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_SET_ADC_CHANNEL, NULL, NULL);
+	return ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_SET_ADC_CHANNEL, NULL, 0, NULL);
 }
 
 /*
- * 获取ADC参数
+ * Get the ADC parameters
  */
 SR_PRIV int ch32h417_get_adc_params(const struct sr_dev_inst *sdi,
 								 uint8_t *width, uint8_t *div)
 {
-	uint8_t data[2];
-	int len;
+	uint8_t data[2] = {0};
+	int len = 0;
 	int ret;
 
 	ret = ch32h417_send_command((struct sr_dev_inst *)sdi, CMD_GET_ADC_PARAMS, 0, NULL);
 	if (ret != SR_OK)
 		return ret;
 
-	ret = ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_GET_ADC_PARAMS, data, &len);
+	ret = ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_GET_ADC_PARAMS, data, (int)sizeof(data), &len);
 	if (ret != SR_OK)
 		return ret;
 
@@ -373,20 +430,20 @@ SR_PRIV int ch32h417_get_adc_params(const struct sr_dev_inst *sdi,
 }
 
 /*
- * 获取ADC通道
+ * Get the ADC channel
  */
 SR_PRIV int ch32h417_get_adc_channel(const struct sr_dev_inst *sdi,
 								  uint8_t *channel)
 {
-	uint8_t data;
-	int len;
+	uint8_t data = 0;
+	int len = 0;
 	int ret;
 
 	ret = ch32h417_send_command((struct sr_dev_inst *)sdi, CMD_GET_ADC_CHANNEL, 0, NULL);
 	if (ret != SR_OK)
 		return ret;
 
-	ret = ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_GET_ADC_CHANNEL, &data, &len);
+	ret = ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_GET_ADC_CHANNEL, &data, 1, &len);
 	if (ret != SR_OK)
 		return ret;
 
@@ -397,7 +454,7 @@ SR_PRIV int ch32h417_get_adc_channel(const struct sr_dev_inst *sdi,
 }
 
 /*
- * 开始逻辑分析仪采集
+ * Start logic acquisition
  */
 SR_PRIV int ch32h417_start_logic(const struct sr_dev_inst *sdi)
 {
@@ -406,7 +463,7 @@ SR_PRIV int ch32h417_start_logic(const struct sr_dev_inst *sdi)
 }
 
 /*
- * 停止逻辑分析仪采集
+ * Stop logic acquisition
  */
 SR_PRIV int ch32h417_stop_logic(const struct sr_dev_inst *sdi)
 {
@@ -415,7 +472,7 @@ SR_PRIV int ch32h417_stop_logic(const struct sr_dev_inst *sdi)
 }
 
 /*
- * 开始ADC采集
+ * Start ADC acquisition
  */
 SR_PRIV int ch32h417_start_adc(const struct sr_dev_inst *sdi)
 {
@@ -424,7 +481,7 @@ SR_PRIV int ch32h417_start_adc(const struct sr_dev_inst *sdi)
 }
 
 /*
- * 停止ADC采集
+ * Stop ADC acquisition
  */
 SR_PRIV int ch32h417_stop_adc(const struct sr_dev_inst *sdi)
 {
@@ -433,9 +490,9 @@ SR_PRIV int ch32h417_stop_adc(const struct sr_dev_inst *sdi)
 }
 
 /*
- * 进入IAP模式（固件升级模式）
- * 命令: 0xAE + len(0)
- * 设备收到此命令后会进入IAP模式，可用于固件升级
+ * Enter IAP mode (firmware upgrade mode)
+ * Command: 0xAE + len(0)
+ * The device switches to IAP mode after this command, enabling a firmware upgrade
  */
 SR_PRIV int ch32h417_enter_iap(const struct sr_dev_inst *sdi)
 {
@@ -443,13 +500,13 @@ SR_PRIV int ch32h417_enter_iap(const struct sr_dev_inst *sdi)
 	return ch32h417_send_command((struct sr_dev_inst *)sdi, CMD_ENTER_IAP, 0, NULL);
 }
 
-/* 发送停止命令并发送SR_DF_END */
+/* Send the stop command and emit SR_DF_END */
 static void send_stop_command(const struct sr_dev_inst *sdi)
 {
 	int ret = -1;
 	struct dev_context *devc = sdi->priv;
 
-	/* 发送停止命令 */
+	/* Send the stop command */
 	if (devc->mode == MODE_LOGIC_ANALYZER)
 	{
 		ret = ch32h417_stop_logic(sdi);
@@ -467,7 +524,7 @@ static void send_stop_command(const struct sr_dev_inst *sdi)
 		}
 	}
 	
-	/* 清除缓冲上传缓存 */
+	/* Flush the buffered upload cache */
 	unsigned long pipe_num = (devc->mode == MODE_LOGIC_ANALYZER) ?
 									 PIPE_LOGIC_DATA : PIPE_ADC_DATA;
 	if (!ch375_clear_buf_upload(devc->device_index, pipe_num)) {
@@ -476,7 +533,7 @@ static void send_stop_command(const struct sr_dev_inst *sdi)
 }
 
 /*
- * 创建设备上下文
+ * Create the device context
  */
 SR_PRIV struct dev_context *ch32h417_dev_new(void)
 {
@@ -489,7 +546,7 @@ SR_PRIV struct dev_context *ch32h417_dev_new(void)
 	devc->limit_frames = 1;
 	devc->capture_ratio = 0;
 	devc->sample_width = SAMPLE_WIDTH_16BIT;
-	devc->num_channels = 16; /* 默认16通道 */
+	devc->num_channels = 16; /* 16 channels by default */
 	devc->voltage_level = VOLTAGE_3_3V;
 	devc->adc_width = ADC_WIDTH_8BIT;
 	devc->adc_channel = ADC_CHANNEL_1;
@@ -498,7 +555,7 @@ SR_PRIV struct dev_context *ch32h417_dev_new(void)
 	devc->samplerates = logic_samplerates_usb3;
 	devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb3);
 
-	/* CH375相关初始化 */
+	/* CH375 related initialization */
 	devc->device_index = -1;
 	devc->device_handle = NULL;
 	devc->buffer_size = BUFFER_UPLOAD_SIZE;
@@ -510,18 +567,18 @@ SR_PRIV struct dev_context *ch32h417_dev_new(void)
 }
 
 /*
- * 检测USB速度（通过设备描述符中的bcdUSB字段）
- * USB设备描述符结构：
- *   偏移0: bLength (描述符长度)
- *   偏移1: bDescriptorType (描述符类型)
- *   偏移2-3: bcdUSB (USB版本，BCD编码)
+ * Detect the USB speed from the bcdUSB field of the device descriptor
+ * USB device descriptor layout:
+ *   offset 0:   bLength (descriptor length)
+ *   offset 1:   bDescriptorType (descriptor type)
+ *   offset 2-3: bcdUSB (USB version, BCD encoded)
  *   ...
- * 返回: TRUE表示USB 2.0，FALSE表示USB 3.0
+ * @return TRUE for USB 2.0, FALSE for USB 3.0
  */
 SR_PRIV gboolean ch32h417_detect_usb_speed(const struct sr_dev_inst *sdi)
 {
 	struct dev_context *devc;
-	uint8_t descr[18];  /* USB设备描述符固定18字节 */
+	uint8_t descr[18];  /* A USB device descriptor is always 18 bytes */
 	unsigned long length;
 	uint16_t bcd_usb;
 
@@ -532,7 +589,7 @@ SR_PRIV gboolean ch32h417_detect_usb_speed(const struct sr_dev_inst *sdi)
 	length = sizeof(descr);
 	if (!ch375_get_device_descr(devc->device_index, descr, &length)) {
 		sr_warn("Failed to get device descriptor, assuming USB 3.0");
-		return FALSE;  /* 默认USB 3.0 */
+		return FALSE;  /* Default to USB 3.0 */
 	}
 
 	if (length < 4) {
@@ -540,7 +597,7 @@ SR_PRIV gboolean ch32h417_detect_usb_speed(const struct sr_dev_inst *sdi)
 		return FALSE;
 	}
 
-	/* bcdUSB字段位于偏移2-3，小端序 */
+	/* The bcdUSB field sits at offset 2-3, little endian */
 	bcd_usb = descr[2] | (descr[3] << 8);
 
 	sr_info("Device descriptor: bcdUSB=0x%04x", bcd_usb);
@@ -558,17 +615,18 @@ SR_PRIV gboolean ch32h417_detect_usb_speed(const struct sr_dev_inst *sdi)
 }
 
 /*
- * 获取固件版本号
- * CH32H417无FPGA，只有固件版本
- * 命令: 0xAC + len(0)
- * 返回: 0xBC + len(2) + Status(0x00) + buf[0](固件版本) + buf[1](硬件版本)
+ * Get the firmware version
+ * The CH32H417 has no FPGA, only a firmware version
+ * Command: 0xAC + len(0)
+ * Response: 0xBC + len(2) + status(0x00) + buf[0] (fw version) + buf[1] (hw version)
  */
 SR_PRIV int ch32h417_get_fw_version(const struct sr_dev_inst *sdi)
 {
 	struct dev_context *devc;
 	uint8_t data[2] = {0};
-	int len;
+	int len = 0;
 	int ret;
+	uint8_t hw_version;
 
 	devc = sdi->priv;
 
@@ -578,15 +636,18 @@ SR_PRIV int ch32h417_get_fw_version(const struct sr_dev_inst *sdi)
 		return ret;
 	}
 
-	ret = ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_GET_VERSION, data, &len);
+	ret = ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_GET_VERSION, data, (int)sizeof(data), &len);
 	if (ret != SR_OK) {
 		sr_err("Failed to receive version response");
 		return ret;
 	}
 
-	if (len >= 2) {
-		devc->fw_version = (data[0] << 8) | data[1];
-		sr_info("Firmware version: %d, Hardware version: %d", data[0], data[1]);
+	if (len >= 1) {
+		/* Some firmware revisions return only one payload byte (the software
+		 * version); a missing hardware version is treated as 0 instead of reading stale data. */
+		hw_version = (len >= 2) ? data[1] : 0;
+		devc->fw_version = ((uint16_t)data[0] << 8) | hw_version;
+		sr_info("Firmware version: %d, Hardware version: %d", data[0], hw_version);
 	} else {
 		sr_warn("Version response too short: %d", len);
 		devc->fw_version = 0;
@@ -625,7 +686,7 @@ static gpointer stop_command_thread_func(gpointer data)
 	return NULL;
 }
 
-/* 发送逻辑分析仪数据 */
+/* Send logic analyzer data */
 static void la_send_data_proc(struct sr_dev_inst *sdi,
 			  uint8_t *data, size_t length, size_t unitsize)
 {
@@ -641,7 +702,7 @@ static void la_send_data_proc(struct sr_dev_inst *sdi,
 	sr_session_send(sdi, &packet);
 }
 
-/* 发送ADC数据 */
+/* Send ADC data */
 static void adc_send_data_proc(struct sr_dev_inst *sdi,
 							   uint8_t *data, size_t length, size_t sample_width)
 {
@@ -658,29 +719,36 @@ static void adc_send_data_proc(struct sr_dev_inst *sdi,
 
 	devc = sdi->priv;
 
-	/* 计算样本数量：8位ADC每样本1字节，10位ADC每样本2字节 */
+	/* Sample count: 1 byte per sample for 8-bit ADC, 2 bytes for 10-bit ADC */
 	size_t sample_bytes = (devc->adc_width == ADC_WIDTH_10BIT) ? 2 : 1;
 	num_samples = length / sample_bytes;
 
-	/* 将原始ADC数据转换为float电压值 */
+	if (num_samples == 0)
+		return;
+
+	/* Convert the raw ADC data into float voltages */
 	float_data = g_try_malloc(sizeof(float) * num_samples);
 	if (!float_data) {
 		sr_err("Failed to allocate float buffer for ADC data");
 		return;
 	}
 
-	for (i = 0; i < num_samples; i++) {
-		/* 根据ADC位宽读取数据 */
-		if (devc->adc_width == ADC_WIDTH_10BIT) {
-			/* 10bit ADC：读取16位值 */
-			raw_sample = *((uint16_t*)(data + i * 2));
-			voltage = (float)(raw_sample & 0x3FF) * 320.0f / 220.0f / 1024.0 * 3.3;
-		} else {
-			/* 8bit ADC：读取8位值 */
-			voltage = (float)data[i] * 320.0f / 220.0f / 256.0 * 3.3;
-		}
+	if (devc->adc_width == ADC_WIDTH_10BIT) {
+		/* 10-bit ADC: assemble the value byte by byte, little endian, to avoid unaligned access and host endianness differences */
+		const float scale = 320.0f / 220.0f / 1024.0f * 3.3f;
 
-		float_data[i] = voltage;
+		for (i = 0; i < num_samples; i++) {
+			raw_sample = (uint16_t)data[i * 2] |
+						 ((uint16_t)data[i * 2 + 1] << 8);
+			voltage = (float)(raw_sample & 0x3FF) * scale;
+			float_data[i] = voltage;
+		}
+	} else {
+		/* 8-bit ADC: read a single byte */
+		const float scale = 320.0f / 220.0f / 256.0f * 3.3f;
+
+		for (i = 0; i < num_samples; i++)
+			float_data[i] = (float)data[i] * scale;
 	}
 
 	sr_analog_init(&analog, &encoding, &meaning, &spec, 2);
@@ -700,7 +768,7 @@ static void adc_send_data_proc(struct sr_dev_inst *sdi,
 	g_free(float_data);
 }
 
-/* 数据读取线程 */
+/* Data read thread */
 static gpointer data_read_thread(gpointer arg)
 {
 	struct sr_dev_inst *sdi = arg;
@@ -713,7 +781,7 @@ static gpointer data_read_thread(gpointer arg)
 	unsigned int num_samples;
 	int trigger_offset, pre_trigger_samples, cur_sample_count, processed_samples;
 	int no_data_count = 0;
-	int64_t no_data_timeout_ms = 500; /* 500ms无数据超时 */
+	int64_t no_data_timeout_ms = 500; /* 500 ms without data counts as a timeout */
 
 	pipe_num = (devc->mode == MODE_LOGIC_ANALYZER) ? PIPE_LOGIC_DATA : PIPE_ADC_DATA;
 
@@ -737,25 +805,25 @@ static gpointer data_read_thread(gpointer arg)
 		processed_samples = 0;
 		current_time = g_get_monotonic_time();
 
-		/* 查询缓冲数据 */
+		/* Poll for buffered data */
 		if (!ch375_query_buf_upload_ex(devc->device_index, pipe_num,
 									   &transfer_count, &total_data_len)) {
-			/* 查询失败，短暂等待后重试 */
+			/* Query failed, wait briefly and retry */
 			sr_warn("Failed to query buffer upload, retrying in 1ms");
 			g_usleep(1000);
 			continue;
 		}
 
 		if (transfer_count == 0) {
-			/* 没有数据，检查是否设备已停止 */
-			/* 计算无数据时间 */
+			/* No data: check whether the device has stopped */
+			/* Track how long there has been no data */
 			int64_t no_data_time_ms = (current_time - last_query_time) / 1000;
 			if (no_data_time_ms >= no_data_timeout_ms) {
 				send_stop_command(sdi);
-				/* 超时无数据，设备可能已停止采集 */
+				/* Timed out with no data, the device may have stopped acquiring */
 				sr_info("No data for %d ms, device may have stopped", no_data_timeout_ms);
 				g_free(buffer);
-				/* 设置标志表示线程正在退出，定时器回调会处理停止 */
+				/* Flag the thread as exiting; the timer callback handles the stop */
 				g_mutex_lock(&devc->mutex);
 				devc->acq_aborted = TRUE;
 				g_mutex_unlock(&devc->mutex);
@@ -766,11 +834,11 @@ static gpointer data_read_thread(gpointer arg)
 			continue;
 		}
 
-		/* 有数据，重置计数器 */
+		/* Data received, reset the counter */
 		no_data_count = 0;
 		last_query_time = current_time;
 
-		/* 读取数据 */
+		/* Read the data */
 		length = devc->buffer_size;
 		if (!ch375_read_endpoint(devc->device_index, pipe_num, buffer, &length)) {
 			sr_warn("Failed to read data from pipe %lu", pipe_num);
@@ -787,7 +855,7 @@ static gpointer data_read_thread(gpointer arg)
 
 		cur_sample_count = length / unitsize;
 
-		/* 触发处理 */
+		/* Trigger handling */
 	check_trigger:
 		g_mutex_lock(&devc->mutex);
 
@@ -828,7 +896,7 @@ static gpointer data_read_thread(gpointer arg)
 		}
 		g_mutex_unlock(&devc->mutex);
 
-		/* 检查采样限制 */
+		/* Enforce the sample limit */
 		const int frame_ended = devc->limit_samples && (devc->sent_samples >= devc->limit_samples);
 		const int final_frame = devc->limit_frames && (devc->num_frames >= (devc->limit_frames - 1));
 
@@ -890,25 +958,25 @@ static gpointer data_read_thread(gpointer arg)
 	return NULL;
 }
 
-/* 结束采集 */
+/* Finish acquisition */
 static void finish_acquisition(struct sr_dev_inst *sdi)
 {
 	struct dev_context *devc;
 
 	devc = sdi->priv;
 
-	/* 发送停止命令和结束包 */
+	/* Send the stop command and the end packet */
 	send_stop_command(sdi);
 
-	/* 移除定时器回调 */
+	/* Remove the timer callback */
 	sr_session_source_remove(sdi->session, -1);
 
-	/* 停止读取线程 */
+	/* Stop the read thread */
 	g_mutex_lock(&devc->mutex);
 	devc->acq_aborted = TRUE;
 	g_mutex_unlock(&devc->mutex);
 
-	/* 等待线程结束 */
+	/* Wait for the thread to finish */
 	if (devc->read_thread) {
 		g_thread_join(devc->read_thread);
 		devc->read_thread = NULL;
@@ -943,7 +1011,7 @@ static void ch32h417_flush_cmd_endpoint(unsigned long index)
 	uint8_t buffer[PACKET_SIZE_IN];
 	unsigned long io_length;
 
-	/* 设置超时 0mS */
+	/* Set the timeout to 0 ms */
 	if (!ch375_set_timeout_ex(index, 1, 1, 1, 1)) {
 		sr_warn("Failed to set timeout ex for device at index %d", index);
 	}
@@ -969,7 +1037,7 @@ static void ch32h417_flush_cmd_endpoint(unsigned long index)
 		g_usleep(1000);
 	}
 
-	/* 恢复超时 */
+	/* Restore the timeout */
 	if (!ch375_set_timeout_ex(index, USB_TIMEOUT, USB_TIMEOUT, USB_TIMEOUT, USB_TIMEOUT)) {
 		sr_warn("Failed to set timeout ex for device at index %d", index);
 	}
@@ -978,7 +1046,7 @@ static void ch32h417_flush_cmd_endpoint(unsigned long index)
 }
 
 /*
- * 开始采集
+ * Start acquisition
  */
 SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 {
@@ -992,11 +1060,11 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 	devc->acq_aborted = FALSE;
 	devc->num_frames = 0;
 
-	/* 清空端点0 */
+	/* Flush endpoint 0 */
 	sr_info("Flushing cmd endpoint...");
 	ch32h417_flush_cmd_endpoint(devc->device_index);
 
-	/* 启动缓冲缓冲上传 */
+	/* Enable buffered upload */
 	if (!ch375_set_buf_upload_ex(devc->device_index, 0, PIPE_LOGIC_DATA, devc->buffer_size)) {
 		sr_warn("Failed to set upload buffer pipe %d for device at index %d", PIPE_LOGIC_DATA, devc->device_index);
 	}
@@ -1011,18 +1079,18 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 		sr_warn("Failed to set upload buffer pipe %d for device at index %d", PIPE_ADC_DATA, devc->device_index);
 	}
 
-	/* 配置通道 */
+	/* Configure the channels */
 	if (devc->mode == MODE_LOGIC_ANALYZER)
 	{
 		pipe_num = PIPE_LOGIC_DATA;
-		/* 先发送停止命令，确保设备处于空闲状态 */
+		/* Send a stop command first to make sure the device is idle */
 		ret = ch32h417_stop_logic(sdi);
 		if (ret != SR_OK)
 		{
 			sr_warn("Pre-stop logic command failed, continuing anyway...");
 		}
 
-		/* 设置逻辑分析仪参数 */
+		/* Set the logic analyzer parameters */
 		ret = ch32h417_set_logic_params(sdi);
 		if (ret != SR_OK)
 		{
@@ -1030,12 +1098,12 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 			return ret;
 		}
 
-		/* 测试验证命令 */
+		/* Verification test command */
 		// {
 		// 	uint8_t width, div, level;
 		// 	int test_failed = 0;
 
-		// 	/* 测试 A4: 获取逻辑分析仪参数 */
+		// 	/* Test A4: get the logic analyzer parameters */
 		// 	ret = ch32h417_get_logic_params(sdi, &width, &div);
 		// 	if (ret == SR_OK) {
 		// 		sr_info("Verify A4: width=0x%02x, div=%d (expect width=0x%02x)",
@@ -1050,7 +1118,7 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 		// 	}
 		// }
 
-		/* 开始逻辑分析仪采集 */
+		/* Start logic acquisition */
 		ret = ch32h417_start_logic(sdi);
 		if (ret != SR_OK)
 		{
@@ -1101,7 +1169,7 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 			return ret;
 		}
 
-		/* 开始ADC采集 */
+		/* Start ADC acquisition */
 		ret = ch32h417_start_adc(sdi);
 		if (ret != SR_OK)
 		{
@@ -1113,7 +1181,7 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 			sizeof(float) * devc->limit_samples);
 	}
 
-	/* 设置触发 */
+	/* Configure the trigger */
 	if ((trigger = sr_session_trigger_get(sdi->session)))
 	{
 		int pre_trigger_samples = 0;
@@ -1167,7 +1235,7 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 
 	std_session_send_df_header(sdi);
 
-	/* 添加定时器回调，用于检查采集状态并在主线程中停止采集 */
+	/* Add a timer callback that watches the acquisition state and stops it on the main thread */
 	sr_session_source_add(sdi->session, -1, 0, 5,
 		acquisition_check_cb, (void *)sdi);
 
@@ -1175,7 +1243,7 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 }
 
 /*
- * 停止采集
+ * Stop acquisition
  */
 SR_PRIV int ch32h417_acquisition_stop(const struct sr_dev_inst *sdi)
 {

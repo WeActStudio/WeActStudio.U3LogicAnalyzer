@@ -483,11 +483,11 @@ void DecodeTrace::create_decoder_options(QWidget *parent, QFormLayout *form)
 	form->addRow(stack_button_box);
 
 	// const View *const view = owner_->view();
-	// QLabel *start_label = new QLabel(tr("解码器起始位置："), parent);
+	// QLabel *start_label = new QLabel(tr("Decoder start position:"), parent);
 	// start_position_combobox_ = new QComboBox(parent);
 
-	// // 添加“解码器结束位置”行
-	// QLabel *end_label = new QLabel(tr("解码器结束位置："), parent);
+	// // Add the "decoder end position" row
+	// QLabel *end_label = new QLabel(tr("Decoder end position:"), parent);
 	// end_position_combobox_ = new QComboBox(parent);
 	// start_position_combobox_->addItem("start");
 	// end_position_combobox_->addItem("end");
@@ -495,7 +495,7 @@ void DecodeTrace::create_decoder_options(QWidget *parent, QFormLayout *form)
 	// flag_position_.push_back(0);
 	// for (auto ptr : view->flags()) {
 	// 	flag_position_.push_back((uint64_t)((double)ptr->time_ * session_.get_samplerate()));
-	// 	QString str = tr("光标:");
+	// 	QString str = tr("Cursor:");
 	// 	str += ptr->get_index_text();
 	// 	start_position_combobox_->addItem(str);
 	// 	end_position_combobox_->addItem(str);
@@ -531,16 +531,16 @@ void DecodeTrace::create_decoder_options(QWidget *parent, QFormLayout *form)
     //     this,
     //     SLOT(on_end_position_changed(int)));
 	
-	// QPushButton *confirmButton = new QPushButton("确认", parent);
-	// form->addRow("", confirmButton);  // 第一个参数是空字符串 label
+	// QPushButton *confirmButton = new QPushButton("Confirm", parent);
+	// form->addRow("", confirmButton);  // the first argument is the (empty) label
 	// connect(confirmButton, SIGNAL(clicked()), this, SLOT(on_comfirm_button_clicked()));
 }
 
 void DecodeTrace::on_comfirm_button_clicked()
 {
 	for (auto& pair : channel_id_map_) {
-		QComboBox* comboBox = pair.first;  // 取出 QComboBox 指针
-		int currentIndex = comboBox->currentIndex();  // 获取当前选中索引
+		QComboBox* comboBox = pair.first;  // Extract the QComboBox pointer
+		int currentIndex = comboBox->currentIndex();  // Read the current index
 		// Determine signal that was selected
 		shared_ptr<data::SignalBase> signal =
 			comboBox->itemData(currentIndex).value<shared_ptr<data::SignalBase>>();
@@ -798,7 +798,7 @@ void DecodeTrace::mouse_left_press_event(const QMouseEvent* event)
 				forceUpdate(r.container);
 
 				r.container->setVisible(true);
-				// 限制注解行最大高度，防止无限累加
+				// Clamp the annotation row height so it cannot grow without bound
 				const int max_expand = default_row_height_ * 6;
 				int hint_h = r.container->sizeHint().height();
 				r.expanded_height = default_row_height_ + min(hint_h, max_expand);
@@ -1575,7 +1575,7 @@ void DecodeTrace::update_expanded_rows()
 {
 	for (DecodeTraceRow& r : rows_) {
 		if (r.expanding || r.expanded) {
-			// 限制注解行最大高度，防止无限累加
+			// Clamp the annotation row height so it cannot grow without bound
 			const int max_expand = default_row_height_ * 6;
 			int hint_h = r.container->sizeHint().height();
 			r.expanded_height = default_row_height_ + min(hint_h, max_expand);

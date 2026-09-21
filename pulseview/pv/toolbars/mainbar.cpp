@@ -156,7 +156,7 @@ namespace pv
 			channel_number_ = 16;
 			channels_ = nullptr;
 
-			// 初始化设备状态图标
+			// Initialize the device status icon
 			device_status_icon_->setObjectName(QString::fromUtf8("device_status_icon"));
 			device_status_icon_->setIcon(QIcon(":/icons/Demo.png"));
 			device_status_icon_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
@@ -266,7 +266,7 @@ namespace pv
 			connect(menu_file_import, SIGNAL(format_selected(shared_ptr<sigrok::InputFormat>)),
 					this, SLOT(import_file(shared_ptr<sigrok::InputFormat>)));
 			action_connect_->setText(tr("&Connect to Device..."));
-			action_connect_->setToolTip(""); // 去除悬浮提示
+			action_connect_->setToolTip(""); // Remove the tooltip
 			// connect(action_connect_, SIGNAL(triggered(bool)),
 			// 	this, SLOT(on_actionConnect_triggered()));
 
@@ -442,7 +442,7 @@ namespace pv
 			connect(&session, SIGNAL(device_changed()),
 					this, SLOT(on_device_changed()));
 
-			/* CH32H417设备事件信号槽连接 */
+			/* CH32H417 device event signal/slot connections */
 			connect(this, SIGNAL(ch32h417_device_event_signal(unsigned long)),
 					this, SLOT(on_ch32h417_device_event(unsigned long)));
 
@@ -464,14 +464,14 @@ namespace pv
 				channels_ = nullptr;
 			}
 
-			/* 停止热插拔线程 */
+			/* Stop the hot-plug thread */
 			if (t_hot_plug.joinable())
 			{
 				hot_plug_listen_ = false;
 				t_hot_plug.join();
 			}
 
-			/* 清理CH375DLL资源 */
+			/* Release the CH375DLL resources */
 			ch375_cleanup();
 			commit_channel_number(0);
 		}
@@ -670,7 +670,7 @@ namespace pv
 				QString model = QString::fromStdString(sr_dev->model());
 				if (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH569)])
 				{
-					// CH569: 采样率数量随通道数变化
+					// CH569: the number of sample rates depends on the channel count
 					switch (channel_number_)
 					{
 					case 2:
@@ -689,7 +689,7 @@ namespace pv
 				}
 				else if (model == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 				{
-					// CH32H417: 固定16个采样率，不随通道数变化
+					// CH32H417: always 16 sample rates, independent of the channel count
 					num_elements = 16;
 				}
 				sample_rate_.show_list(elements, num_elements);
@@ -785,7 +785,7 @@ namespace pv
 			min_sample_count = min(max(min_sample_count, MinSampleCount),
 								   max_sample_count);
 
-			// Max data : 18,000,000,000字节   Min data : 100字节
+			// Max data: 18,000,000,000 bytes   Min data: 100 bytes
 			// max_time = 18000000000 / sample_rate_.get_current_data(sample_rate_.get_current_index())
 			// min_time = 0.0001S = 100us
 			uint64_t sampleRate = sample_rate_.get_current_data(sample_rate_.get_current_index());
@@ -836,7 +836,7 @@ namespace pv
 			QString model = QString::fromStdString(device->device()->model());
 			bool is_ch32h417 = (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)] || model == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]);
 
-			// CH32H417处理
+			// CH32H417 handling
 			if (is_ch32h417)
 			{
 				bool is_usb2 = channels_ ? channels_->is_usb2() : false;
@@ -845,7 +845,7 @@ namespace pv
 
 				if (is_usb2)
 				{
-					// CH32H417 USB2.0: 2/4/8通道最高40MHz，16通道最高20MHz
+					// CH32H417 USB 2.0: up to 40 MHz with 2/4/8 channels, up to 20 MHz with 16 channels
 					if (maxSampleRate == SR_MHZ(40))
 					{
 						channel_number = 8;
@@ -859,7 +859,7 @@ namespace pv
 				}
 				else
 				{
-					// CH32H417 USB3.0: 采样率固定200MHz
+					// CH32H417 USB 3.0: sample rate fixed at 200 MHz
 					channel_number = 16;
 					sample_rate_channel_max = SR_MHZ(200);
 				}
@@ -869,7 +869,7 @@ namespace pv
 				return;
 			}
 
-			// CH569和其他设备的处理
+			// CH569 and other devices
 			uint16_t channel_number = 16;
 			uint64_t sample_rate_channel_max = 0;
 			MaxSampleRate = maxSampleRate;
@@ -925,8 +925,8 @@ namespace pv
 
 		void MainBar::on_update_channel_count(uint16_t channelCount)
 		{
-			// CH32H417专用：处理通道数变化
-			// 只接受8或16通道
+			// CH32H417 specific: handle a channel count change
+			// Only 8 or 16 channels are accepted
 			if (channelCount != 8 && channelCount != 16)
 			{
 				return;
@@ -957,7 +957,7 @@ namespace pv
 
 		void MainBar::on_update_threshold_value_ch32h417(float thresholdValue)
 		{
-			// 只保存阈值，不发送到硬件（硬件发送由 on_threshold_value_raw_changed 处理）
+			// Only store the threshold here; the hardware is updated by on_threshold_value_raw_changed
 			thresholdValue_ch32h417_ = thresholdValue;
 		}
 
@@ -992,7 +992,7 @@ namespace pv
 
 			const shared_ptr<sigrok::Device> sr_dev = device->device();
 
-			// 模式名称：0=Logic Analyzer, 1=ADC
+			// Mode names: 0 = Logic Analyzer, 1 = ADC
 			QString mode_str = (mode == 0) ? "Logic Analyzer" : "ADC";
 
 			try
@@ -1002,7 +1002,7 @@ namespace pv
 
 				qDebug() << "Device mode set to:" << mode_str;
 
-				// 模式切换后更新采样率列表
+				// Update the sample rate list after a mode switch
 				update_sample_rate_selector();
 				update_sample_rate_selector_value();
 			}
@@ -1020,7 +1020,7 @@ namespace pv
 
 			const shared_ptr<sigrok::Device> sr_dev = device->device();
 
-			// ADC通道：0=Channel 0, 1=Channel 1
+			// ADC channel: 0 = Channel 0, 1 = Channel 1
 			try
 			{
 				sr_dev->config_set(ConfigKey::ADC_CHANNEL,
@@ -1041,7 +1041,7 @@ namespace pv
 
 			const shared_ptr<sigrok::Device> sr_dev = device->device();
 
-			// ADC精度：0=8-bit, 1=10-bit
+			// ADC resolution: 0 = 8-bit, 1 = 10-bit
 			uint64_t precision_value = (precision == 0) ? 8 : 10;
 
 			try
@@ -1124,7 +1124,7 @@ namespace pv
 							is_usb2 = (usb_version == 2);
 						}
 					} catch (Error &error) {
-						// 默认USB3.0
+						// Default to USB 3.0
 					}
 				}
 
@@ -1206,19 +1206,19 @@ namespace pv
 		void MainBar::set_setting_default()
 		{
 			QSettings settings;
-			// 写入配置信息
+			// Store the configuration
 			settings.beginGroup("Settings");
 
 			QString vendorName = get_vendorName();
 			if (vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 			{
-				// CH32H417使用GlobalSettings的ThresholdLevel键值
+				// CH32H417 uses the ThresholdLevel key of GlobalSettings
 				GlobalSettings gs;
 				gs.setValue(GlobalSettings::Key_ThresholdLevel, thresholdValue_ch32h417_);
 			}
 			else
 			{
-				// CH569使用原有的两路阈值设置
+				// CH569 keeps its original two-threshold settings
 				settings.setValue("Threshold_bank_1", QString::number(thresholdValue_1_));
 				settings.setValue("Threshold_bank_2", QString::number(thresholdValue_2_));
 			}
@@ -1265,7 +1265,7 @@ namespace pv
 			QSettings settings;
 			if (settings.contains("Settings/sample_count_index"))
 			{
-				// CH569阈值设置
+				// CH569 threshold settings
 				threshold_bank_1_default_ = settings.value("Settings/Threshold_bank_1").toFloat();
 				threshold_bank_2_default_ = settings.value("Settings/Threshold_bank_2").toFloat();
 				channel_number_default_ = settings.value("Settings/channel_number").toInt();
@@ -1340,7 +1340,7 @@ namespace pv
 			channels_ = new Channels(session_, QString::fromStdString(sr_dev->vendor()), this);
 			set_vendorName(QString::fromStdString(sr_dev->vendor()));
 
-			// 获取USB版本并设置
+			// Read the USB version and apply it
 			if (sr_dev->config_check(ConfigKey::USB_VERSION, Capability::GET))
 			{
 				try
@@ -1395,11 +1395,11 @@ namespace pv
 		{
 			// restore settings
 			QString vendorName = get_vendorName();
-			// 支持 CH569 和 CH32H417 两种设备
+			// Supports both the CH569 and the CH32H417
 			if (vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] && vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 				return;
 
-			// CH32H417使用GlobalSettings的ThresholdLevel键值
+			// CH32H417 uses the ThresholdLevel key of GlobalSettings
 			if (vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 			{
 				GlobalSettings gs;
@@ -1409,11 +1409,11 @@ namespace pv
 				}
 				else
 				{
-					// CH32H417硬件默认阈值是2.3V
+					// The CH32H417 hardware default threshold is 2.3 V
 					threshold_ch32h417_default_ = 2.3f;
 				}
 
-				// 关闭CH32H417逻辑分析仪模式下的模拟通道A0/A1
+				// Disable analog channels A0/A1 in CH32H417 logic analyzer mode
 				for (const auto &sig : session_.signalbases())
 				{
 					if (sig->type() == data::SignalBase::AnalogChannel)
@@ -1642,27 +1642,27 @@ namespace pv
 			QDialog dialog(this);
 			dialog.setWindowTitle(tr("Error"));
 
-			// 设置更大的字体
+			// Use a larger font
 			QFont font = dialog.font();
 			font.setPointSize(font.pointSize() + 2);
 			dialog.setFont(font);
 
-			// 设置对话框最小宽度，高度自动计算
+			// Set a minimum width; the height is computed automatically
 			dialog.setMinimumWidth(400);
 			dialog.adjustSize();
 
 			QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
-			// 创建图标和文本布局
+			// Create the icon and text layout
 			QHBoxLayout *contentLayout = new QHBoxLayout();
 
-			// 创建图标标签
+			// Create the icon label
 			QLabel *iconLabel = new QLabel(&dialog);
 			iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Warning));
 			iconLabel->setAlignment(Qt::AlignTop);
 			contentLayout->addWidget(iconLabel);
 
-			// 创建文本标签
+			// Create the text label
 			QLabel *label = new QLabel(&dialog);
 			label->setText(text + "\n\n" + info_text);
 			label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
@@ -1671,14 +1671,14 @@ namespace pv
 
 			layout->addLayout(contentLayout);
 
-			// 创建按钮
+			// Create the button
 			QHBoxLayout *buttonLayout = new QHBoxLayout();
 			buttonLayout->addStretch();
 			QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 			buttonLayout->addWidget(okBtn);
 			layout->addLayout(buttonLayout);
 
-			// 连接信号
+			// Connect the signal
 			connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
 
 			dialog.exec();
@@ -1835,16 +1835,16 @@ namespace pv
 			QString vendor = QString::fromStdString(sr_dev->vendor());
 			QString model = QString::fromStdString(sr_dev->model());
 
-			// 处理 CH569 和 CH32H417 设备的切换
+			// Handle switching between CH569 and CH32H417 devices
 			if (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] || vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 			{
-				// 更新设备选择器显示的名称
+				// Update the name shown in the device selector
 				QString device_name = vendor;
 				QString vendor_name = vendor;
 				set_device_selector_name(device_name);
 				set_vendorName(vendor_name);
 
-				// 切换到选中的设备
+				// Switch to the selected device
 				session_.select_device(device);
 
 				if (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
@@ -1865,7 +1865,7 @@ namespace pv
 				return;
 			}
 
-			// 其他设备的处理
+			// Other devices
 			session_.select_device(device);
 		}
 
@@ -1873,18 +1873,25 @@ namespace pv
 		{
 			uint16_t vid = WCH_VID;
 			uint16_t pid_ch569 = WCH_PID_CH569;
-			/* CH32H417检测已移至CH375SetDeviceNotify回调 */
+			/* CH32H417 detection has moved to the CH375SetDeviceNotify callback */
 
-			// 跟踪CH569设备的插拔状态
+			// Track the attach state of CH569 devices
 			bool ch569_attached = false;
 			bool ch569_attached_pre = false;
 
-			libusb_device **devlist;
-			struct libusb_device_descriptor des;
+			libusb_device **devlist = NULL;
 			libusb_context *libusb_ctx = NULL;
 			int device_count = 0;
 			int index = 0;
 			int index_time = 0;
+
+			/* The libusb context must be initialized explicitly: passing
+			 * NULL to libusb_get_device_list() is undefined behaviour (older versions dereference a null pointer). */
+			if (libusb_init(&libusb_ctx) != 0)
+			{
+				qWarning() << "hot_plug_listen: libusb_init failed";
+				return;
+			}
 
 			while (hot_plug_listen_)
 			{
@@ -1893,14 +1900,19 @@ namespace pv
 
 				for (index = 0; index < device_count; index++)
 				{
-					libusb_get_device_descriptor(devlist[index], &des);
+					struct libusb_device_descriptor des;
+
+					if (libusb_get_device_descriptor(devlist[index], &des) != 0)
+						continue;
 					if (des.idVendor == vid && des.idProduct == pid_ch569)
 					{
 						ch569_attached = true;
 						break;
 					}
 				}
-				libusb_free_device_list(devlist, 1);
+				if (device_count >= 0)
+					libusb_free_device_list(devlist, 1);
+				devlist = NULL;
 
 				if (index_time < 3)
 				{
@@ -1908,21 +1920,21 @@ namespace pv
 				}
 				else
 				{
-					// 获取当前选中的设备类型
+					// Get the currently selected device type
 					QString currentVendorName = get_vendorName();
 					bool is_using_ch569 = (currentVendorName == "USB3.0(CH569)");
 
-					// 检查 CH569 状态变化
+					// Check for a CH569 state change
 					if (ch569_attached != ch569_attached_pre)
 					{
 						if (ch569_attached)
 						{
-							// CH569 插入，只更新设备列表，不自动切换
+							// CH569 plugged in: refresh the device list only, do not switch automatically
 							device_attached();
 						}
 						else if (is_using_ch569)
 						{
-							// 当前使用的 CH569 被拔出
+							// The CH569 currently in use was unplugged
 							set_vendorName("");
 							session_.stop_capture();
 							divice_detached();
@@ -1934,6 +1946,7 @@ namespace pv
 				g_usleep(100000);
 				ch569_attached_pre = ch569_attached;
 			}
+			libusb_exit(libusb_ctx);
 		}
 
 		void MainBar::on_device_changed()
@@ -1946,19 +1959,19 @@ namespace pv
 
 		void MainBar::hot_plug_start()
 		{
-			/* 设置静态实例指针 */
+			/* Set the static instance pointer */
 			s_mainbar_instance = this;
 
-			/* 注册unsigned long为Qt元类型，用于跨线程信号传递 */
+			/* Register unsigned long as a Qt metatype for cross-thread signal delivery */
 			qRegisterMetaType<unsigned long>("unsigned long");
 
-			/* 初始化CH375DLL用于CH32H417热插拔检测 */
+			/* Initialize CH375DLL for CH32H417 hot-plug detection */
 			ch375_init();
 
-			/* 注册CH32H417设备事件通知回调 */
+			/* Register the CH32H417 device event callback */
 			ch375_set_device_notify(0, NULL, ch32h417_notify_callback);
 
-			/* 启动CH569轮询线程 */
+			/* Start the CH569 polling thread */
 			if (t_hot_plug.joinable())
 			{
 				hot_plug_listen_ = false;
@@ -1971,20 +1984,20 @@ namespace pv
 
 		void MainBar::hot_plug_stop()
 		{
-			/* 清除静态实例指针 */
+			/* Clear the static instance pointer */
 			s_mainbar_instance = nullptr;
 
-			/* 取消CH32H417设备事件通知回调 */
+			/* Unregister the CH32H417 device event callback */
 			ch375_set_device_notify(0, NULL, NULL);
 
-			/* 停止CH569轮询线程 */
+			/* Stop the CH569 polling thread */
 			if (t_hot_plug.joinable())
 			{
 				hot_plug_listen_ = false;
 				t_hot_plug.join();
 			}
 
-			/* 清理CH375DLL */
+			/* Release CH375DLL */
 			ch375_cleanup();
 		}
 
@@ -2251,7 +2264,7 @@ namespace pv
 			QString text;
 			QString vendorName = get_vendorName();
 			
-			// demo设备或无设备时，只显示软件版本
+			// For the demo device or no device, only the software version is shown
 			if (vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)] && vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH569)])
 			{
 				text = tr("<b>Software Version:</b> %1<br/>").arg(softwareVersion);
@@ -2267,10 +2280,10 @@ namespace pv
 				}
 				else if (vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 				{
-					// CH32H417: fw_version格式为 (固件版本 << 8) | 硬件版本
-					// 显示格式: 硬件版本.固件版本 (如 1.1)
-					uint8_t fw = (hardware_version_ >> 8) & 0xff; // 固件版本
-					uint8_t hw = hardware_version_ & 0xff;		  // 硬件版本
+					// CH32H417: fw_version is (firmware version << 8) | hardware version
+					// Displayed as <hardware version>.<firmware version> (e.g. 1.1)
+					uint8_t fw = (hardware_version_ >> 8) & 0xff; // firmware version
+					uint8_t hw = hardware_version_ & 0xff;		  // hardware version
 					firmwareVersion = QString::number(hw) + "." + QString::number(fw);
 
 					text = tr("<b>Software Version:</b> %1<br/>").arg(softwareVersion) + \
@@ -2278,7 +2291,7 @@ namespace pv
 				}
 				else
 				{
-					// CH569有固件版本和FPGA版本
+					// The CH569 has a firmware version and an FPGA version
 					firmwareVersion = QString::number((hardware_version_ >> 16) & 0xff);
 					firmwareVersion += ".";
 					firmwareVersion += QString::number((hardware_version_ >> 24) & 0xff);
@@ -2294,27 +2307,27 @@ namespace pv
 				dialog.setWindowTitle(tr("Version Info"));
 				dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
-				// 设置更大的字体
+				// Use a larger font
 				QFont font = dialog.font();
 				font.setPointSize(font.pointSize() + 2);
 				dialog.setFont(font);
 
-				// 设置对话框最小宽度，高度自动计算
+				// Set a minimum width; the height is computed automatically
 				dialog.setMinimumWidth(400);
 				dialog.adjustSize();
 
 				QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
-				// 创建图标和文本布局
+				// Create the icon and text layout
 				QHBoxLayout *contentLayout = new QHBoxLayout();
 
-				// 创建图标标签
+				// Create the icon label
 				QLabel *iconLabel = new QLabel(&dialog);
 				iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Information));
 				iconLabel->setAlignment(Qt::AlignTop);
 				contentLayout->addWidget(iconLabel);
 
-				// 创建文本标签
+				// Create the text label
 				QLabel *label = new QLabel(&dialog);
 				label->setText(text);
 				label->setTextFormat(Qt::RichText);
@@ -2324,14 +2337,14 @@ namespace pv
 
 				layout->addLayout(contentLayout);
 
-				// 创建按钮
+				// Create the button
 				QHBoxLayout *buttonLayout = new QHBoxLayout();
 				buttonLayout->addStretch();
 				QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 				buttonLayout->addWidget(okBtn);
 				layout->addLayout(buttonLayout);
 
-				// 连接信号
+				// Connect the signal
 				connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
 
 				dialog.exec();
@@ -2343,17 +2356,22 @@ namespace pv
 
 		void MainBar::on_action_update_triggered()
 		{
-			/* 检查当前设备是否为CH32H417（USB模式或HID模式） */
+			/* Check whether the current device is a CH32H417 (USB mode or HID mode) */
 			QString currentVendorName = get_vendorName();
 			bool is_ch32h417_usb = (currentVendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]);
 
-			bool is_ch32h417_hid = false;
-			libusb_device **hid_devlist;
-			struct libusb_device_descriptor hid_des;
-			libusb_context *hid_ctx = NULL;
+		bool is_ch32h417_hid = false;
+		libusb_device **hid_devlist = NULL;
+		libusb_context *hid_ctx = NULL;
+
+		/* Initialize the libusb context explicitly before enumerating, to avoid passing NULL */
+		if (libusb_init(&hid_ctx) == 0) {
 			int hid_count = libusb_get_device_list(hid_ctx, &hid_devlist);
 			for (int i = 0; i < hid_count; i++) {
-				libusb_get_device_descriptor(hid_devlist[i], &hid_des);
+				struct libusb_device_descriptor hid_des;
+
+				if (libusb_get_device_descriptor(hid_devlist[i], &hid_des) != 0)
+					continue;
 				if (hid_des.idVendor == WCH_VID && hid_des.idProduct == WCH_PID_CH32H417_HID) {
 					is_ch32h417_hid = true;
 					break;
@@ -2361,33 +2379,37 @@ namespace pv
 			}
 			if (hid_count >= 0)
 				libusb_free_device_list(hid_devlist, 1);
+			libusb_exit(hid_ctx);
+		} else {
+			qWarning() << "on_action_update_triggered: libusb_init failed";
+		}
 
 			if (!is_ch32h417_usb && !is_ch32h417_hid)
 			{
 				QDialog dialog(this);
 				dialog.setWindowTitle(tr("Warning"));
 
-				// 设置更大的字体
+				// Use a larger font
 				QFont font = dialog.font();
 				font.setPointSize(font.pointSize() + 2);
 				dialog.setFont(font);
 
-				// 设置对话框最小宽度，高度自动计算
+				// Set a minimum width; the height is computed automatically
 				dialog.setMinimumWidth(350);
 				dialog.adjustSize();
 
 				QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
-				// 创建图标和文本布局
+				// Create the icon and text layout
 				QHBoxLayout *contentLayout = new QHBoxLayout();
 
-				// 创建图标标签
+				// Create the icon label
 				QLabel *iconLabel = new QLabel(&dialog);
 				iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Warning));
 				iconLabel->setAlignment(Qt::AlignTop);
 				contentLayout->addWidget(iconLabel);
 
-				// 创建文本标签
+				// Create the text label
 				QLabel *label = new QLabel(&dialog);
 				label->setText(tr("The current device does not support firmware upgrade.\nPlease connect the CH32H417 device and try again."));
 				label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
@@ -2396,27 +2418,27 @@ namespace pv
 
 				layout->addLayout(contentLayout);
 
-				// 创建按钮
+				// Create the button
 				QHBoxLayout *buttonLayout = new QHBoxLayout();
 				buttonLayout->addStretch();
 				QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 				buttonLayout->addWidget(okBtn);
 				layout->addLayout(buttonLayout);
 
-				// 连接信号
+				// Connect the signal
 				connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
 
 				dialog.exec();
 				return;
 			}
 
-			/* 弹出文件选择对话框，让用户选择固件文件 */
+			/* Let the user pick the firmware file */
 			QString firmwarePath = QFileDialog::getOpenFileName(this,
 																tr("Select firmware file"),
 																"",
 																tr("Firmware File (*.bin *.BIN *.hex *.HEX);;All Files (*.*)"));
 
-			/* 用户取消选择 */
+			/* The user cancelled the selection */
 			if (firmwarePath.isEmpty())
 			{
 				return;
@@ -2427,17 +2449,17 @@ namespace pv
 				session_.stop_capture();
 			}
 
-			/* 创建进度对话框 */
+			/* Create the progress dialog */
 			QProgressDialog *progressDlg = new QProgressDialog(
 				tr("Firmware update in progress, do not disconnect the USB connection"), tr("Cancel"), 0, 100, this);
 			progressDlg->setWindowTitle(tr("Firmware Update"));
 			progressDlg->setWindowModality(Qt::WindowModal);
 			progressDlg->setMinimumDuration(0);
 			progressDlg->setValue(0);
-			progressDlg->setCancelButton(nullptr); /* 禁止取消 */
+			progressDlg->setCancelButton(nullptr); /* cancellation disabled */
 			progressDlg->setWindowFlags(progressDlg->windowFlags() & ~Qt::WindowContextHelpButtonHint | Qt::WindowStaysOnTopHint);
 
-			/* 设置IAP升级标志，防止热插拔检测误报设备掉线 */
+			/* Set the IAP flag so hot-plug detection does not report a false disconnect */
 			iap_upgrading_ = true;
 
 			pv::dialogs::IAPWorker *worker = new pv::dialogs::IAPWorker(0, firmwarePath, WCH_VID, WCH_PID_CH32H417_HID, is_ch32h417_hid);
@@ -2455,27 +2477,27 @@ namespace pv
 					dialog.setWindowTitle(tr("Update Failed"));
 					dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
-					// 设置更大的字体
+					// Use a larger font
 					QFont font = dialog.font();
 					font.setPointSize(font.pointSize() + 2);
 					dialog.setFont(font);
 
-					// 设置对话框最小宽度，高度自动计算
+					// Set a minimum width; the height is computed automatically
 					// dialog.setMinimumWidth(400);
 					// dialog.adjustSize();
 
 					QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
-					// 创建图标和文本布局
+					// Create the icon and text layout
 					QHBoxLayout *contentLayout = new QHBoxLayout();
 
-					// 创建图标标签
+					// Create the icon label
 					QLabel *iconLabel = new QLabel(&dialog);
 					iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Critical));
 					iconLabel->setAlignment(Qt::AlignTop);
 					contentLayout->addWidget(iconLabel);
 
-					// 创建文本标签
+					// Create the text label
 					QLabel *label = new QLabel(&dialog);
 					label->setText(tr("Firmware Update Failed!\nPlease check the device connection and firmware file."));
 					label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
@@ -2484,14 +2506,14 @@ namespace pv
 
 					layout->addLayout(contentLayout);
 
-					// 创建按钮
+					// Create the button
 					QHBoxLayout *buttonLayout = new QHBoxLayout();
 					buttonLayout->addStretch();
 					QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 					buttonLayout->addWidget(okBtn);
 					layout->addLayout(buttonLayout);
 
-					// 连接信号
+					// Connect the signal
 					connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
 
 					dialog.exec();
@@ -2508,7 +2530,7 @@ namespace pv
 
 		void MainBar::on_action_use_guide_triggered()
 		{
-			// 获取可执行文件所在目录
+			// Directory that holds the executable
 			QString appDir = QCoreApplication::applicationDirPath();
 
 			QString pdfPath = appDir + "/doc/U3LogicAnalyzer逻辑分析仪使用手册.pdf";
@@ -2521,27 +2543,27 @@ namespace pv
 				QDialog dialog(this);
 				dialog.setWindowTitle(tr("提示信息"));
 
-				// 设置更大的字体
+				// Use a larger font
 				QFont font = dialog.font();
 				font.setPointSize(font.pointSize() + 2);
 				dialog.setFont(font);
 
-				// 设置对话框最小宽度，高度自动计算
+				// Set a minimum width; the height is computed automatically
 				dialog.setMinimumWidth(500);
 				dialog.adjustSize();
 
 				QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
-				// 创建图标和文本布局
+				// Create the icon and text layout
 				QHBoxLayout *contentLayout = new QHBoxLayout();
 
-				// 创建图标标签
+				// Create the icon label
 				QLabel *iconLabel = new QLabel(&dialog);
 				iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Information));
 				iconLabel->setAlignment(Qt::AlignTop);
 				contentLayout->addWidget(iconLabel);
 
-				// 创建文本标签
+				// Create the text label
 				QLabel *label = new QLabel(&dialog);
 				label->setText(tr("找不到PDF文件：\n%1\n\n请确认 doc 目录和用户手册文件是否存在。").arg(pdfPath));
 				label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
@@ -2550,14 +2572,14 @@ namespace pv
 
 				layout->addLayout(contentLayout);
 
-				// 创建按钮
+				// Create the button
 				QHBoxLayout *buttonLayout = new QHBoxLayout();
 				buttonLayout->addStretch();
 				QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 				buttonLayout->addWidget(okBtn);
 				layout->addLayout(buttonLayout);
 
-				// 连接信号
+				// Connect the signal
 				connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
 
 				dialog.exec();
@@ -2572,27 +2594,27 @@ namespace pv
 				QDialog dialog(this);
 				dialog.setWindowTitle(tr("Open Failed"));
 
-				// 设置更大的字体
+				// Use a larger font
 				QFont font = dialog.font();
 				font.setPointSize(font.pointSize() + 2);
 				dialog.setFont(font);
 
-				// 设置对话框最小宽度，高度自动计算
+				// Set a minimum width; the height is computed automatically
 				dialog.setMinimumWidth(400);
 				dialog.adjustSize();
 
 				QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
-				// 创建图标和文本布局
+				// Create the icon and text layout
 				QHBoxLayout *contentLayout = new QHBoxLayout();
 
-				// 创建图标标签
+				// Create the icon label
 				QLabel *iconLabel = new QLabel(&dialog);
 				iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Warning));
 				iconLabel->setAlignment(Qt::AlignTop);
 				contentLayout->addWidget(iconLabel);
 
-				// 创建文本标签
+				// Create the text label
 				QLabel *label = new QLabel(&dialog);
 				label->setText(tr("无法打开PDF文件，请确认系统已安装PDF阅读器。"));
 				label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
@@ -2601,14 +2623,14 @@ namespace pv
 
 				layout->addLayout(contentLayout);
 
-				// 创建按钮
+				// Create the button
 				QHBoxLayout *buttonLayout = new QHBoxLayout();
 				buttonLayout->addStretch();
 				QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 				buttonLayout->addWidget(okBtn);
 				layout->addLayout(buttonLayout);
 
-				// 连接信号
+				// Connect the signal
 				connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
 
 				dialog.exec();
@@ -2633,27 +2655,27 @@ namespace pv
 			dialog.setWindowTitle(tr("About"));
 			dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
-			// 设置更大的字体
+			// Use a larger font
 			QFont font = dialog.font();
 			font.setPointSize(font.pointSize() + 2);
 			dialog.setFont(font);
 
-			// 设置对话框最小宽度，高度自动计算
+			// Set a minimum width; the height is computed automatically
 			dialog.setMinimumWidth(500);
 			dialog.adjustSize();
 
 			QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
-			// 创建图标和文本布局
+			// Create the icon and text layout
 			QHBoxLayout *contentLayout = new QHBoxLayout();
 
-			// 创建图标标签
+			// Create the icon label
 			QLabel *iconLabel = new QLabel(&dialog);
 			iconLabel->setPixmap(QPixmap(":/icons/pulseview.png"));
 			iconLabel->setAlignment(Qt::AlignTop);
 			contentLayout->addWidget(iconLabel);
 
-			// 创建文本标签
+			// Create the text label
 			QLabel *label = new QLabel(&dialog);
 			label->setText(text);
 			label->setTextFormat(Qt::RichText);
@@ -2664,23 +2686,23 @@ namespace pv
 
 			layout->addLayout(contentLayout);
 
-			// 创建按钮
+			// Create the button
 			QHBoxLayout *buttonLayout = new QHBoxLayout();
 			buttonLayout->addStretch();
 			QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
 			buttonLayout->addWidget(okBtn);
 			layout->addLayout(buttonLayout);
 
-			// 连接信号
+			// Connect the signal
 			connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
 
 			dialog.exec();
 		}
 
-		/* CH32H417热插拔回调函数 - 在DLL线程中执行 */
+		/* CH32H417 hot-plug callback - runs on the DLL thread */
 		void MainBar::ch32h417_notify_callback(unsigned long eventStatus)
 		{
-			/* 通过QMetaObject::invokeMethod将事件传递到主线程处理 */
+			/* Hand the event to the main thread through QMetaObject::invokeMethod */
 			if (s_mainbar_instance)
 			{
 				QMetaObject::invokeMethod(s_mainbar_instance, "on_ch32h417_device_event",
@@ -2688,7 +2710,7 @@ namespace pv
 			}
 		}
 
-		/* CH32H417设备事件处理 - 在主线程中执行 */
+		/* CH32H417 device event handler - runs on the main thread */
 		void MainBar::on_ch32h417_device_event(unsigned long eventStatus)
 		{
 			QString currentVendorName = get_vendorName();
@@ -2703,27 +2725,27 @@ namespace pv
 					dialog->setWindowTitle(tr("Update Success"));
 					dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
-					// 设置更大的字体
+					// Use a larger font
 					QFont font = dialog->font();
 					font.setPointSize(font.pointSize() + 2);
 					dialog->setFont(font);
 
-					// 设置对话框最小宽度，高度自动计算
+					// Set a minimum width; the height is computed automatically
 					dialog->setMinimumWidth(400);
 					dialog->adjustSize();
 
 					QVBoxLayout *layout = new QVBoxLayout(dialog);
 
-					// 创建图标和文本布局
+					// Create the icon and text layout
 					QHBoxLayout *contentLayout = new QHBoxLayout();
 
-					// 创建图标标签
+					// Create the icon label
 					QLabel *iconLabel = new QLabel(dialog);
 					iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Information));
 					iconLabel->setAlignment(Qt::AlignTop);
 					contentLayout->addWidget(iconLabel);
 
-					// 创建文本标签
+					// Create the text label
 					QLabel *label = new QLabel(dialog);
 					label->setText(tr("Firmware Update Success!\nDevice already restart."));
 					label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
@@ -2732,21 +2754,21 @@ namespace pv
 
 					layout->addLayout(contentLayout);
 
-					// 创建按钮
+					// Create the button
 					QHBoxLayout *buttonLayout = new QHBoxLayout();
 					buttonLayout->addStretch();
 					QPushButton *okBtn = new QPushButton(tr("Confirm"), dialog);
 					buttonLayout->addWidget(okBtn);
 					layout->addLayout(buttonLayout);
 
-					// 连接信号
+					// Connect the signal
 					connect(okBtn, &QPushButton::clicked, dialog, &QDialog::accept);
 
 					dialog->setWindowModality(Qt::NonModal);
 					dialog->setAttribute(Qt::WA_DeleteOnClose);
 					dialog->show();
 				}
-				/* CH32H417插入 - 如果是IAP升级后的设备重新上线，清除升级标志 */
+				/* CH32H417 plugged in: if the device is coming back after an IAP upgrade, clear the upgrade flag */
 				device_attached();
 			}
 			else if (eventStatus == CH375_DEVICE_REMOVE)

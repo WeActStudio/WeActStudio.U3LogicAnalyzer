@@ -96,7 +96,7 @@ Channels::Channels(Session &session, QString device_name, QWidget *parent) :
 	is_weact_logic_v2_(false),
 	model_()
 {
-	// ch569初始化阈值映射表
+	// Initialize the CH569 threshold mapping table
 	threshold_value_map_ = {
 		{0, 4.2f},
 		{1, 3.5f},
@@ -138,7 +138,7 @@ Channels::DeviceMode Channels::determineDeviceMode() const
 		return is_usb2 ? DeviceMode::CH569_USB2 : DeviceMode::CH569_USB3;
 	}
 
-	// CH32H417默认为逻辑分析仪模式
+	// The CH32H417 defaults to logic analyzer mode
 	if (wch_type == WchDeviceType::CH32H417) {
 		return is_usb2 ? DeviceMode::CH32H417_USB2_LOGIC : DeviceMode::CH32H417_USB3_LOGIC;
 	}
@@ -147,7 +147,7 @@ Channels::DeviceMode Channels::determineDeviceMode() const
 }
 
 // ============================================================================
-// UI初始化
+// UI initialization
 // ============================================================================
 
 void Channels::init_ui()
@@ -233,12 +233,12 @@ void Channels::init_ui()
 
 void Channels::init_wch_ui()
 {
-	// WCH设备的UI已在populate_group中创建
+	// The WCH device UI is created in populate_group
 }
 
 void Channels::init_other_ui()
 {
-	// 非WCH设备无额外UI
+	// Non-WCH devices have no extra UI
 }
 
 void Channels::init_channel_state()
@@ -291,15 +291,15 @@ void Channels::init_channel_radios(QVBoxLayout* layout)
 	                 device_mode_ == DeviceMode::CH32H417_ADC);
 
 	if (is_ch32h417) {
-		// CH32H417: 根据USB版本显示不同的采样率
+		// CH32H417: the sample rates depend on the USB version
 		if (device_mode_ == DeviceMode::CH32H417_USB2_LOGIC) {
-			// C32H417 USB2.0: 2/4/8通道最高40MHz，16通道最高20MHz
+			// CH32H417 USB 2.0: up to 40 MHz with 2/4/8 channels, up to 20 MHz with 16 channels
 			channel_modes << tr("Use 2 channels (Max 40MHz)");
 			channel_modes << tr("Use 4 channels (Max 40MHz)");
 			channel_modes << tr("Use 8 channels (Max 40MHz)");
 			channel_modes << tr("Use 16 channels (Max 20MHz)");
 		} else {
-			// CH32H417 USB3.0: 最高200MHz
+			// CH32H417 USB 3.0: up to 200 MHz
 			channel_modes << tr("Use 2 channels (Max 200MHz)");
 			channel_modes << tr("Use 4 channels (Max 200MHz)");
 			channel_modes << tr("Use 8 channels (Max 200MHz)");
@@ -343,13 +343,13 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 	
 	layout->setLabelAlignment(Qt::AlignCenter | Qt::AlignVCenter);
 	if (is_ch569) {
-		// CH569有两组阈值
+		// The CH569 has two threshold groups
 		QStringList thresholds = {"0.5V", "0.8V", "0.9V", "1.3V", "1.6V"};
 
 		threshold_selector_1_ = new QComboBox();
 		threshold_selector_1_->setMinimumWidth(100);
 		threshold_selector_1_->addItems(thresholds);
-		threshold_selector_1_->setCurrentIndex(4);  // CH569默认1.6V
+		threshold_selector_1_->setCurrentIndex(4);  // CH569 default 1.6 V
 		connect(threshold_selector_1_, SIGNAL(currentIndexChanged(int)),
 			this, SLOT(on_set_threshold_value_1(int)));
 		layout->addRow(tr("Trigger Threshold(0~7 Channel)"), threshold_selector_1_);
@@ -599,7 +599,7 @@ void Channels::populate_group(shared_ptr<ChannelGroup> group,
 }
 
 // ============================================================================
-// 通道选择
+// Channel selection
 // ============================================================================
 
 void Channels::channelSelect(uint16_t index)
@@ -614,10 +614,10 @@ void Channels::channelSelect(uint16_t index)
 	};
 
 	static const ChannelConfig configs[] = {
-		{2, SR_GHZ(1)},      // 2通道
-		{4, SR_MHZ(500)},    // 4通道
-		{8, SR_MHZ(250)},    // 8通道
-		{16, SR_MHZ(125)}    // 16通道
+		{2, SR_GHZ(1)},      // 2 channels
+		{4, SR_MHZ(500)},    // 4 channels
+		{8, SR_MHZ(250)},    // 8 channels
+		{16, SR_MHZ(125)}    // 16 channels
 	};
 
 	const ChannelConfig& config = configs[index];
@@ -642,30 +642,30 @@ void Channels::channelSelect(uint16_t index)
 		} else {
 			channel_count_change(8);
 		}
-		emit_signal = false;  // CH32H417采样率固定，不需要更新采样率
+		emit_signal = false;  // CH32H417 sample rates are fixed, the rate list does not need updating
 		break;
 
 	case DeviceMode::CH32H417_USB2_LOGIC:
-		// CH32H417 USB2.0: 8通道最高40MHz，16通道最高20MHz
+		// CH32H417 USB 2.0: up to 40 MHz with 8 channels, up to 20 MHz with 16 channels
 		switch (index) {
-		case 0: // 2通道
+		case 0: // 2 channels
 			max_sample_rate = SR_MHZ(40);
-			channel_count_change(8);  // 硬件实际使用8通道
+			channel_count_change(8);  // The hardware actually uses 8 channels
 			break;
-		case 1: // 4通道
+		case 1: // 4 channels
 			max_sample_rate = SR_MHZ(40);
-			channel_count_change(8);  // 硬件实际使用8通道
+			channel_count_change(8);  // The hardware actually uses 8 channels
 			break;
-		case 2: // 8通道
+		case 2: // 8 channels
 			max_sample_rate = SR_MHZ(40);
 			channel_count_change(8);
 			break;
-		case 3: // 16通道
+		case 3: // 16 channels
 			max_sample_rate = SR_MHZ(20);
 			channel_count_change(16);
 			break;
 		}
-		emit_signal = true;  // USB2.0模式下采样率随通道数变化，需要更新采样率列表
+		emit_signal = true;  // On USB 2.0 the sample rate depends on the channel count, so the rate list must be updated
 		break;
 
 	case DeviceMode::CH32H417_ADC:
@@ -791,7 +791,7 @@ void Channels::set_default_bank_threshold(float threshold_1, float threshold_2)
 			}
 		}
 
-		// CH569有两路阈值
+		// The CH569 has two thresholds
 		if (it.second == threshold_2) {
 			if (threshold_selector_2_) {
 				threshold_selector_2_->setCurrentIndex(index);
@@ -810,7 +810,7 @@ void Channels::set_default_pre_trigger(uint8_t pre_trigger)
 }
 
 // ============================================================================
-// 模式切换 (CH32H417)
+// Mode switching (CH32H417)
 // ============================================================================
 
 void Channels::on_mode_changed(int index)
@@ -901,9 +901,9 @@ void Channels::on_mode_changed(int index)
 
 	updating_channels_ = false;
 
-	// 模式切换后通道启用/禁用状态变化，需要更新view中的signalbase列表
-	// (restore_setup可能已将disabled通道从view中remove_signalbase，
-	//  切换模式后需通过update_signals将重新enabled的通道添加回view)
+	// A mode switch changes which channels are enabled, so the signalbase list in the view must be updated
+	// (restore_setup may already have removed the disabled channels from the view with remove_signalbase;
+	//  the channels re-enabled by the mode switch must be added back through update_signals)
 	session_.update_signals();
 
 	mode_changed(index);
@@ -933,7 +933,7 @@ void Channels::on_adc_channel_changed(int index)
 		updating_channels_ = false;
 	}
 
-	// ADC通道切换后需要更新view中的signalbase列表
+	// After an ADC channel switch the signalbase list in the view must be updated
 	session_.update_signals();
 	adc_channel_changed(index);
 	qDebug() << "ADC channel changed to:" << index + 1;
@@ -1081,7 +1081,7 @@ void Channels::showEvent(QShowEvent* event)
 
 void Channels::on_voltage_level_changed(double value)
 {
-	// 电压到A1命令值的映射表
+	// Mapping table from voltage to the A1 command value
 	static const QMap<double, uint16_t> voltage_to_raw = {
 		{2.3, 33},
 		{2.2, 93},
@@ -1140,7 +1140,7 @@ void Channels::on_input_level_changed(double value)
 
 void Channels::set_default_channel()
 {
-	// 默认通道配置已在构造函数中处理
+	// The default channel setup is handled in the constructor
 }
 
 // ============================================================================
@@ -1192,7 +1192,7 @@ void Channels::update_channel_radio_texts()
 		channel_modes << tr("Use 16 channels (Max 62.5MHz)");
 	}
 
-	// 更新RadioButton的文字
+	// Update the radio button labels
 	for (int i = 0; i < channel_modes.size() && i < 4; ++i) {
 		if (radioChannels[i]) {
 			radioChannels[i]->setText(channel_modes[i]);

@@ -3,5 +3,7 @@
 /install
 /dist
 /CMakeFiles
+/.workbuddy
 
 CMakeCache.txt
+/CODE_REVIEW.md

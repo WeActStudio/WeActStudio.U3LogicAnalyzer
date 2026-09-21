@@ -989,7 +989,7 @@ namespace pv
 			{
 				Trace::paint_hover_marker(p);
 
-				// 如果没有有效的电压值，不绘制标签
+				// Skip the label when there is no valid voltage value
 				if (std::isnan(value_at_hover_pos_))
 					return;
 
@@ -1011,7 +1011,7 @@ namespace pv
 				int voltage_y = visual_y - (int)(value_at_hover_pos_ * scale_);
 				voltage_y = std::min(std::max(voltage_y, top), bottom);
 
-				// 绘制交汇点标记
+				// Draw the crossing marker
 				p.setRenderHint(QPainter::Antialiasing, true);
 				p.setBrush(QColor(255, 200, 0));
 				p.setPen(QPen(Qt::black, 1));
@@ -1047,7 +1047,7 @@ namespace pv
 				p.setBrush(QColor(40, 40, 40, 220));
 				p.drawRoundedRect(label_x, label_y, label_width, label_height, 4, 4);
 
-				// 绘制电压文本
+				// Draw the voltage text
 				p.setPen(QColor(255, 255, 255));
 				p.drawText(label_x + 8, label_y + label_height - fm.descent() - 4, voltage_text);
 

@@ -569,7 +569,7 @@ void Session::restore_settings(QSettings &settings)
 		if (device)
 			set_device(device);
 		else {
-			// 没有找到任何设备，使用默认设备选择demo
+			// No device found, fall back to the demo device
 			qDebug() << "No device found, selecting default device";
 			set_default_device();
 		}

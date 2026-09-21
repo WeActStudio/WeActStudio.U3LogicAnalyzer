@@ -197,18 +197,18 @@ private Q_SLOTS:
 	void on_add_math_signal_clicked();
 
 	void on_update_max_sample_rate(uint64_t maxSampleRate);
-	void on_update_channel_count(uint16_t channelCount);  // CH32H417通道数变化处理
+	void on_update_channel_count(uint16_t channelCount);  // Handle a CH32H417 channel count change
 	void on_update_threshold_value_1(float thresholdValue);
 	void on_update_threshold_value_2(float thresholdValue);
-	void on_update_threshold_value_ch32h417(float thresholdValue);  // CH32H417专用阈值处理
+	void on_update_threshold_value_ch32h417(float thresholdValue);  // CH32H417-specific threshold handling
 	void on_update_pre_trigger(uint8_t value);
 	void on_mode_changed(int mode);
-	void on_adc_channel_changed(int channel);  // ADC通道切换处理
-	void on_adc_precision_changed(int precision);  // ADC精度切换处理
-	void on_threshold_value_raw_changed(uint16_t value);  // DAC原始值设置
+	void on_adc_channel_changed(int channel);  // Handle an ADC channel switch
+	void on_adc_precision_changed(int precision);  // Handle an ADC resolution switch
+	void on_threshold_value_raw_changed(uint16_t value);  // Set the raw DAC value
 	void on_ch32h417_device_event(unsigned long eventStatus);
-	void on_channel_selection_changed();  // 通道选择变化处理，用于更新通道高度
-	void update_device_status_icon();  // 更新设备状态图标
+	void on_channel_selection_changed();  // Handle a channel selection change, used to update the channel height
+	void update_device_status_icon();  // Update the device status icon
 public Q_SLOTS:
 	void on_add_decoder_clicked();
 	

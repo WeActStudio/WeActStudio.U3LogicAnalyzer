@@ -53,7 +53,7 @@ bool HoverToolButton::eventFilter(QObject *watched, QEvent *event)
         if (!menuRect.contains(globalPos) && !btnRect.contains(globalPos)) {
             m_menu->close();
         }
-        return false;  // 不拦截，让事件继续传递
+        return false;  // Do not intercept, let the event propagate
     }
 
     return false;

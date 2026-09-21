@@ -1,14 +1,14 @@
 #!/bin/sh
 # clean_pycache.sh
 
-# 脚本所在目录
+# Directory that holds this script
 startDir=$(cd "$(dirname "$0")" && pwd)
 cd "$startDir" || exit 1
 
-# 删除所有 __pycache__ 目录
+# Remove all __pycache__ directories
 find "$startDir" -type d -name "__pycache__" -print -exec rm -rf {} \;
 
-# 删除所有 *.pyc 文件
+# Remove all *.pyc files
 find "$startDir" -type f -name "*.pyc" -print -delete
 
 echo "Cleanup completed."
