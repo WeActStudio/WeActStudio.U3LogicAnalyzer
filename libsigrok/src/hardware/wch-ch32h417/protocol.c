@@ -581,7 +581,6 @@ SR_PRIV struct dev_context *ch32h417_dev_new(void)
 	devc->capture_ratio = 0;
 	devc->sample_width = SAMPLE_WIDTH_16BIT;
 	devc->num_channels = 16; /* 16 channels by default */
-	devc->voltage_level = VOLTAGE_3_3V;
 	devc->adc_width = ADC_WIDTH_8BIT;
 	devc->adc_channel = ADC_CHANNEL_1;
 	devc->fw_version = 0;
@@ -595,7 +594,6 @@ SR_PRIV struct dev_context *ch32h417_dev_new(void)
 	devc->buffer_size = BUFFER_UPLOAD_SIZE;
 
 	g_mutex_init(&devc->mutex);
-	g_cond_init(&devc->cond);
 
 	return devc;
 }
@@ -1036,11 +1034,6 @@ static void finish_acquisition(struct sr_dev_inst *sdi)
 		devc->stl = NULL;
 	}
 
-	if (devc->logic_buffer)
-	{
-		g_free(devc->logic_buffer);
-		devc->logic_buffer = NULL;
-	}
 	sr_dbg("finish_acquisition function done");
 }
 

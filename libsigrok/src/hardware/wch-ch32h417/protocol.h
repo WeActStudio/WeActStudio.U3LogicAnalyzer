@@ -104,16 +104,6 @@ enum ch32h417_mode {
 	MODE_ADC,
 };
 
-/* Voltage levels */
-enum voltage_level {
-	VOLTAGE_3_3V = 0,
-	VOLTAGE_2_5V = 1,
-	VOLTAGE_2_0V = 2,
-	VOLTAGE_1_8V = 3,
-	VOLTAGE_1_5V = 4,
-	VOLTAGE_1_2V = 5,
-};
-
 /* ADC channels */
 enum adc_channel {
 	ADC_CHANNEL_1 = 0,
@@ -150,7 +140,6 @@ struct dev_context {
 	uint64_t sent_samples;
 	uint8_t sample_width;      /* 8bit or 16bit */
 	int32_t num_channels;      /* 8 or 16 channels */
-	enum voltage_level voltage_level;
 	uint16_t threshold_value_1;  /* Raw DAC threshold value (0-1024) */
 
 	/* ADC configuration */
@@ -178,11 +167,9 @@ struct dev_context {
 	/* Data read thread */
 	GThread *read_thread;      /* Read thread */
 	GMutex mutex;              /* Mutex */
-	GCond cond;                /* Condition variable */
 
-	/* Data buffer */
-	uint8_t *logic_buffer;
-	size_t buffer_size;        /* Read buffer size */
+	/* Data read buffer */
+	size_t buffer_size;
 
 	void (*send_data_proc)(struct sr_dev_inst *sdi,
 		uint8_t *data, size_t length, size_t sample_width);

@@ -434,10 +434,13 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 }
 
 /*
- * Release the CH375 handle owned by a device instance. scan() opens every
- * device it inspects, so an instance that was never opened through
- * dev_open() still holds a handle when it is cleared -- the standard helper
- * only closes instances that reached SR_ST_ACTIVE.
+ * Release the resources owned by a device instance before the standard
+ * helper frees it. scan() opens every device it inspects, so an instance
+ * that was never opened through dev_open() still holds a handle when it is
+ * cleared -- the standard helper only closes instances that reached
+ * SR_ST_ACTIVE. The mutex created in ch32h417_dev_new() is cleared here as
+ * well: on Windows GMutex wraps a CRITICAL_SECTION, which is not released
+ * by simply freeing the structure that contains it.
  */
 static void dev_clear_private(void *priv)
 {
@@ -450,6 +453,8 @@ static void dev_clear_private(void *priv)
 		ch375_close_device(devc->device_index);
 		devc->device_handle = NULL;
 	}
+
+	g_mutex_clear(&devc->mutex);
 }
 
 /* Clear devices */
