@@ -74,7 +74,11 @@ static const int32_t trigger_matches[] = {
 	SR_TRIGGER_EDGE,
 };
 
-/* Logic analyzer sample rates - USB 3.0 (up to 200 MHz) */
+/*
+ * Logic analyzer sample rates - USB 3.0 (up to 200 MHz).
+ * The index of an entry is the clock divider index sent to the device, so
+ * entries may only be appended at the end (see the assertions below).
+ */
 static const uint64_t logic_samplerates_usb3[] = {
 	SR_MHZ(200),
 	SR_MHZ(187.5),
@@ -88,8 +92,8 @@ static const uint64_t logic_samplerates_usb3[] = {
 	SR_MHZ(100),
 	SR_MHZ(93.75),
 	SR_MHZ(87.5),
-	SR_MHZ(81.5),
-	SR_MHZ(75.125),
+	SR_MHZ(81.25),
+	SR_MHZ(78.125),
 	SR_MHZ(75),	
 	SR_MHZ(68.75),
 	SR_MHZ(50),
@@ -133,6 +137,22 @@ static const uint64_t adc_samplerates[] = {
 	SR_MHZ(11.43),
 	SR_MHZ(10),
 };
+
+/*
+ * The divider index that the driver sends in params[1] is the index into
+ * these tables (see samplerate_to_divider() in protocol.c). The firmware
+ * adds a fixed offset per USB mode (UHSIF_Clock_Set() in ch32h417_logic.c):
+ *
+ *   USB 3.0,              cases 0x00 .. 0x18
+ *   USB 2.0,  8 channels, cases 0x11 .. 0x18
+ *   USB 2.0, 16 channels, cases 0x13 .. 0x18
+ *
+ * These assertions keep the tables in sync with the firmware; a mismatch
+ * would make the device sample at the wrong frequency.
+ */
+G_STATIC_ASSERT(ARRAY_SIZE(logic_samplerates_usb3) == 25);
+G_STATIC_ASSERT(ARRAY_SIZE(logic_samplerates_usb2_8ch) == 8);
+G_STATIC_ASSERT(ARRAY_SIZE(logic_samplerates_usb2_16ch) == 6);
 
 /* Operating mode names */
 static const char *mode_names[] = {
@@ -201,21 +221,6 @@ static void ch375_init_comm_params(struct dev_context *devc)
 	if (!ch375_set_buf_download_ex(devc->device_index, 0, PIPE_CMD, 0)) {
 		sr_warn("Failed to set download buffer pipe %d for device at index %d", PIPE_CMD, devc->device_index);
 	}
-}
-
-/* Check whether the device matches */
-static gboolean is_plausible(uint16_t vid, uint16_t pid)
-{
-	int i;
-
-	for (i = 0; supported_devices[i].vid; i++)
-	{
-		if (vid == supported_devices[i].vid &&
-			pid == supported_devices[i].pid)
-			return TRUE;
-	}
-
-	return FALSE;
 }
 
 /**
@@ -337,15 +342,17 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 
 		sr_dbg("Found device at index %d: VID=0x%04x, PID=0x%04x", i, vid, pid);
 
-		// if (!is_plausible(vid, pid))
-		// {
-		// 	ch375_close_device(i);
-		// 	continue;
-		// }
 		const char *device_name = ch375_get_device_name(i);
 		
-		extract_usb_serial(device_name, serial_number, sizeof(serial_number));
-		sr_dbg("Device name: %s", device_name);
+		/* scan() may inspect more than one device, so the buffer has to be
+		 * cleared before every attempt: a device whose name cannot be parsed
+		 * would otherwise inherit the serial number of the previous one. */
+		memset(serial_number, 0, sizeof(serial_number));
+		if (extract_usb_serial(device_name, serial_number,
+							 sizeof(serial_number)) != 0)
+			sr_warn("Could not parse a serial number from the device name");
+
+		sr_dbg("Device name: %s", device_name ? device_name : "(unknown)");
 		sr_dbg("USB serial: %s", serial_number);
 
 		prof = NULL;
@@ -426,10 +433,29 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	return std_scan_complete(di, devices);
 }
 
+/*
+ * Release the CH375 handle owned by a device instance. scan() opens every
+ * device it inspects, so an instance that was never opened through
+ * dev_open() still holds a handle when it is cleared -- the standard helper
+ * only closes instances that reached SR_ST_ACTIVE.
+ */
+static void dev_clear_private(void *priv)
+{
+	struct dev_context *devc = priv;
+
+	if (!devc)
+		return;
+
+	if (devc->device_handle && devc->device_handle != CH375_INVALID_HANDLE) {
+		ch375_close_device(devc->device_index);
+		devc->device_handle = NULL;
+	}
+}
+
 /* Clear devices */
 static int dev_clear(const struct sr_dev_driver *di)
 {
-	return std_dev_clear(di);
+	return std_dev_clear_with_callback(di, dev_clear_private);
 }
 
 /* Open device */

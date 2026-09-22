@@ -161,6 +161,8 @@ struct dev_context {
 	/* Trigger */
 	gboolean trigger_fired;
 	gboolean acq_aborted;
+	gboolean acq_started;     /* Acquisition fully started: the session source and the DF header exist */
+	gboolean stop_sent;       /* Stop command already sent for this acquisition */
 	struct soft_trigger_logic *stl;
 
 	/* Firmware version */
@@ -180,7 +182,6 @@ struct dev_context {
 
 	/* Data buffer */
 	uint8_t *logic_buffer;
-	float *analog_buffer;
 	size_t buffer_size;        /* Read buffer size */
 
 	void (*send_data_proc)(struct sr_dev_inst *sdi,

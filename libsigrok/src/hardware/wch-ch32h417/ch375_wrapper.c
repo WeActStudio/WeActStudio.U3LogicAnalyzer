@@ -47,6 +47,17 @@
 
 static HMODULE ch375_dll_handle = NULL;
 
+/* Serializes loading and unloading the DLL */
+G_LOCK_DEFINE_STATIC(ch375_dll);
+
+/*
+ * Number of devices currently opened through ch375_open_device(). The DLL is
+ * kept loaded while this is non-zero: ch375_cleanup() is also called from the
+ * GUI thread, and unloading the DLL while libsigrok still holds device
+ * handles would leave those handles dangling.
+ */
+static gint ch375_open_count = 0;
+
 /* Device management function pointers */
 static CH375OpenDevice_func pCH375OpenDevice = NULL;
 static CH375CloseDevice_func pCH375CloseDevice = NULL;
@@ -108,88 +119,11 @@ static CH375SetDeviceNotify_func pCH375SetDeviceNotify = NULL;
  * Helper macro for dynamic loading
  * ============================================================================ */
 
-#define LOAD_FUNC(name) \
-    do { \
-        p##name = (name##_func)GetProcAddress(ch375_dll_handle, #name); \
-        if (!p##name) { \
-            sr_err("Failed to get " #name " function address"); \
-            return SR_ERR; \
-        } \
-    } while(0)
-
-#define LOAD_FUNC_OPTIONAL(name) \
-    do { \
-        p##name = (name##_func)GetProcAddress(ch375_dll_handle, #name); \
-    } while(0)
-
-/* ============================================================================
- * DLL load/unload
- * ============================================================================ */
-
-int ch375_init(void)
-{
-    if (ch375_dll_handle != NULL) {
-        /* Already loaded */
-        return SR_OK;
-    }
-
-    /* Try to load CH375DLL64.DLL */
-    ch375_dll_handle = LoadLibraryA("CH375DLL64.DLL");
-    if (ch375_dll_handle == NULL) {
-        /* Try to load CH375DLL.DLL (32-bit build) */
-        ch375_dll_handle = LoadLibraryA("CH375DLL.DLL");
-        if (ch375_dll_handle == NULL) {
-            sr_err("Failed to load CH375DLL64.DLL or CH375DLL.DLL");
-            return SR_ERR;
-        }
-        sr_warn("Loaded CH375DLL.DLL (32-bit), consider using 64-bit version");
-    }
-
-    /* Load all required functions */
-    LOAD_FUNC(CH375OpenDevice);
-    LOAD_FUNC(CH375CloseDevice);
-    LOAD_FUNC(CH375GetUsbID);
-    LOAD_FUNC(CH375SetTimeout);
-    LOAD_FUNC(CH375WriteRead);
-    LOAD_FUNC(CH375ReadEndP);
-    LOAD_FUNC(CH375SetBufUploadEx);
-    LOAD_FUNC(CH375QueryBufUploadEx);
-    LOAD_FUNC(CH375ClearBufUpload);
-    LOAD_FUNC(CH375AbortEndPRead);
-
-    /* Load the optional functions */
-    LOAD_FUNC_OPTIONAL(CH375GetVersion);
-    LOAD_FUNC_OPTIONAL(CH375GetDrvVersion);
-    LOAD_FUNC_OPTIONAL(CH375GetDeviceName);
-    LOAD_FUNC_OPTIONAL(CH375GetDeviceDescr);
-    LOAD_FUNC_OPTIONAL(CH375GetConfigDescr);
-    LOAD_FUNC_OPTIONAL(CH375ResetDevice);
-    LOAD_FUNC_OPTIONAL(CH375SetExclusive);
-    LOAD_FUNC_OPTIONAL(CH375SetTimeoutEx);
-    LOAD_FUNC_OPTIONAL(CH375WriteEndP);
-    LOAD_FUNC_OPTIONAL(CH375AbortEndPWrite);
-    LOAD_FUNC_OPTIONAL(CH375ResetInEndP);
-    LOAD_FUNC_OPTIONAL(CH375ResetOutEndP);
-    LOAD_FUNC_OPTIONAL(CH375ReadData);
-    LOAD_FUNC_OPTIONAL(CH375WriteData);
-    LOAD_FUNC_OPTIONAL(CH375AbortRead);
-    LOAD_FUNC_OPTIONAL(CH375AbortWrite);
-    LOAD_FUNC_OPTIONAL(CH375SetBufUpload);
-    LOAD_FUNC_OPTIONAL(CH375QueryBufUpload);
-    LOAD_FUNC_OPTIONAL(CH375SetBufDownload);
-    LOAD_FUNC_OPTIONAL(CH375QueryBufDownload);
-    LOAD_FUNC_OPTIONAL(CH375SetBufDownloadEx);
-    LOAD_FUNC_OPTIONAL(CH375DriverCommand);
-    LOAD_FUNC_OPTIONAL(CH375WriteData);
-    LOAD_FUNC_OPTIONAL(CH375SetDeviceNotify);
-    
-    unsigned long version = ch375_get_version();
-    sr_info("CH375DLL loaded successfully, version: %08x", version);
-
-    return SR_OK;
-}
-
-void ch375_cleanup(void)
+/*
+ * Unload the DLL and drop every function pointer.
+ * The caller must hold ch375_dll.
+ */
+static void ch375_unload_locked(void)
 {
     if (ch375_dll_handle != NULL) {
         FreeLibrary(ch375_dll_handle);
@@ -234,6 +168,132 @@ void ch375_cleanup(void)
     }
 }
 
+#define LOAD_FUNC(name) \
+    do { \
+        p##name = (name##_func)GetProcAddress(ch375_dll_handle, #name); \
+        if (!p##name) { \
+            sr_err("Failed to get " #name " function address"); \
+            return SR_ERR; \
+        } \
+    } while(0)
+
+#define LOAD_FUNC_OPTIONAL(name) \
+    do { \
+        p##name = (name##_func)GetProcAddress(ch375_dll_handle, #name); \
+    } while(0)
+
+/* ============================================================================
+ * DLL load/unload
+ * ============================================================================ */
+
+/*
+ * Load the DLL and populate the function pointer table.
+ * The caller must hold ch375_dll.
+ */
+static int ch375_load_locked(void)
+{
+    /* Try to load CH375DLL64.DLL */
+    ch375_dll_handle = LoadLibraryA("CH375DLL64.DLL");
+    if (ch375_dll_handle == NULL) {
+        /* Try to load CH375DLL.DLL (32-bit build) */
+        ch375_dll_handle = LoadLibraryA("CH375DLL.DLL");
+        if (ch375_dll_handle == NULL) {
+            sr_err("Failed to load CH375DLL64.DLL or CH375DLL.DLL");
+            return SR_ERR;
+        }
+        sr_warn("Loaded CH375DLL.DLL (32-bit), consider using 64-bit version");
+    }
+
+    /* Load all required functions */
+    LOAD_FUNC(CH375OpenDevice);
+    LOAD_FUNC(CH375CloseDevice);
+    LOAD_FUNC(CH375GetUsbID);
+    LOAD_FUNC(CH375SetTimeout);
+    LOAD_FUNC(CH375ReadEndP);
+    LOAD_FUNC(CH375SetBufUploadEx);
+    LOAD_FUNC(CH375QueryBufUploadEx);
+    LOAD_FUNC(CH375ClearBufUpload);
+    LOAD_FUNC(CH375AbortEndPRead);
+
+    /* Load the optional functions */
+    LOAD_FUNC_OPTIONAL(CH375GetVersion);
+    LOAD_FUNC_OPTIONAL(CH375GetDrvVersion);
+    LOAD_FUNC_OPTIONAL(CH375GetDeviceName);
+    LOAD_FUNC_OPTIONAL(CH375GetDeviceDescr);
+    LOAD_FUNC_OPTIONAL(CH375GetConfigDescr);
+    LOAD_FUNC_OPTIONAL(CH375ResetDevice);
+    LOAD_FUNC_OPTIONAL(CH375SetExclusive);
+    LOAD_FUNC_OPTIONAL(CH375SetTimeoutEx);
+    LOAD_FUNC_OPTIONAL(CH375WriteRead);    /* only ch375_write_read() uses it */
+    /* ch32h417_send_command() cannot work without this one */
+    LOAD_FUNC(CH375WriteEndP);
+    LOAD_FUNC_OPTIONAL(CH375AbortEndPWrite);
+    LOAD_FUNC_OPTIONAL(CH375ResetInEndP);
+    LOAD_FUNC_OPTIONAL(CH375ResetOutEndP);
+    LOAD_FUNC_OPTIONAL(CH375ReadData);
+    LOAD_FUNC_OPTIONAL(CH375WriteData);
+    LOAD_FUNC_OPTIONAL(CH375AbortRead);
+    LOAD_FUNC_OPTIONAL(CH375AbortWrite);
+    LOAD_FUNC_OPTIONAL(CH375SetBufUpload);
+    LOAD_FUNC_OPTIONAL(CH375QueryBufUpload);
+    LOAD_FUNC_OPTIONAL(CH375SetBufDownload);
+    LOAD_FUNC_OPTIONAL(CH375QueryBufDownload);
+    LOAD_FUNC_OPTIONAL(CH375SetBufDownloadEx);
+    LOAD_FUNC_OPTIONAL(CH375DriverCommand);
+    LOAD_FUNC_OPTIONAL(CH375SetDeviceNotify);
+    
+    unsigned long version = ch375_get_version();
+    sr_info("CH375DLL loaded successfully, version: %08x", version);
+
+    return SR_OK;
+}
+
+int ch375_init(void)
+{
+    int ret;
+
+    G_LOCK(ch375_dll);
+
+    if (ch375_dll_handle != NULL) {
+        /* Already loaded */
+        G_UNLOCK(ch375_dll);
+        return SR_OK;
+    }
+
+    ret = ch375_load_locked();
+    if (ret != SR_OK) {
+        /* Do not leave the DLL mapped with a half-populated function table */
+        ch375_unload_locked();
+        G_UNLOCK(ch375_dll);
+        return ret;
+    }
+
+    G_UNLOCK(ch375_dll);
+
+    return SR_OK;
+}
+
+void ch375_cleanup(void)
+{
+    G_LOCK(ch375_dll);
+
+    if (ch375_dll_handle == NULL) {
+        G_UNLOCK(ch375_dll);
+        return;
+    }
+
+    if (g_atomic_int_get(&ch375_open_count) > 0) {
+        sr_warn("CH375DLL still has %d open device(s), keeping it loaded",
+                g_atomic_int_get(&ch375_open_count));
+        G_UNLOCK(ch375_dll);
+        return;
+    }
+
+    ch375_unload_locked();
+
+    G_UNLOCK(ch375_dll);
+}
+
 int ch375_is_loaded(void)
 {
     return (ch375_dll_handle != NULL);
@@ -265,6 +325,8 @@ void* ch375_open_device(unsigned long index)
         return CH375_INVALID_HANDLE;
     }
 
+    g_atomic_int_inc(&ch375_open_count);
+
     sr_dbg("Opened device at index %lu", index);
     return handle;
 }
@@ -273,6 +335,8 @@ void ch375_close_device(unsigned long index)
 {
     if (pCH375CloseDevice) {
         pCH375CloseDevice(index);
+        if (g_atomic_int_get(&ch375_open_count) > 0)
+            g_atomic_int_dec_and_test(&ch375_open_count);
         sr_dbg("Closed device at index %lu", index);
     }
 }

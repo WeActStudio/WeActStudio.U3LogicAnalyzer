@@ -22,7 +22,14 @@
 #include "protocol.h"
 #include <math.h>
 
-/* Logic analyzer sample rates - USB 3.0 (up to 200 MHz) */
+/*
+ * Logic analyzer sample rates - USB 3.0 (up to 200 MHz).
+ *
+ * The index of an entry is the clock divider index that is sent to the
+ * device, so entries may only ever be appended at the end; inserting a
+ * rate in the middle would shift the divider of every entry behind it.
+ * See samplerate_to_divider().
+ */
 static const uint64_t logic_samplerates_usb3[] = {
 	SR_MHZ(200),	
 	SR_MHZ(187.5),	
@@ -36,8 +43,8 @@ static const uint64_t logic_samplerates_usb3[] = {
 	SR_MHZ(100),	
 	SR_MHZ(93.75),	
 	SR_MHZ(87.5),	
-	SR_MHZ(81.5),	
-	SR_MHZ(75.125), 
+	SR_MHZ(81.25),	
+	SR_MHZ(78.125), 
 	SR_MHZ(75),		
 	SR_MHZ(68.75),	
 	SR_MHZ(50),
@@ -73,7 +80,11 @@ static const uint64_t logic_samplerates_usb2_8ch[] = {
 	SR_MHZ(4),
 };
 
-/* ADC sample rates, up to 20 MHz */
+/*
+ * ADC sample rates, up to 20 MHz. The table index plus
+ * CH32H417_ADC_DIVIDER_OFFSET is the divider index (see
+ * ch32h417_set_adc_params()).
+ */
 static const uint64_t adc_samplerates[] = {
 	SR_MHZ(20),	  
 	SR_MHZ(16),	  
@@ -81,6 +92,9 @@ static const uint64_t adc_samplerates[] = {
 	SR_MHZ(11.43),
 	SR_MHZ(10),
 };
+
+/* ADC sample rates start at this divider index */
+#define CH32H417_ADC_DIVIDER_OFFSET 3
 
 static uint8_t resp_buffer[PACKET_SIZE_IN];
 static int resp_len = 0;
@@ -224,6 +238,34 @@ SR_PRIV int ch32h417_receive_response(struct sr_dev_inst *sdi,
 }
 
 
+/*
+ * Map a sample rate to the hardware clock divider index.
+ *
+ * The divider index is the position of the rate inside the table the
+ * driver handed to the device: the firmware takes the index that the host
+ * sends in params[1] and looks it up in its own divider table
+ * (UHSIF_Clock_Set(), "case 0x00 .. 0x18" in ch32h417_logic.c), adding a
+ * fixed offset for USB 2.0 mode.
+ *
+ * @param rates      Sample rate table, in divider order.
+ * @param num_rates  Number of entries in @p rates.
+ * @param samplerate Rate to look up.
+ *
+ * @return The divider index, or -1 when the rate is not in the table.
+ */
+static int samplerate_to_divider(const uint64_t *rates,
+								 unsigned int num_rates, uint64_t samplerate)
+{
+	unsigned int i;
+
+	for (i = 0; i < num_rates; i++) {
+		if (rates[i] == samplerate)
+			return (int)i;
+	}
+
+	return -1;
+}
+
 SR_PRIV int ch32h417_set_logic_params(const struct sr_dev_inst *sdi)
 {
 	struct dev_context *devc;
@@ -236,13 +278,9 @@ SR_PRIV int ch32h417_set_logic_params(const struct sr_dev_inst *sdi)
 	params[0] = devc->sample_width;
 
 	/* Clock divider index */
-	int div = 0;
-	while (div < devc->num_samplerates &&
-		   devc->samplerates[div] != devc->cur_samplerate)
-	{
-		div++;
-	}
-	if (div >= devc->num_samplerates)
+	int div = samplerate_to_divider(devc->samplerates,
+			(unsigned int)devc->num_samplerates, devc->cur_samplerate);
+	if (div < 0)
 	{
 		sr_err("Invalid samplerate: %" PRIu64, devc->cur_samplerate);
 		return SR_ERR_ARG;
@@ -357,18 +395,14 @@ SR_PRIV int ch32h417_set_adc_params(const struct sr_dev_inst *sdi)
 	params[0] = devc->adc_width;
 
 	/* Determine the clock divider index */
-	int div = 0;
-	while (div < ARRAY_SIZE(adc_samplerates) &&
-		   adc_samplerates[div] != devc->cur_samplerate)
-	{
-		div++;
-	}
-	if (div >= ARRAY_SIZE(adc_samplerates))
+	int div = samplerate_to_divider(adc_samplerates,
+			(unsigned int)ARRAY_SIZE(adc_samplerates), devc->cur_samplerate);
+	if (div < 0)
 	{
 		sr_err("Invalid ADC samplerate: %" PRIu64, devc->cur_samplerate);
 		return SR_ERR_ARG;
 	}
-	div += 3;
+	div += CH32H417_ADC_DIVIDER_OFFSET;
 	params[1] = (uint8_t)div;
 
 	sr_info("Setting ADC params: width=0x%02x, div=%d", params[0], params[1]);
@@ -658,6 +692,50 @@ SR_PRIV int ch32h417_get_fw_version(const struct sr_dev_inst *sdi)
 	return SR_OK;
 }
 
+/*
+ * Read the abort flag. Several threads write it, so it has to be read
+ * while holding devc->mutex.
+ */
+static gboolean acquisition_aborted(struct dev_context *devc)
+{
+	gboolean aborted;
+
+	g_mutex_lock(&devc->mutex);
+	aborted = devc->acq_aborted;
+	g_mutex_unlock(&devc->mutex);
+
+	return aborted;
+}
+
+/* Set the abort flag while holding devc->mutex. */
+static void acquisition_set_aborted(struct dev_context *devc,
+									gboolean aborted)
+{
+	g_mutex_lock(&devc->mutex);
+	devc->acq_aborted = aborted;
+	g_mutex_unlock(&devc->mutex);
+}
+
+/*
+ * Send the stop command at most once per acquisition. Both the data read
+ * thread and finish_acquisition() want to stop the device, and re-issuing
+ * the command while it is already idle confuses it. The flag is reset by
+ * ch32h417_acquisition_start().
+ */
+static void send_stop_command_once(const struct sr_dev_inst *sdi)
+{
+	struct dev_context *devc = sdi->priv;
+	gboolean need_send;
+
+	g_mutex_lock(&devc->mutex);
+	need_send = !devc->stop_sent;
+	devc->stop_sent = TRUE;
+	g_mutex_unlock(&devc->mutex);
+
+	if (need_send)
+		send_stop_command(sdi);
+}
+
 static int acquisition_check_cb(int fd, int revents, void *cb_data)
 {
 	struct sr_dev_inst *sdi = cb_data;
@@ -666,24 +744,13 @@ static int acquisition_check_cb(int fd, int revents, void *cb_data)
 	(void)fd;
 	(void)revents;
 
-	g_mutex_lock(&devc->mutex);
-	gboolean should_stop = devc->acq_aborted;
-	g_mutex_unlock(&devc->mutex);
-
-	if (should_stop) {
+	if (acquisition_aborted(devc)) {
 		sr_dbg("acquisition_check_cb: thread requested stop");
 		sr_dev_acquisition_stop(sdi);
 		return G_SOURCE_REMOVE;
 	}
 
 	return G_SOURCE_CONTINUE;
-}
-
-static gpointer stop_command_thread_func(gpointer data)
-{
-	struct sr_dev_inst *sdi = data;
-	send_stop_command(sdi);
-	return NULL;
 }
 
 /* Send logic analyzer data */
@@ -780,7 +847,6 @@ static gpointer data_read_thread(gpointer arg)
 	size_t unitsize;
 	unsigned int num_samples;
 	int trigger_offset, pre_trigger_samples, cur_sample_count, processed_samples;
-	int no_data_count = 0;
 	int64_t no_data_timeout_ms = 500; /* 500 ms without data counts as a timeout */
 
 	pipe_num = (devc->mode == MODE_LOGIC_ANALYZER) ? PIPE_LOGIC_DATA : PIPE_ADC_DATA;
@@ -801,7 +867,7 @@ static gpointer data_read_thread(gpointer arg)
 	
 	int64_t last_query_time = g_get_monotonic_time();
 	int64_t current_time = last_query_time;
-	while (!devc->acq_aborted) {
+	while (!acquisition_aborted(devc)) {
 		processed_samples = 0;
 		current_time = g_get_monotonic_time();
 
@@ -819,14 +885,12 @@ static gpointer data_read_thread(gpointer arg)
 			/* Track how long there has been no data */
 			int64_t no_data_time_ms = (current_time - last_query_time) / 1000;
 			if (no_data_time_ms >= no_data_timeout_ms) {
-				send_stop_command(sdi);
+				send_stop_command_once(sdi);
 				/* Timed out with no data, the device may have stopped acquiring */
 				sr_info("No data for %d ms, device may have stopped", no_data_timeout_ms);
 				g_free(buffer);
 				/* Flag the thread as exiting; the timer callback handles the stop */
-				g_mutex_lock(&devc->mutex);
-				devc->acq_aborted = TRUE;
-				g_mutex_unlock(&devc->mutex);
+				acquisition_set_aborted(devc, TRUE);
 				sr_dbg("data_read_thread EXIT (timeout)");
 				return NULL;
 			}
@@ -834,8 +898,7 @@ static gpointer data_read_thread(gpointer arg)
 			continue;
 		}
 
-		/* Data received, reset the counter */
-		no_data_count = 0;
+		/* Data received, reset the idle timer */
 		last_query_time = current_time;
 
 		/* Read the data */
@@ -920,36 +983,14 @@ static gpointer data_read_thread(gpointer arg)
 			}
 		}
 		if (frame_ended && final_frame) {
-			send_stop_command(sdi);
+			send_stop_command_once(sdi);
 
-			g_mutex_lock(&devc->mutex);
-			devc->acq_aborted = TRUE;
-			g_mutex_unlock(&devc->mutex);
+			acquisition_set_aborted(devc, TRUE);
 			g_free(buffer);
 			sr_dbg("data_read_thread EXIT (frame limit)");
 			return NULL;
 		}
 
-		// if (devc->limit_samples && devc->sent_samples >= devc->limit_samples) {
-		// 	devc->num_frames++;
-		// 	devc->sent_samples = 0;
-		// 	devc->trigger_fired = FALSE;
-
-		// 	if (devc->stl)
-		// 		devc->stl->cur_stage = 0;
-
-		// 	if (devc->limit_frames && devc->num_frames >= devc->limit_frames) {
-		// 		// g_thread_try_new("stop_cmd", stop_command_thread_func, (gpointer)sdi, NULL);
-		// 		send_stop_command(sdi);
-
-		// 		g_mutex_lock(&devc->mutex);
-		// 		devc->acq_aborted = TRUE;
-		// 		g_mutex_unlock(&devc->mutex);
-		// 		g_free(buffer);
-		// 		sr_dbg("data_read_thread EXIT (frame limit)");
-		// 		return NULL;	
-		// 	}
-		// }
 	}
 
 	g_free(buffer);
@@ -966,15 +1007,15 @@ static void finish_acquisition(struct sr_dev_inst *sdi)
 	devc = sdi->priv;
 
 	/* Send the stop command and the end packet */
-	send_stop_command(sdi);
+	send_stop_command_once(sdi);
 
-	/* Remove the timer callback */
-	sr_session_source_remove(sdi->session, -1);
+	/* Remove the timer callback. It only exists when the acquisition was
+	 * started successfully, and so does the DF header sent below. */
+	if (devc->acq_started)
+		sr_session_source_remove(sdi->session, -1);
 
 	/* Stop the read thread */
-	g_mutex_lock(&devc->mutex);
-	devc->acq_aborted = TRUE;
-	g_mutex_unlock(&devc->mutex);
+	acquisition_set_aborted(devc, TRUE);
 
 	/* Wait for the thread to finish */
 	if (devc->read_thread) {
@@ -982,7 +1023,10 @@ static void finish_acquisition(struct sr_dev_inst *sdi)
 		devc->read_thread = NULL;
 	}
 	
-	std_session_send_df_end(sdi);
+	if (devc->acq_started) {
+		std_session_send_df_end(sdi);
+		devc->acq_started = FALSE;
+	}
 
 	sr_dbg("devc->read_thread EXIT");
 
@@ -996,12 +1040,6 @@ static void finish_acquisition(struct sr_dev_inst *sdi)
 	{
 		g_free(devc->logic_buffer);
 		devc->logic_buffer = NULL;
-	}
-
-	if (devc->analog_buffer)
-	{
-		g_free(devc->analog_buffer);
-		devc->analog_buffer = NULL;
 	}
 	sr_dbg("finish_acquisition function done");
 }
@@ -1057,8 +1095,9 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 
 	devc = sdi->priv;
 	devc->sent_samples = 0;
-	devc->acq_aborted = FALSE;
+	acquisition_set_aborted(devc, FALSE);
 	devc->num_frames = 0;
+	devc->acq_started = FALSE;
 
 	/* Flush endpoint 0 */
 	sr_info("Flushing cmd endpoint...");
@@ -1176,9 +1215,6 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 			sr_err("Failed to start ADC acquisition.");
 			return ret;
 		}
-
-		devc->analog_buffer = g_try_malloc(
-			sizeof(float) * devc->limit_samples);
 	}
 
 	/* Configure the trigger */
@@ -1206,17 +1242,18 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 		devc->send_data_proc = adc_send_data_proc;
 	}
 
-	g_mutex_lock(&devc->mutex);
-	devc->acq_aborted = TRUE;
-	g_mutex_unlock(&devc->mutex);
+	acquisition_set_aborted(devc, TRUE);
 
 	if (devc->read_thread) {
 		g_thread_join(devc->read_thread);
 		devc->read_thread = NULL;
 	}
 
+	acquisition_set_aborted(devc, FALSE);
+
+	/* A new acquisition may send the stop command again */
 	g_mutex_lock(&devc->mutex);
-	devc->acq_aborted = FALSE;
+	devc->stop_sent = FALSE;
 	g_mutex_unlock(&devc->mutex);
 
 	if (!ch375_clear_buf_upload(devc->device_index, pipe_num)) {
@@ -1229,11 +1266,12 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 		if (!ch375_clear_buf_upload(devc->device_index, pipe_num)) {
 			sr_warn("Failed to clear upload buffer pipe %lu for device at index %d", pipe_num, devc->device_index);
 		}
-		send_stop_command(sdi);
+		send_stop_command_once(sdi);
 		return SR_ERR;
 	}
 
 	std_session_send_df_header(sdi);
+	devc->acq_started = TRUE;
 
 	/* Add a timer callback that watches the acquisition state and stops it on the main thread */
 	sr_session_source_add(sdi->session, -1, 0, 5,
