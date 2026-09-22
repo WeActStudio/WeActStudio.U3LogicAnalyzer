@@ -51,14 +51,43 @@ fi
 
 JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
-for arg in "$@"; do
-    case $arg in
+while [ $# -gt 0 ]; do
+    case $1 in
         --clean) CLEAN=1 ;;
         --package) PACKAGE=1 ;;
-        --prefix) PREFIX="$2"; shift ;;
+        --prefix)
+            if [ $# -lt 2 ]; then
+                echo "[error] --prefix requires a path argument" >&2
+                exit 1
+            fi
+            PREFIX="$2"
+            shift
+            ;;
+        *)
+            echo "[warn] Unknown option: $1" >&2
+            ;;
     esac
-    shift 2>/dev/null || true
+    shift
 done
+
+# ============================================================================
+# Python version detection
+# Detect instead of hardcoding (e.g. "3.14") so that an MSYS2 Python upgrade
+# cannot silently break the packaged protocol decoders.
+# ============================================================================
+PYVER=""
+if command -v python3 >/dev/null 2>&1; then
+    PYVER="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true)"
+fi
+if [ -z "$PYVER" ]; then
+    PYVER="$(pkg-config --modversion python3 2>/dev/null || true)"
+fi
+if [ -z "$PYVER" ]; then
+    echo "[warn] Could not detect the Python version; assuming 3.14" >&2
+    PYVER="3.14"
+fi
+PYDLL="libpython${PYVER}.dll"
+PYTHON_SRC="/mingw64/lib/python${PYVER}"
 
 echo "============================================"
 echo " CH32H417 LogicAnalyzer Build"
@@ -185,7 +214,7 @@ if [ $IS_WINDOWS -eq 1 ]; then
         libsigc-2.0-0.dll libstdc++-6.dll libwinpthread-1.dll \
         libgcc_s_seh-1.dll libgmodule-2.0-0.dll libusb-1.0.dll libhidapi-0.dll \
         libintl-8.dll libiconv-2.dll libpcre2-8-0.dll libffi-8.dll \
-        libzip.dll libbz2-1.dll liblzma-5.dll zlib1.dll libzstd.dll libpython3.14.dll; do
+        libzip.dll libbz2-1.dll liblzma-5.dll zlib1.dll libzstd.dll "$PYDLL"; do
         cp "/mingw64/bin/$dll" "$PVDIR/" 2>/dev/null || true
     done
 #     cat > "$PVDIR/run.bat" << 'RBEOF'
@@ -242,17 +271,16 @@ if [ $PACKAGE -eq 1 ]; then
             libusb-1.0.dll libhidapi-0.dll \
             libintl-8.dll libiconv-2.dll libpcre2-8-0.dll libffi-8.dll \
             libzip.dll libbz2-1.dll liblzma-5.dll \
-            zlib1.dll libzstd.dll libpython3.14.dll; do
+            zlib1.dll libzstd.dll "$PYDLL"; do
             cp "/mingw64/bin/$dll" "$DIST_DIR/" 2>/dev/null || true
         done
 
 	# 4. Copy Python standard library (needed for protocol decoders)
         echo "  Python standard library..."
-        PYTHON_SRC="/mingw64/lib/python3.14"
         if [ -d "$PYTHON_SRC" ]; then
-            mkdir -p "$DIST_DIR/python-portable/lib/python3.14"
+            mkdir -p "$DIST_DIR/python-portable/lib/python${PYVER}"
             if [ -d "$PYTHON_SRC/lib-dynload" ]; then
-                cp -r "$PYTHON_SRC/lib-dynload" "$DIST_DIR/python-portable/lib/python3.14/"
+                cp -r "$PYTHON_SRC/lib-dynload" "$DIST_DIR/python-portable/lib/python${PYVER}/"
             fi
             for dir in asyncio collections concurrent ctypes distutils email encodings \
                        html http importlib json lib logging multiprocessing \
@@ -272,9 +300,13 @@ if [ $PACKAGE -eq 1 ]; then
                        textwrap.py threading.py token.py tokenize.py \
                        _weakrefset.py sysconfig _pydecimal.py _py_warnings.py numbers.py contextlib.py contextvars.py \
                        types.py typing.py uuid.py warnings.py weakref.py; do
-                cp -r "$PYTHON_SRC/$dir" "$DIST_DIR/python-portable/lib/python3.14/" 2>/dev/null || true
+                cp -r "$PYTHON_SRC/$dir" "$DIST_DIR/python-portable/lib/python${PYVER}/" 2>/dev/null || true
             done
             echo "    $(find "$DIST_DIR/python-portable" -type f | wc -l) files"
+        else
+            echo "[error] Python standard library not found at $PYTHON_SRC" >&2
+            echo "        The packaged protocol decoders would not work; aborting." >&2
+            exit 1
         fi
 
 	# 5. Copy protocol decoders

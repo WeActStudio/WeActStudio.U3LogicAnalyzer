@@ -38,5 +38,5 @@ cat <<EOF
 现在可以运行:
 
   ./build.sh         # build
-  cd build_cmake/pulseview_build && ./LogicAnalyzer.exe   # run
+  cd build_cmake/logicanalyzer_build && ./LogicAnalyzer.exe   # run
 EOF

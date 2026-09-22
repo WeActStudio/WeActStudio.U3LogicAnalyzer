@@ -97,25 +97,17 @@ cd build_cmake/logicanalyzer_build
 
 ### macOS
 
-工作流：`.github/workflows/build-macos.yml`（Homebrew + Qt5，执行 `./build.sh --clean --package`）
+**不受支持。** CH32H417 硬件通信依赖 Windows 专用的 CH375DLL：`ch375_wrapper.c` 只实现
+`_WIN32` 分支，其余平台在编译期直接 `#error` 退出。因此仓库不再提供 macOS 构建流程
+（原 `build-macos.yml` 已移除），`setup_env_macos.sh` 与 `build.sh` 的 macOS 分支亦不再维护。
 
-产物：`LogicAnalyzer-macOS`（zip，内含 `LogicAnalyzer.app`、130 个解码器和 `run.sh`）
-
-> **注意：** CH32H417 硬件通信依赖 Windows 专用 CH375DLL，macOS 版可编译运行（含 Demo 驱动和协议解码），但无法连接 CH32H417 设备。
-
-本地 macOS 构建：
-
-```bash
-./setup_env_macos.sh   # 安装 glibmm@2.66 + libsigc++@2（需 glibmm-2.4，非默认 glibmm 2.88）
-./build.sh --package
-open dist/LogicAnalyzer/LogicAnalyzer.app
-```
+> 需要在 macOS 上使用 PulseView 时，请改用上游 sigrok 官方版本。
 
 ### 触发条件
 
 - 推送到 `main` 或 `master` 分支
 - Pull Request
-- 手动触发（Actions → Build Windows / Build macOS → Run workflow）
+- 手动触发（Actions → Build Windows → Run workflow）
 
 构建完成后，在对应 workflow run 的 **Artifacts** 区域下载产物。
 

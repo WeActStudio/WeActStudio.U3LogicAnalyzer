@@ -29,14 +29,11 @@
 #include "libsigrok-internal.h"
 #include <glib.h>
 
-/* Windows API headers - mingw-w64 cross compilation */
+/* Windows API headers (CH375DLL is a Windows-only library) */
 #ifdef _WIN32
 #include <windows.h>
 #else
-/* mingw-w64 cross compilation still uses the Windows headers */
-#include <windef.h>
-#include <winbase.h>
-#include <libloaderapi.h>
+#error "ch375_wrapper.c only supports Windows (CH375DLL is a Windows-only library)"
 #endif
 
 #define LOG_PREFIX "ch375"

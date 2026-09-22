@@ -32,7 +32,7 @@
 
 #include "../../../libsigrok/src/hardware/wch-ch32h417/ch375_wrapper.h"
 
-#include <hidapi.h>
+#include <hidapi/hidapi.h>
 
 #include <cstdio>
 #include <cstdint>
@@ -325,10 +325,16 @@ bool IAPWorker::hid_write(const uint8_t *data, size_t len)
 
     ::hid_set_nonblocking((hid_device*)hid_handle_, 1);
 
+    if (len > (HID_PACKET_LEN - 1)) {
+        log(tr("HID写入数据过长 (%1 > %2)，已拒绝")
+            .arg(static_cast<qulonglong>(len)).arg(HID_PACKET_LEN - 1));
+        return false;
+    }
+
     uint8_t send_buf[HID_PACKET_LEN] = {0};
     send_buf[0] = HID_REPORT_ID;
 
-    if (len > 0 && len <= (HID_PACKET_LEN - 1)) {
+    if (len > 0) {
         memcpy(send_buf + 1, data, len);
     }
 

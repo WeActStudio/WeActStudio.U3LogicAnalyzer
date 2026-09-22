@@ -47,7 +47,7 @@
 #include <mutex>
 #include <QFile>
 #include <libusb.h>
-#include <hidapi.h>
+#include <hidapi/hidapi.h>
 
 #include "../../../libsigrok/src/hardware/wch-ch32h417/ch375_wrapper.h"
 

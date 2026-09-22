@@ -533,36 +533,34 @@ include_directories(
 	${Boost_INCLUDE_DIRS}
 )
 
-# hidapi headers for IAP/mainbar (pkg-config; MSYS2 needs Windows path fallback)
+# hidapi headers for IAP / mainbar (pv/dialogs/iapdialog.cpp, pv/toolbars/mainbar.hpp).
+# Resolve the directory that *contains* hidapi/hidapi.h so the sources can
+# consistently use #include <hidapi/hidapi.h> on every platform / distro layout.
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+	pkg_check_modules(HIDAPI_PC QUIET hidapi)
+endif()
 set(HIDAPI_INCLUDE_DIR "")
-execute_process(
-	COMMAND pkg-config --cflags-only-I hidapi
-	OUTPUT_VARIABLE _hidapi_cflags
-	OUTPUT_STRIP_TRAILING_WHITESPACE
-	RESULT_VARIABLE _hidapi_rc
-	ERROR_QUIET
-)
-if(_hidapi_rc EQUAL 0 AND _hidapi_cflags)
-	string(REGEX REPLACE "^-I" "" HIDAPI_INCLUDE_DIR "${_hidapi_cflags}")
-	string(STRIP "${HIDAPI_INCLUDE_DIR}" HIDAPI_INCLUDE_DIR)
-elseif(WIN32)
-	execute_process(
-		COMMAND cygpath -m /mingw64/include/hidapi
-		OUTPUT_VARIABLE HIDAPI_INCLUDE_DIR
-		OUTPUT_STRIP_TRAILING_WHITESPACE
-		ERROR_QUIET
-	)
-elseif(APPLE)
-	foreach(_hidapi_path /opt/homebrew/include/hidapi /usr/local/include/hidapi)
-		if(EXISTS "${_hidapi_path}/hidapi.h")
-			set(HIDAPI_INCLUDE_DIR "${_hidapi_path}")
-			break()
-		endif()
-	endforeach()
+foreach(_hidapi_dir ${HIDAPI_PC_INCLUDE_DIRS})
+	get_filename_component(_hidapi_parent "${_hidapi_dir}" DIRECTORY)
+	if(EXISTS "${_hidapi_parent}/hidapi/hidapi.h")
+		set(HIDAPI_INCLUDE_DIR "${_hidapi_parent}")
+		break()
+	endif()
+	if(EXISTS "${_hidapi_dir}/hidapi/hidapi.h")
+		set(HIDAPI_INCLUDE_DIR "${_hidapi_dir}")
+		break()
+	endif()
+endforeach()
+if(NOT HIDAPI_INCLUDE_DIR)
+	find_path(HIDAPI_INCLUDE_DIR NAMES hidapi/hidapi.h
+		HINTS /mingw64/include /opt/homebrew/include)
 endif()
 if(HIDAPI_INCLUDE_DIR)
 	include_directories(${HIDAPI_INCLUDE_DIR})
 	message(STATUS "hidapi include dir: ${HIDAPI_INCLUDE_DIR}")
+else()
+	message(WARNING "hidapi headers not found - the IAP firmware upgrade will not build")
 endif()
 
 if(STATIC_PKGDEPS_LIBS)
