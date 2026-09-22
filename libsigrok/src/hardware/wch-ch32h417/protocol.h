@@ -175,6 +175,19 @@ struct dev_context {
 		uint8_t *data, size_t length, size_t sample_width);
 };
 
+/*
+ * Sample rate tables, defined in protocol.c. The index of an entry is
+ * the clock divider index that is sent to the device, so entries may
+ * only ever be appended at the end; inserting a rate in the middle
+ * would shift the divider of every entry behind it. The declared sizes
+ * are checked against the definitions by compile-time assertions in
+ * protocol.c.
+ */
+SR_PRIV extern const uint64_t logic_samplerates_usb3[25];
+SR_PRIV extern const uint64_t logic_samplerates_usb2_16ch[6];
+SR_PRIV extern const uint64_t logic_samplerates_usb2_8ch[8];
+SR_PRIV extern const uint64_t adc_samplerates[5];
+
 /* Protocol function declarations */
 SR_PRIV int ch32h417_send_command(struct sr_dev_inst *sdi,
 	uint8_t cmd, uint8_t len, const uint8_t *data);

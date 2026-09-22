@@ -36,6 +36,7 @@
 #include <QMetaType>
 #include <QString>
 #include <QFontMetrics>
+#include <QMessageBox>
 
 using std::string;
 using std::vector;
@@ -174,6 +175,31 @@ vector<string> split_string(string text, string separator);
  * @return width of the string in pixels
  */
 std::streamsize text_width(const QFontMetrics &metric, const QString &string);
+
+
+/**
+ * Show the custom styled message dialog used throughout the application:
+ * a slightly larger font, an icon on the left, the message text and a
+ * single "Confirm" button.
+ *
+ * @param[in] parent Parent widget, also used to place the dialog.
+ * @param[in] title Window title.
+ * @param[in] text Message body.
+ * @param[in] icon Icon shown on the left hand side.
+ * @param[in] min_width Minimum dialog width in pixels; 0 to leave it
+ *  to the layout.
+ * @param[in] rich_text Whether @a text has to be rendered as rich text.
+ * @param[in] open_links Whether hyperlinks in @a text open in a browser.
+ * @param[in] modal Whether to block until the user confirms.
+ */
+void show_message(QWidget *parent, const QString &title, const QString &text,
+	const QPixmap &icon, int min_width = 400, bool rich_text = false,
+	bool open_links = false, bool modal = true);
+
+/** Overload taking one of the standard message box icons. */
+void show_message(QWidget *parent, const QString &title, const QString &text,
+	QMessageBox::Icon icon, int min_width = 400, bool rich_text = false,
+	bool open_links = false, bool modal = true);
 
 } // namespace util
 } // namespace pv

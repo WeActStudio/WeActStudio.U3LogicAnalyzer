@@ -74,86 +74,6 @@ static const int32_t trigger_matches[] = {
 	SR_TRIGGER_EDGE,
 };
 
-/*
- * Logic analyzer sample rates - USB 3.0 (up to 200 MHz).
- * The index of an entry is the clock divider index sent to the device, so
- * entries may only be appended at the end (see the assertions below).
- */
-static const uint64_t logic_samplerates_usb3[] = {
-	SR_MHZ(200),
-	SR_MHZ(187.5),
-	SR_MHZ(175),
-	SR_MHZ(162.5),
-	SR_MHZ(156.25),
-	SR_MHZ(150),
-	SR_MHZ(137.5),
-	SR_MHZ(125),
-	SR_MHZ(112.5),
-	SR_MHZ(100),
-	SR_MHZ(93.75),
-	SR_MHZ(87.5),
-	SR_MHZ(81.25),
-	SR_MHZ(78.125),
-	SR_MHZ(75),	
-	SR_MHZ(68.75),
-	SR_MHZ(50),
-	SR_MHZ(40),
-	SR_MHZ(30),
-	SR_MHZ(20),
-	SR_MHZ(16),
-	SR_MHZ(12),
-	SR_MHZ(8),
-	SR_MHZ(6),
-	SR_MHZ(4),
-};
-
-/* Logic analyzer sample rates - USB 2.0, 16 channels (up to 20 MHz) */
-static const uint64_t logic_samplerates_usb2_16ch[] = {
-	SR_MHZ(20),
-	SR_MHZ(16),
-	SR_MHZ(12),
-	SR_MHZ(8),
-	SR_MHZ(6),
-	SR_MHZ(4),
-};
-
-/* Logic analyzer sample rates - USB 2.0, 8 channels (up to 40 MHz) */
-static const uint64_t logic_samplerates_usb2_8ch[] = {
-	SR_MHZ(40),
-	SR_MHZ(30),
-	SR_MHZ(20),
-	SR_MHZ(16),
-	SR_MHZ(12),
-	SR_MHZ(8),
-	SR_MHZ(6),
-	SR_MHZ(4),
-};
-
-/* ADC sample rates */
-static const uint64_t adc_samplerates[] = {
-	SR_MHZ(20),
-	SR_MHZ(16),
-	SR_MHZ(13.33),
-	SR_MHZ(11.43),
-	SR_MHZ(10),
-};
-
-/*
- * The divider index that the driver sends in params[1] is the index into
- * these tables (see samplerate_to_divider() in protocol.c). The firmware
- * adds a fixed offset per USB mode (UHSIF_Clock_Set() in ch32h417_logic.c):
- *
- *   USB 3.0,              cases 0x00 .. 0x18
- *   USB 2.0,  8 channels, cases 0x11 .. 0x18
- *   USB 2.0, 16 channels, cases 0x13 .. 0x18
- *
- * These assertions keep the tables in sync with the firmware; a mismatch
- * would make the device sample at the wrong frequency.
- */
-G_STATIC_ASSERT(ARRAY_SIZE(logic_samplerates_usb3) == 25);
-G_STATIC_ASSERT(ARRAY_SIZE(logic_samplerates_usb2_8ch) == 8);
-G_STATIC_ASSERT(ARRAY_SIZE(logic_samplerates_usb2_16ch) == 6);
-
 /* Operating mode names */
 static const char *mode_names[] = {
 	[MODE_LOGIC_ANALYZER] = "Logic Analyzer",
@@ -230,7 +150,7 @@ static void ch375_init_comm_params(struct dev_context *devc)
  * @param buf_sz Output buffer size
  * @return 0 on success, -1 on failure
  */
-int extract_usb_serial(const char *dev_path, char *out_sn, size_t buf_sz)
+static int extract_usb_serial(const char *dev_path, char *out_sn, size_t buf_sz)
 {
     const char *p1, *p2, *p3;
     size_t len;
@@ -274,7 +194,7 @@ int extract_usb_serial(const char *dev_path, char *out_sn, size_t buf_sz)
  * @brief Check whether str starts with the given prefix
  * @return 1 if it is a prefix, 0 otherwise
  */
-int str_startswith(const char *str, const char *prefix)
+static int str_startswith(const char *str, const char *prefix)
 {
     if (!str || !prefix)
         return 0;
@@ -463,6 +383,51 @@ static int dev_clear(const struct sr_dev_driver *di)
 	return std_dev_clear_with_callback(di, dev_clear_private);
 }
 
+/*
+ * Select the sample rate table to expose for the current device state.
+ *
+ * A serial number starting with "b5" identifies a device that supports
+ * the full table; older ones only expose a subset (a single rate on
+ * USB 2.0, the non-legacy rates on USB 3.0, see the "- 11" below).
+ *
+ * Call this whenever the channel count, the USB speed or the operating
+ * mode changes; it leaves devc->cur_samplerate alone.
+ */
+static void ch32h417_update_samplerate_list(struct dev_context *devc)
+{
+	const gboolean full_table = str_startswith(devc->profile->SN_start, "b5");
+
+	if (devc->mode != MODE_LOGIC_ANALYZER)
+	{
+		devc->samplerates = adc_samplerates;
+		devc->num_samplerates = ARRAY_SIZE(adc_samplerates);
+		return;
+	}
+
+	if (devc->is_usb2)
+	{
+		if (devc->num_channels == 16)
+		{
+			devc->samplerates = logic_samplerates_usb2_16ch;
+			devc->num_samplerates = full_table ?
+				ARRAY_SIZE(logic_samplerates_usb2_16ch) : 1;
+		}
+		else
+		{
+			devc->samplerates = logic_samplerates_usb2_8ch;
+			devc->num_samplerates = full_table ?
+				ARRAY_SIZE(logic_samplerates_usb2_8ch) : 1;
+		}
+	}
+	else
+	{
+		devc->samplerates = logic_samplerates_usb3;
+		devc->num_samplerates = full_table ?
+			ARRAY_SIZE(logic_samplerates_usb3) :
+			ARRAY_SIZE(logic_samplerates_usb3) - 11;
+	}
+}
+
 /* Open device */
 static int dev_open(struct sr_dev_inst *sdi)
 {
@@ -493,30 +458,7 @@ static int dev_open(struct sr_dev_inst *sdi)
 	if (devc->mode == MODE_LOGIC_ANALYZER)
 	{
 		devc->is_usb2 = ch32h417_detect_usb_speed(sdi);
-		if (devc->is_usb2)
-		{
-			if (devc->num_channels == 16) {
-				devc->samplerates = logic_samplerates_usb2_16ch;
-				if(str_startswith(devc->profile->SN_start, "b5"))
-					devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_16ch);
-				else
-					devc->num_samplerates = 1;
-			} else {
-				devc->samplerates = logic_samplerates_usb2_8ch;
-				if(str_startswith(devc->profile->SN_start, "b5"))
-					devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_8ch);
-				else
-					devc->num_samplerates = 1;
-			}
-		}
-		else
-		{
-			devc->samplerates = logic_samplerates_usb3;
-			if(str_startswith(devc->profile->SN_start, "b5"))
-				devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb3);
-			else
-				devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb3) - 11;
-		}
+		ch32h417_update_samplerate_list(devc);
 		devc->cur_samplerate = devc->samplerates[0];
 	}
 
@@ -657,16 +599,10 @@ static int config_set(uint32_t key, GVariant *data,
 		devc->sample_width = (num == 16) ? SAMPLE_WIDTH_16BIT : SAMPLE_WIDTH_8BIT;
 		sr_info("Channel count set to %d", devc->num_channels);
 
-		/* On USB 2.0 a channel count change requires updating the sample rate table */
+		/* A different channel count selects a different sample rate table */
 		if (devc->is_usb2 && devc->mode == MODE_LOGIC_ANALYZER)
 		{
-			if (devc->num_channels == 16) {
-				devc->samplerates = logic_samplerates_usb2_16ch;
-				devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_16ch);
-			} else {
-				devc->samplerates = logic_samplerates_usb2_8ch;
-				devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_8ch);
-			}
+			ch32h417_update_samplerate_list(devc);
 			devc->cur_samplerate = devc->samplerates[0];
 		}
 	}
@@ -683,38 +619,7 @@ static int config_set(uint32_t key, GVariant *data,
 		devc->mode = (enum ch32h417_mode)mode_idx;
 
 		/* Update the sample rate list when switching mode */
-		if (devc->mode == MODE_LOGIC_ANALYZER)
-		{
-			if (devc->is_usb2)
-			{
-				if (devc->num_channels == 16) {
-					devc->samplerates = logic_samplerates_usb2_16ch;
-					if(str_startswith(devc->profile->SN_start, "b5"))
-						devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_16ch);
-					else
-						devc->num_samplerates = 1;
-				} else {
-					devc->samplerates = logic_samplerates_usb2_8ch;
-					if(str_startswith(devc->profile->SN_start, "b5"))
-						devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb2_8ch);
-					else
-						devc->num_samplerates = 1;
-				}
-			}
-			else
-			{
-				devc->samplerates = logic_samplerates_usb3;
-				if(str_startswith(devc->profile->SN_start, "b5"))
-					devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb3);
-				else
-					devc->num_samplerates = ARRAY_SIZE(logic_samplerates_usb3) - 11;
-			}
-		}
-		else
-		{
-			devc->samplerates = adc_samplerates;
-			devc->num_samplerates = ARRAY_SIZE(adc_samplerates);
-		}
+		ch32h417_update_samplerate_list(devc);
 
 		devc->cur_samplerate = devc->samplerates[0];
 

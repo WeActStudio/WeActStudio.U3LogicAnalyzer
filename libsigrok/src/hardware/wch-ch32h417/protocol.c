@@ -30,7 +30,7 @@
  * rate in the middle would shift the divider of every entry behind it.
  * See samplerate_to_divider().
  */
-static const uint64_t logic_samplerates_usb3[] = {
+const uint64_t logic_samplerates_usb3[] = {
 	SR_MHZ(200),	
 	SR_MHZ(187.5),	
 	SR_MHZ(175),	
@@ -59,7 +59,7 @@ static const uint64_t logic_samplerates_usb3[] = {
 };
 
 /* Logic analyzer USB 2.0, 16 channels (up to 20 MHz) */
-static const uint64_t logic_samplerates_usb2_16ch[] = {
+const uint64_t logic_samplerates_usb2_16ch[] = {
 	SR_MHZ(20),
 	SR_MHZ(16),
 	SR_MHZ(12),
@@ -69,7 +69,7 @@ static const uint64_t logic_samplerates_usb2_16ch[] = {
 };
 
 /* Logic analyzer USB 2.0, 8 channels (up to 40 MHz) */
-static const uint64_t logic_samplerates_usb2_8ch[] = {
+const uint64_t logic_samplerates_usb2_8ch[] = {
 	SR_MHZ(40),
 	SR_MHZ(30),
 	SR_MHZ(20),
@@ -85,13 +85,31 @@ static const uint64_t logic_samplerates_usb2_8ch[] = {
  * CH32H417_ADC_DIVIDER_OFFSET is the divider index (see
  * ch32h417_set_adc_params()).
  */
-static const uint64_t adc_samplerates[] = {
+const uint64_t adc_samplerates[] = {
 	SR_MHZ(20),	  
 	SR_MHZ(16),	  
 	SR_MHZ(13.33),
 	SR_MHZ(11.43),
 	SR_MHZ(10),
 };
+
+/*
+ * The divider index that the driver sends in params[1] is the index
+ * into these tables (see samplerate_to_divider() below). The firmware
+ * adds a fixed offset per USB mode (UHSIF_Clock_Set() in
+ * ch32h417_logic.c):
+ *
+ *   USB 3.0,              cases 0x00 .. 0x18
+ *   USB 2.0,  8 channels, cases 0x11 .. 0x18
+ *   USB 2.0, 16 channels, cases 0x13 .. 0x18
+ *
+ * These assertions keep the tables in sync with the firmware and with
+ * the sizes declared in protocol.h; a mismatch would make the device
+ * sample at the wrong frequency.
+ */
+G_STATIC_ASSERT(ARRAY_SIZE(logic_samplerates_usb3) == 25);
+G_STATIC_ASSERT(ARRAY_SIZE(logic_samplerates_usb2_8ch) == 8);
+G_STATIC_ASSERT(ARRAY_SIZE(logic_samplerates_usb2_16ch) == 6);
 
 /* ADC sample rates start at this divider index */
 #define CH32H417_ADC_DIVIDER_OFFSET 3

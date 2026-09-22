@@ -1101,21 +1101,14 @@ void Channels::on_voltage_level_changed(double value)
 		{0.8, 751},
 	};
 
-	uint16_t raw_value = 33;
-	if (voltage_to_raw.contains(value)) {
-		raw_value = voltage_to_raw[value];
-	} else {
-		double closest_voltage = 2.3;
-		double min_diff = std::abs(value - closest_voltage);
-		for (auto it = voltage_to_raw.begin(); it != voltage_to_raw.end(); ++it) {
-			double diff = std::abs(value - it.key());
-			if (diff < min_diff) {
-				min_diff = diff;
-				closest_voltage = it.key();
-				raw_value = it.value();
-			}
-		}
+	// Pick the table entry closest to the requested voltage. The spin box
+	// steps by 0.1 V, but a custom value may fall between mapped entries.
+	auto nearest = voltage_to_raw.constBegin();
+	for (auto it = voltage_to_raw.constBegin(); it != voltage_to_raw.constEnd(); ++it) {
+		if (std::abs(value - it.key()) < std::abs(value - nearest.key()))
+			nearest = it;
 	}
+	const uint16_t raw_value = nearest.value();
 
 	qDebug() << "Threshold Level changed to:" << value << "V, raw value:" << raw_value;
 	threshold_value_raw_changed(raw_value);

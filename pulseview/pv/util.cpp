@@ -29,6 +29,15 @@
 
 #include <QDebug>
 #include <QTextStream>
+#include <QCoreApplication>
+#include <QDialog>
+#include <QFont>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QMessageBox>
+#include <QPixmap>
+#include <QPushButton>
+#include <QVBoxLayout>
 
 using std::fixed;
 using std::max;
@@ -316,6 +325,79 @@ std::streamsize text_width(const QFontMetrics &metric, const QString &string)
 #else
 	return metric.width(string);
 #endif
+}
+
+
+void show_message(QWidget *parent, const QString &title, const QString &text,
+	const QPixmap &icon, int min_width, bool rich_text, bool open_links,
+	bool modal)
+{
+	QDialog *dialog = new QDialog(parent);
+	dialog->setWindowTitle(title);
+	// These dialogs never need a context help button.
+	dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
+
+	if (!modal) {
+		dialog->setWindowModality(Qt::NonModal);
+		dialog->setAttribute(Qt::WA_DeleteOnClose);
+	}
+
+	// Use a slightly larger font than the parent.
+	QFont font = dialog->font();
+	font.setPointSize(font.pointSize() + 2);
+	dialog->setFont(font);
+
+	// The dialog height is computed automatically.
+	if (min_width > 0)
+		dialog->setMinimumWidth(min_width);
+
+	QVBoxLayout *layout = new QVBoxLayout(dialog);
+
+	// Icon on the left, message text on the right.
+	QHBoxLayout *content_layout = new QHBoxLayout();
+
+	QLabel *icon_label = new QLabel(dialog);
+	icon_label->setPixmap(icon);
+	icon_label->setAlignment(Qt::AlignTop);
+	content_layout->addWidget(icon_label);
+
+	QLabel *label = new QLabel(dialog);
+	label->setText(text);
+	label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
+	label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+	if (rich_text)
+		label->setTextFormat(Qt::RichText);
+	if (open_links)
+		label->setOpenExternalLinks(true);
+	content_layout->addWidget(label, 1);
+
+	layout->addLayout(content_layout);
+
+	// A single confirmation button, right aligned. The translation context
+	// matches the one the callers used before this helper existed.
+	QHBoxLayout *button_layout = new QHBoxLayout();
+	button_layout->addStretch();
+	QPushButton *ok_button = new QPushButton(
+		QCoreApplication::translate("pv::toolbars::MainBar", "Confirm"), dialog);
+	button_layout->addWidget(ok_button);
+	layout->addLayout(button_layout);
+
+	QObject::connect(ok_button, &QPushButton::clicked, dialog, &QDialog::accept);
+
+	if (modal) {
+		dialog->exec();
+		delete dialog;
+	} else {
+		dialog->show();
+	}
+}
+
+void show_message(QWidget *parent, const QString &title, const QString &text,
+	QMessageBox::Icon icon, int min_width, bool rich_text, bool open_links,
+	bool modal)
+{
+	show_message(parent, title, text, QMessageBox::standardIcon(icon),
+		min_width, rich_text, open_links, modal);
 }
 
 } // namespace util

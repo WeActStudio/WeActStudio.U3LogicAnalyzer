@@ -1639,49 +1639,8 @@ namespace pv
 
 		void MainBar::show_session_error(const QString text, const QString info_text)
 		{
-			QDialog dialog(this);
-			dialog.setWindowTitle(tr("Error"));
-
-			// Use a larger font
-			QFont font = dialog.font();
-			font.setPointSize(font.pointSize() + 2);
-			dialog.setFont(font);
-
-			// Set a minimum width; the height is computed automatically
-			dialog.setMinimumWidth(400);
-			dialog.adjustSize();
-
-			QVBoxLayout *layout = new QVBoxLayout(&dialog);
-
-			// Create the icon and text layout
-			QHBoxLayout *contentLayout = new QHBoxLayout();
-
-			// Create the icon label
-			QLabel *iconLabel = new QLabel(&dialog);
-			iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Warning));
-			iconLabel->setAlignment(Qt::AlignTop);
-			contentLayout->addWidget(iconLabel);
-
-			// Create the text label
-			QLabel *label = new QLabel(&dialog);
-			label->setText(text + "\n\n" + info_text);
-			label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
-			label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-			contentLayout->addWidget(label, 1);
-
-			layout->addLayout(contentLayout);
-
-			// Create the button
-			QHBoxLayout *buttonLayout = new QHBoxLayout();
-			buttonLayout->addStretch();
-			QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
-			buttonLayout->addWidget(okBtn);
-			layout->addLayout(buttonLayout);
-
-			// Connect the signal
-			connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
-
-			dialog.exec();
+			pv::util::show_message(this, tr("Error"), text + "\n\n" + info_text,
+				QMessageBox::standardIcon(QMessageBox::Warning));
 		}
 
 		void MainBar::export_file(shared_ptr<OutputFormat> format, bool selection_only, QString file_name)
@@ -2303,51 +2262,9 @@ namespace pv
 						   tr("<b>FPGA Version:</b> %1").arg(fpgaVersion);	   
 				}
 			}
-			QDialog dialog(this);
-				dialog.setWindowTitle(tr("Version Info"));
-				dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
-
-				// Use a larger font
-				QFont font = dialog.font();
-				font.setPointSize(font.pointSize() + 2);
-				dialog.setFont(font);
-
-				// Set a minimum width; the height is computed automatically
-				dialog.setMinimumWidth(400);
-				dialog.adjustSize();
-
-				QVBoxLayout *layout = new QVBoxLayout(&dialog);
-
-				// Create the icon and text layout
-				QHBoxLayout *contentLayout = new QHBoxLayout();
-
-				// Create the icon label
-				QLabel *iconLabel = new QLabel(&dialog);
-				iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Information));
-				iconLabel->setAlignment(Qt::AlignTop);
-				contentLayout->addWidget(iconLabel);
-
-				// Create the text label
-				QLabel *label = new QLabel(&dialog);
-				label->setText(text);
-				label->setTextFormat(Qt::RichText);
-				label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
-				label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-				contentLayout->addWidget(label, 1);
-
-				layout->addLayout(contentLayout);
-
-				// Create the button
-				QHBoxLayout *buttonLayout = new QHBoxLayout();
-				buttonLayout->addStretch();
-				QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
-				buttonLayout->addWidget(okBtn);
-				layout->addLayout(buttonLayout);
-
-				// Connect the signal
-				connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
-
-				dialog.exec();
+			pv::util::show_message(this, tr("Version Info"), text,
+				QMessageBox::standardIcon(QMessageBox::Information),
+				400, true);
 		}
 
 		void MainBar::on_action_feedback_triggered()
@@ -2386,49 +2303,9 @@ namespace pv
 
 			if (!is_ch32h417_usb && !is_ch32h417_hid)
 			{
-				QDialog dialog(this);
-				dialog.setWindowTitle(tr("Warning"));
-
-				// Use a larger font
-				QFont font = dialog.font();
-				font.setPointSize(font.pointSize() + 2);
-				dialog.setFont(font);
-
-				// Set a minimum width; the height is computed automatically
-				dialog.setMinimumWidth(350);
-				dialog.adjustSize();
-
-				QVBoxLayout *layout = new QVBoxLayout(&dialog);
-
-				// Create the icon and text layout
-				QHBoxLayout *contentLayout = new QHBoxLayout();
-
-				// Create the icon label
-				QLabel *iconLabel = new QLabel(&dialog);
-				iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Warning));
-				iconLabel->setAlignment(Qt::AlignTop);
-				contentLayout->addWidget(iconLabel);
-
-				// Create the text label
-				QLabel *label = new QLabel(&dialog);
-				label->setText(tr("The current device does not support firmware upgrade.\nPlease connect the CH32H417 device and try again."));
-				label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
-				label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-				contentLayout->addWidget(label, 1);
-
-				layout->addLayout(contentLayout);
-
-				// Create the button
-				QHBoxLayout *buttonLayout = new QHBoxLayout();
-				buttonLayout->addStretch();
-				QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
-				buttonLayout->addWidget(okBtn);
-				layout->addLayout(buttonLayout);
-
-				// Connect the signal
-				connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
-
-				dialog.exec();
+				pv::util::show_message(this, tr("Warning"),
+					tr("The current device does not support firmware upgrade.\nPlease connect the CH32H417 device and try again."),
+					QMessageBox::standardIcon(QMessageBox::Warning), 350);
 				return;
 			}
 
@@ -2473,50 +2350,9 @@ namespace pv
 				progressDlg->close();
 				if (!success) {
 					iap_upgrading_ = false;
-					QDialog dialog(this);
-					dialog.setWindowTitle(tr("Update Failed"));
-					dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
-
-					// Use a larger font
-					QFont font = dialog.font();
-					font.setPointSize(font.pointSize() + 2);
-					dialog.setFont(font);
-
-					// Set a minimum width; the height is computed automatically
-					// dialog.setMinimumWidth(400);
-					// dialog.adjustSize();
-
-					QVBoxLayout *layout = new QVBoxLayout(&dialog);
-
-					// Create the icon and text layout
-					QHBoxLayout *contentLayout = new QHBoxLayout();
-
-					// Create the icon label
-					QLabel *iconLabel = new QLabel(&dialog);
-					iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Critical));
-					iconLabel->setAlignment(Qt::AlignTop);
-					contentLayout->addWidget(iconLabel);
-
-					// Create the text label
-					QLabel *label = new QLabel(&dialog);
-					label->setText(tr("Firmware Update Failed!\nPlease check the device connection and firmware file."));
-					label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
-					label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-					contentLayout->addWidget(label, 1);
-
-					layout->addLayout(contentLayout);
-
-					// Create the button
-					QHBoxLayout *buttonLayout = new QHBoxLayout();
-					buttonLayout->addStretch();
-					QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
-					buttonLayout->addWidget(okBtn);
-					layout->addLayout(buttonLayout);
-
-					// Connect the signal
-					connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
-
-					dialog.exec();
+					pv::util::show_message(this, tr("Update Failed"),
+						tr("Firmware Update Failed!\nPlease check the device connection and firmware file."),
+						QMessageBox::standardIcon(QMessageBox::Critical), 0);
 				}
 				workerThread->quit(); });
 			connect(workerThread, &QThread::finished, workerThread, &QThread::deleteLater);
@@ -2540,49 +2376,9 @@ namespace pv
 			QFileInfo fileInfo(pdfPath);
 			if (!fileInfo.exists())
 			{
-				QDialog dialog(this);
-				dialog.setWindowTitle(tr("提示信息"));
-
-				// Use a larger font
-				QFont font = dialog.font();
-				font.setPointSize(font.pointSize() + 2);
-				dialog.setFont(font);
-
-				// Set a minimum width; the height is computed automatically
-				dialog.setMinimumWidth(500);
-				dialog.adjustSize();
-
-				QVBoxLayout *layout = new QVBoxLayout(&dialog);
-
-				// Create the icon and text layout
-				QHBoxLayout *contentLayout = new QHBoxLayout();
-
-				// Create the icon label
-				QLabel *iconLabel = new QLabel(&dialog);
-				iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Information));
-				iconLabel->setAlignment(Qt::AlignTop);
-				contentLayout->addWidget(iconLabel);
-
-				// Create the text label
-				QLabel *label = new QLabel(&dialog);
-				label->setText(tr("找不到PDF文件：\n%1\n\n请确认 doc 目录和用户手册文件是否存在。").arg(pdfPath));
-				label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
-				label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-				contentLayout->addWidget(label, 1);
-
-				layout->addLayout(contentLayout);
-
-				// Create the button
-				QHBoxLayout *buttonLayout = new QHBoxLayout();
-				buttonLayout->addStretch();
-				QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
-				buttonLayout->addWidget(okBtn);
-				layout->addLayout(buttonLayout);
-
-				// Connect the signal
-				connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
-
-				dialog.exec();
+				pv::util::show_message(this, tr("提示信息"),
+					tr("找不到PDF文件：\n%1\n\n请确认 doc 目录和用户手册文件是否存在。").arg(pdfPath),
+					QMessageBox::standardIcon(QMessageBox::Information), 500);
 				return;
 			}
 
@@ -2591,49 +2387,9 @@ namespace pv
 			bool opened = QDesktopServices::openUrl(url);
 			if (!opened)
 			{
-				QDialog dialog(this);
-				dialog.setWindowTitle(tr("Open Failed"));
-
-				// Use a larger font
-				QFont font = dialog.font();
-				font.setPointSize(font.pointSize() + 2);
-				dialog.setFont(font);
-
-				// Set a minimum width; the height is computed automatically
-				dialog.setMinimumWidth(400);
-				dialog.adjustSize();
-
-				QVBoxLayout *layout = new QVBoxLayout(&dialog);
-
-				// Create the icon and text layout
-				QHBoxLayout *contentLayout = new QHBoxLayout();
-
-				// Create the icon label
-				QLabel *iconLabel = new QLabel(&dialog);
-				iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Warning));
-				iconLabel->setAlignment(Qt::AlignTop);
-				contentLayout->addWidget(iconLabel);
-
-				// Create the text label
-				QLabel *label = new QLabel(&dialog);
-				label->setText(tr("无法打开PDF文件，请确认系统已安装PDF阅读器。"));
-				label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
-				label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-				contentLayout->addWidget(label, 1);
-
-				layout->addLayout(contentLayout);
-
-				// Create the button
-				QHBoxLayout *buttonLayout = new QHBoxLayout();
-				buttonLayout->addStretch();
-				QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
-				buttonLayout->addWidget(okBtn);
-				layout->addLayout(buttonLayout);
-
-				// Connect the signal
-				connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
-
-				dialog.exec();
+				pv::util::show_message(this, tr("Open Failed"),
+					tr("无法打开PDF文件，请确认系统已安装PDF阅读器。"),
+					QMessageBox::standardIcon(QMessageBox::Warning));
 			}
 		}
 
@@ -2651,52 +2407,9 @@ namespace pv
 						   .arg(appVersion)
 						   .arg(QApplication::organizationDomain());
 
-			QDialog dialog(this);
-			dialog.setWindowTitle(tr("About"));
-			dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
-
-			// Use a larger font
-			QFont font = dialog.font();
-			font.setPointSize(font.pointSize() + 2);
-			dialog.setFont(font);
-
-			// Set a minimum width; the height is computed automatically
-			dialog.setMinimumWidth(500);
-			dialog.adjustSize();
-
-			QVBoxLayout *layout = new QVBoxLayout(&dialog);
-
-			// Create the icon and text layout
-			QHBoxLayout *contentLayout = new QHBoxLayout();
-
-			// Create the icon label
-			QLabel *iconLabel = new QLabel(&dialog);
-			iconLabel->setPixmap(QPixmap(":/icons/pulseview.png"));
-			iconLabel->setAlignment(Qt::AlignTop);
-			contentLayout->addWidget(iconLabel);
-
-			// Create the text label
-			QLabel *label = new QLabel(&dialog);
-			label->setText(text);
-			label->setTextFormat(Qt::RichText);
-			label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
-			label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-			label->setOpenExternalLinks(true);
-			contentLayout->addWidget(label, 1);
-
-			layout->addLayout(contentLayout);
-
-			// Create the button
-			QHBoxLayout *buttonLayout = new QHBoxLayout();
-			buttonLayout->addStretch();
-			QPushButton *okBtn = new QPushButton(tr("Confirm"), &dialog);
-			buttonLayout->addWidget(okBtn);
-			layout->addLayout(buttonLayout);
-
-			// Connect the signal
-			connect(okBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
-
-			dialog.exec();
+			pv::util::show_message(this, tr("About"), text,
+				QPixmap(":/icons/pulseview.png"),
+				500, true, true);
 		}
 
 		/* CH32H417 hot-plug callback - runs on the DLL thread */
@@ -2721,52 +2434,10 @@ namespace pv
 				if (iap_upgrading_)
 				{
 					iap_upgrading_ = false;
-					QDialog *dialog = new QDialog(this);
-					dialog->setWindowTitle(tr("Update Success"));
-					dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
-
-					// Use a larger font
-					QFont font = dialog->font();
-					font.setPointSize(font.pointSize() + 2);
-					dialog->setFont(font);
-
-					// Set a minimum width; the height is computed automatically
-					dialog->setMinimumWidth(400);
-					dialog->adjustSize();
-
-					QVBoxLayout *layout = new QVBoxLayout(dialog);
-
-					// Create the icon and text layout
-					QHBoxLayout *contentLayout = new QHBoxLayout();
-
-					// Create the icon label
-					QLabel *iconLabel = new QLabel(dialog);
-					iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Information));
-					iconLabel->setAlignment(Qt::AlignTop);
-					contentLayout->addWidget(iconLabel);
-
-					// Create the text label
-					QLabel *label = new QLabel(dialog);
-					label->setText(tr("Firmware Update Success!\nDevice already restart."));
-					label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
-					label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-					contentLayout->addWidget(label, 1);
-
-					layout->addLayout(contentLayout);
-
-					// Create the button
-					QHBoxLayout *buttonLayout = new QHBoxLayout();
-					buttonLayout->addStretch();
-					QPushButton *okBtn = new QPushButton(tr("Confirm"), dialog);
-					buttonLayout->addWidget(okBtn);
-					layout->addLayout(buttonLayout);
-
-					// Connect the signal
-					connect(okBtn, &QPushButton::clicked, dialog, &QDialog::accept);
-
-					dialog->setWindowModality(Qt::NonModal);
-					dialog->setAttribute(Qt::WA_DeleteOnClose);
-					dialog->show();
+					pv::util::show_message(this, tr("Update Success"),
+						tr("Firmware Update Success!\nDevice already restart."),
+						QMessageBox::standardIcon(QMessageBox::Information),
+						400, false, false, false);
 				}
 				/* CH32H417 plugged in: if the device is coming back after an IAP upgrade, clear the upgrade flag */
 				device_attached();
