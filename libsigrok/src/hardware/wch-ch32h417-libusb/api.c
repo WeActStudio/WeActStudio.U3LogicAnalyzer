@@ -118,10 +118,11 @@ static void ch32h417_libusb_flush_cmd_endpoint(unsigned long index)
 /* Initialize the device communication parameters */
 static void ch32h417_libusb_init_comm_params(struct dev_context *devc)
 {
-	/* Set the IO mode to synchronous */
-	if (!ch32h417_libusb_set_io_mode(devc->device_index, 0)) {
-		sr_warn("Failed to set IO mode to sync for device at index %d", devc->device_index);
-	}
+	/*
+	 * No CH375 set_io_mode() counterpart here: that call is a private
+	 * CH375WDM.sys IOCTL for the kernel buffered upload path. libusb drives
+	 * every transfer from userspace, so there is nothing to configure.
+	 */
 
 	/* Flush the PIPE_CMD endpoint */
 	ch32h417_libusb_flush_cmd_endpoint(devc->device_index);
@@ -138,9 +139,11 @@ static void ch32h417_libusb_init_comm_params(struct dev_context *devc)
 	if (!ch32h417_libusb_set_buf_upload_ex(devc->device_index, 1, PIPE_ADC_DATA, devc->buffer_size)) {
 		sr_warn("Failed to set upload buffer pipe %d for device at index %d", PIPE_ADC_DATA, devc->device_index);
 	}
-	if (!ch32h417_libusb_set_buf_download_ex(devc->device_index, 0, PIPE_CMD, 0)) {
-		sr_warn("Failed to set download buffer pipe %d for device at index %d", PIPE_CMD, devc->device_index);
-	}
+	/*
+	 * No set_buf_download_ex() counterpart either: buffered download is a
+	 * CH375DLL-side feature for OUT transfers. Plain libusb bulk writes are
+	 * already unbuffered, so there is nothing to turn off.
+	 */
 }
 
 /**
@@ -487,8 +490,17 @@ static int dev_close(struct sr_dev_inst *sdi)
 
 	devc = sdi->priv;
 
-	if (!devc->device_handle || devc->device_handle == LIBUSB_INVALID_HANDLE)
-		return SR_ERR_BUG;
+	/*
+	 * Closing something that is already closed is a no-op, not an error.
+	 * SR_ERR_BUG surfaces as "internal error" and frontends that close a
+	 * device defensively turn that into a thrown sigrok::Error, which
+	 * terminates the application when nobody catches it.
+	 */
+	if (!devc->device_handle || devc->device_handle == LIBUSB_INVALID_HANDLE) {
+		sr_dbg("Device at index %d was already closed", devc->device_index);
+		devc->device_handle = NULL;
+		return SR_OK;
+	}
 
 	sr_info("Closing device at index %d", devc->device_index);
 

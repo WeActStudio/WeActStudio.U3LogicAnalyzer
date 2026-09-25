@@ -49,6 +49,13 @@
 
 #define LOG_PREFIX "ch32h417-libusb"
 
+/*
+ * The ring geometry is expressed in SuperSpeed bursts: a chunk that is not a
+ * whole number of bursts would be cut short by the first partially filled
+ * burst, and the ring would never run at the depth it was sized for.
+ */
+G_STATIC_ASSERT(LIBUSB_STREAM_RING_CHUNK % LIBUSB_STREAM_BURST == 0);
+
 /* ============================================================================
  * Internal state
  * ============================================================================ */
@@ -196,7 +203,13 @@ static void LIBUSB_CALL stream_transfer_cb(struct libusb_transfer *transfer)
 						stream->pipe_num, stream->overflow);
 		}
 	} else if (transfer->status != LIBUSB_TRANSFER_COMPLETED &&
-			   transfer->status != LIBUSB_TRANSFER_CANCELLED) {
+			   transfer->status != LIBUSB_TRANSFER_CANCELLED &&
+			   transfer->status != LIBUSB_TRANSFER_TIMED_OUT) {
+		/*
+		 * A timeout is not worth reporting: the ring stays submitted between
+		 * acquisitions, so an idle device simply times every transfer out and
+		 * gets it resubmitted. Logging those would bury everything else.
+		 */
 		sr_dbg("Stream transfer on pipe %lu ended with status %s",
 			   stream->pipe_num, libusb_error_name(transfer->status));
 	}
@@ -354,6 +367,25 @@ static void stream_free(struct usb_stream *stream)
 	for (i = 0; i < LIBUSB_STREAM_RING_COUNT; i++) {
 		struct stream_slot *slot = &stream->slots[i];
 
+		if (slot->inflight) {
+			/*
+			 * Still outstanding after stream_stop() gave up on it. Freeing
+			 * would hand libusb a dangling transfer, so drop the references
+			 * and leak instead: a wedge on one endpoint is survivable, a
+			 * callback into freed memory is not. stream_start() allocates
+			 * fresh for a slot whose transfer is NULL.
+			 */
+			sr_warn("Stream transfer on pipe %lu never completed, leaking it",
+					stream->pipe_num);
+			slot->transfer = NULL;
+			slot->target = slot->stage = NULL;
+			slot->capacity = 0;
+			slot->stage_len = 0;
+			slot->stage_off = 0;
+			slot->inflight = 0;
+			continue;
+		}
+
 		if (slot->transfer) {
 			libusb_free_transfer(slot->transfer);
 			slot->transfer = NULL;
@@ -361,6 +393,7 @@ static void stream_free(struct usb_stream *stream)
 		g_free(slot->target);
 		g_free(slot->stage);
 		slot->target = slot->stage = NULL;
+		slot->capacity = 0;
 		slot->stage_len = 0;
 		slot->stage_off = 0;
 		slot->inflight = 0;
@@ -486,13 +519,32 @@ int ch32h417_libusb_scan_devices(void)
 
 	G_LOCK(libusb_state);
 
+	/*
+	 * Drop the previous table. Each struct owns its transfer rings, so the
+	 * rings have to go quiet before the struct does: an in-flight transfer
+	 * carries a pointer to the ring as user_data and would otherwise complete
+	 * into a callback that dereferences freed memory. Re-enumerating while a
+	 * ring is still running (unplug, or a rescan after the firmware upgrade
+	 * dialog) is exactly how that used to happen.
+	 */
 	for (i = 0; i < LIBUSB_MAX_NUMBER; i++) {
-		if (device_table[i]) {
-			if (device_table[i]->device)
-				libusb_unref_device(device_table[i]->device);
-			g_free(device_table[i]);
-			device_table[i] = NULL;
+		struct usb_device *du = device_table[i];
+		unsigned int k;
+
+		if (!du)
+			continue;
+
+		for (k = 0; k < 2; k++) {
+			stream_stop(du, &du->stream[k]);
+			stream_free(&du->stream[k]);
 		}
+
+		if (du->handle)
+			libusb_close(du->handle);
+		if (du->device)
+			libusb_unref_device(du->device);
+		g_free(du);
+		device_table[i] = NULL;
 	}
 	device_count = 0;
 
@@ -897,33 +949,4 @@ int ch32h417_libusb_clear_buf_upload(unsigned long index, unsigned long pipe_num
 	sr_dbg("Cleared upload buffer for pipe %lu", pipe_num);
 
 	return LIBUSB_TRUE;
-}
-
-int ch32h417_libusb_set_buf_download_ex(unsigned long index, unsigned long enable,
-										unsigned long pipe_num, unsigned long transfer_size)
-{
-	struct usb_device *du = device_by_index(index);
-
-	/*
-	 * The driver disables buffered download at init and never enables it, so
-	 * accept the request without configuring anything.
-	 */
-	(void)enable;
-	(void)pipe_num;
-	(void)transfer_size;
-
-	return du ? LIBUSB_TRUE : LIBUSB_FALSE;
-}
-
-int ch32h417_libusb_set_io_mode(unsigned long index, unsigned long sync)
-{
-	struct usb_device *du = device_by_index(index);
-
-	/*
-	 * CH375SetIOMode is a private kernel IOCTL. Userspace transfers are always
-	 * synchronous, which is the mode the driver asks for anyway.
-	 */
-	(void)sync;
-
-	return du ? LIBUSB_TRUE : LIBUSB_FALSE;
 }

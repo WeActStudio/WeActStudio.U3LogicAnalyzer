@@ -76,14 +76,21 @@ extern "C" {
 #define LIBUSB_DEFAULT_TRANSFER_SIZE    (1024 * 1024)
 
 /*
- * Depth and granularity of the userspace stream ring. The CH375 kernel driver
- * could hold an entire transferSize (1 MB) of queued data on our behalf; with
- * libusb only what we explicitly submit can arrive, so a ring of this size
- * keeps roughly the same amount of data in flight and gives the read loop
- * enough slack between two polls.
+ * Depth and granularity of the userspace stream ring, sized for the fastest
+ * link the device can negotiate (USB 3.0 SuperSpeed). A SuperSpeed bulk
+ * endpoint has wMaxPacketSize 1024 and bMaxBurst 0x0f, so one burst is 16 kB;
+ * keeping every transfer a whole number of bursts stops a partially filled
+ * burst from ending the transfer early. The same geometry works at high
+ * speed, where the packet size is only 512 bytes.
+ *
+ * The CH375 kernel driver could hold an entire transferSize (1 MB) of queued
+ * data on our behalf; with libusb only what we explicitly submit can arrive,
+ * so the ring keeps roughly 20 ms of a saturated SuperSpeed link in flight,
+ * which is what gives the read loop slack between two polls.
  */
-#define LIBUSB_STREAM_RING_COUNT    64
-#define LIBUSB_STREAM_RING_CHUNK    (64 * 1024)
+#define LIBUSB_STREAM_BURST         (16 * 1024)
+#define LIBUSB_STREAM_RING_CHUNK    (16 * LIBUSB_STREAM_BURST)  /* 256 kB */
+#define LIBUSB_STREAM_RING_COUNT    32                          /* 8 MB */
 
 /*
  * Watchdog for the asynchronous ring. If no new transfer has been accepted for
@@ -138,15 +145,13 @@ int ch32h417_libusb_query_buf_upload_ex(unsigned long index, unsigned long pipe_
 										unsigned long *transfer_count, unsigned long *total_len);
 int ch32h417_libusb_clear_buf_upload(unsigned long index, unsigned long pipe_num);
 
-/* Buffered download is disabled at init and never enabled by this driver */
-int ch32h417_libusb_set_buf_download_ex(unsigned long index, unsigned long enable,
-										unsigned long pipe_num, unsigned long transfer_size);
-
 /*
- * On CH375 this maps to a private kernel IOCTL. libusb transfers are always
- * driven synchronously from userspace, so it succeeds and does nothing.
+ * There is deliberately no set_buf_download_ex() or set_io_mode() counterpart.
+ * Both are CH375DLL-side features: buffered download buffers OUT transfers in
+ * the driver, and set_io_mode() is a private CH375WDM.sys IOCTL selecting how
+ * the kernel buffered upload behaves. libusb drives every transfer from
+ * userspace and has neither knob.
  */
-int ch32h417_libusb_set_io_mode(unsigned long index, unsigned long sync);
 
 #ifdef __cplusplus
 }
