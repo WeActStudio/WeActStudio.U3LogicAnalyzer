@@ -185,6 +185,13 @@ set(LIBSIGROK_SOURCES
     src/hardware/wch-ch32h417/api.c
     src/hardware/wch-ch32h417/protocol.c
     src/hardware/wch-ch32h417/ch375_wrapper.c
+    # Same device protocol driven over libusb instead of the vendor CH375DLL.
+    # It is a separate driver with its own copies of api.c / protocol.c and its
+    # own transport wrapper; global symbols carry the ch32h417_libusb_ prefix so
+    # the two drivers can coexist in this library.
+    src/hardware/wch-ch32h417-libusb/api.c
+    src/hardware/wch-ch32h417-libusb/protocol.c
+    src/hardware/wch-ch32h417-libusb/libusb_wrapper.c
     src/hardware/demo/api.c
     src/hardware/demo/protocol.c
     # --- End of driver list ---
