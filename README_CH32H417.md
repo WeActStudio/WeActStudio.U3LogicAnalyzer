@@ -12,7 +12,13 @@ cd build_cmake/logicanalyzer_build && ./LogicAnalyzer.exe  # 运行
 
 ## 环境要求
 
-**Windows 10/11 + MSYS2 MINGW64**
+| 平台 | 依赖安装 |
+|---|---|
+| Windows 10/11 + MSYS2 MINGW64 | `./setup_env.sh`（或见下方手动安装） |
+| macOS | `./setup_env_macos.sh`（Homebrew） |
+| Linux | 发行版包管理器装 `gcc cmake ninja pkg-config glib2 glibmm libusb-1.0 hidapi libzip boost qt5 python3` |
+
+**Windows（MSYS2 MINGW64）**
 
 ```bash
 # 一键部署
@@ -25,7 +31,11 @@ pacman -S --needed --noconfirm \
     mingw-w64-x86_64-{boost,qt5-static,python}
 ```
 
-> 必须用 **MSYS2 MINGW64** shell（开始菜单 → MSYS2 MINGW64）。
+> 在 Windows 上必须用 **MSYS2 MINGW64** shell（开始菜单 → MSYS2 MINGW64）。
+> macOS / Linux 用普通 shell 即可，`build.sh` 会自动识别平台。
+
+**驱动后端说明**：Windows 上设备默认绑在 CH375WDM.sys（走 `wch-ch32h417` 驱动）；
+想用 libusb 后端需先用 Zadig 改绑 WinUSB。macOS / Linux 只有 libusb 后端。
 
 ## 构建
 
@@ -95,13 +105,21 @@ cd build_cmake/logicanalyzer_build
 
 产物：`LogicAnalyzer-Windows-x64`（便携版 zip，内含 `LogicAnalyzer.exe`、DLL、解码器和 `run.bat`）
 
-### macOS
+### macOS / Linux
 
-**不受支持。** CH32H417 硬件通信依赖 Windows 专用的 CH375DLL：`ch375_wrapper.c` 只实现
-`_WIN32` 分支，其余平台在编译期直接 `#error` 退出。因此仓库不再提供 macOS 构建流程
-（原 `build-macos.yml` 已移除），`setup_env_macos.sh` 与 `build.sh` 的 macOS 分支亦不再维护。
+**支持，走 libusb 后端。** 新增的 `wch-ch32h417-libusb` 驱动不依赖任何 Windows 专用库，
+因此 macOS 与 Linux 可用；构建时会自动排除 CH375 驱动（`libsigrok/CMakeLists.txt` 中
+`if(NOT WIN32)` 的 `list(REMOVE_ITEM ...)`），GUI 侧对 CH375DLL 的调用也已用 `#ifdef _WIN32` 圈住。
 
-> 需要在 macOS 上使用 PulseView 时，请改用上游 sigrok 官方版本。
+| | Windows | macOS / Linux |
+|---|---|---|
+| `wch-ch32h417`（CH375DLL） | ✅ | ❌ 不参与构建 |
+| `wch-ch32h417-libusb`（libusb） | ✅（需改绑 WinUSB） | ✅ |
+| 热插拔 | CH375 回调 + libusb 轮询 | libusb 轮询 |
+| 固件升级（IAP） | 两个后端都行 | 仅 libusb 后端 |
+
+> macOS 上没有 CI 工作流（`build-macos.yml` 早期已移除），需要本地 `./setup_env_macos.sh` +
+> `./build.sh`。Linux 同理，用发行版包管理器装齐依赖后 `./build.sh` 即可。
 
 ### 触发条件
 
