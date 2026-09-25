@@ -456,7 +456,9 @@ namespace pv
 		{
 			s_mainbar_instance = nullptr;
 
+#ifdef _WIN32
 			ch375_set_device_notify(0, NULL, NULL);
+#endif
 
 			if (channels_)
 			{
@@ -471,8 +473,10 @@ namespace pv
 				t_hot_plug.join();
 			}
 
+#ifdef _WIN32
 			/* Release the CH375DLL resources */
 			ch375_cleanup();
+#endif
 			commit_channel_number(0);
 		}
 
@@ -1997,11 +2001,15 @@ namespace pv
 			/* Register unsigned long as a Qt metatype for cross-thread signal delivery */
 			qRegisterMetaType<unsigned long>("unsigned long");
 
-			/* Initialize CH375DLL for CH32H417 hot-plug detection */
+#ifdef _WIN32
+			/*
+			 * CH375DLL only exists on Windows. Where it does, the vendor
+			 * driver reports its own devices; elsewhere the polling thread
+			 * below is the only hot-plug source for the CH32H417.
+			 */
 			ch375_init();
-
-			/* Register the CH32H417 device event callback */
 			ch375_set_device_notify(0, NULL, ch32h417_notify_callback);
+#endif
 
 			/* Start the CH569 polling thread */
 			if (t_hot_plug.joinable())
@@ -2019,8 +2027,10 @@ namespace pv
 			/* Clear the static instance pointer */
 			s_mainbar_instance = nullptr;
 
+#ifdef _WIN32
 			/* Unregister the CH32H417 device event callback */
 			ch375_set_device_notify(0, NULL, NULL);
+#endif
 
 			/* Stop the CH569 polling thread */
 			if (t_hot_plug.joinable())
@@ -2029,8 +2039,10 @@ namespace pv
 				t_hot_plug.join();
 			}
 
+#ifdef _WIN32
 			/* Release CH375DLL */
 			ch375_cleanup();
+#endif
 		}
 
 		void MainBar::on_capture_state_changed(int state)

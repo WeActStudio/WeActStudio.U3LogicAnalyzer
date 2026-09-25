@@ -30,7 +30,10 @@
 #include <QDebug>
 #include <QDateTime>
 
+#ifdef _WIN32
+/* CH375DLL is Windows only; the libusb transport below covers the rest. */
 #include "../../../libsigrok/src/hardware/wch-ch32h417/ch375_wrapper.h"
+#endif
 #include "../../../libsigrok/src/hardware/wch-ch32h417-libusb/libusb_wrapper.h"
 
 #include <hidapi/hidapi.h>
@@ -456,6 +459,7 @@ bool IAPWorker::enter_iap_mode()
         ch32h417_libusb_close_device(device_index_);
 
         log(tr("libusb设备已关闭，等待设备切换模式..."));
+#ifdef _WIN32
     } else {
         if (!ch375_write_endpoint(device_index_, 1, cmd, &io_length)) {
             log(tr("发送IAP命令失败"));
@@ -468,6 +472,13 @@ bool IAPWorker::enter_iap_mode()
 
         log(tr("CH375设备已关闭，等待设备切换模式..."));
     }
+#else
+    } else {
+        /* No CH375DLL here, so libusb is the only way out. */
+        log(tr("当前平台仅支持通过 libusb 发送IAP命令"));
+        return false;
+    }
+#endif
 
     for (int i = 0; i < 5; i++) {
         QThread::msleep(100);

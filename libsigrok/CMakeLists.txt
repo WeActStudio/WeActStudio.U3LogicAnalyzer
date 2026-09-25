@@ -294,6 +294,16 @@ set(LIBSIGROK_SOURCES
     src/scale/kern.c
 )
 
+# CH375DLL is a Windows-only vendor library, so the driver that goes through it
+# only exists there. The libusb driver in the list above speaks the same
+# protocol and covers the CH32H417 everywhere else.
+if(NOT WIN32)
+    list(REMOVE_ITEM LIBSIGROK_SOURCES
+        src/hardware/wch-ch32h417/api.c
+        src/hardware/wch-ch32h417/protocol.c
+        src/hardware/wch-ch32h417/ch375_wrapper.c)
+endif()
+
 # ============================================================================
 # Library target
 # ============================================================================
