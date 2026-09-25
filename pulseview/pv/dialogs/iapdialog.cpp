@@ -31,6 +31,7 @@
 #include <QDateTime>
 
 #include "../../../libsigrok/src/hardware/wch-ch32h417/ch375_wrapper.h"
+#include "../../../libsigrok/src/hardware/wch-ch32h417-libusb/libusb_wrapper.h"
 
 #include <hidapi/hidapi.h>
 
@@ -249,13 +250,15 @@ void IAPDialog::on_upgrade_finished(bool success)
 /* IAPWorker implementation */
 
 IAPWorker::IAPWorker(int device_index, const QString &firmware_path,
-                     uint16_t iap_vid, uint16_t iap_pid, bool already_in_hid_mode)
+                     uint16_t iap_vid, uint16_t iap_pid, bool already_in_hid_mode,
+                     bool use_libusb_backend)
     : device_index_(device_index)
     , firmware_path_(firmware_path)
     , iap_vid_(iap_vid)
     , iap_pid_(iap_pid)
     , hid_handle_(nullptr)
     , already_in_hid_mode_(already_in_hid_mode)
+    , use_libusb_backend_(use_libusb_backend)
     , cancelled_(false)
 {
 }
@@ -425,17 +428,46 @@ bool IAPWorker::enter_iap_mode()
     cmd[0] = 0xAE;  /* CMD_ENTER_IAP */
     cmd[1] = 0;
 
+    /*
+     * The command has to go out on the backend that owns the device. A device
+     * bound to WinUSB cannot be opened through the CH375 DLL, so a write there
+     * would just fail and the upgrade would never start.
+     */
     unsigned long io_length = 64;
-    if (!ch375_write_endpoint(device_index_, 1, cmd, &io_length)) {
-        log(tr("发送IAP命令失败"));
-        return false;
+    if (use_libusb_backend_) {
+        /*
+         * Park the sample rings before switching modes. A ring resubmits itself
+         * for as long as it is enabled, so leaving them running would keep
+         * transfers queued against a device that has stopped answering, and
+         * every one of them would sit there until it timed out.
+         * Pipe 2 is logic samples and pipe 3 is ADC: the pipe number is the
+         * endpoint number.
+         */
+        ch32h417_libusb_set_buf_upload_ex(device_index_, 0, 2, 0);
+        ch32h417_libusb_set_buf_upload_ex(device_index_, 0, 3, 0);
+
+        if (!ch32h417_libusb_write_endpoint(device_index_, 1, cmd, &io_length)) {
+            log(tr("发送IAP命令失败"));
+            return false;
+        }
+
+        log(tr("IAP命令已发送，关闭libusb设备..."));
+
+        ch32h417_libusb_close_device(device_index_);
+
+        log(tr("libusb设备已关闭，等待设备切换模式..."));
+    } else {
+        if (!ch375_write_endpoint(device_index_, 1, cmd, &io_length)) {
+            log(tr("发送IAP命令失败"));
+            return false;
+        }
+
+        log(tr("IAP命令已发送，关闭CH375设备..."));
+
+        ch375_close_device(device_index_);
+
+        log(tr("CH375设备已关闭，等待设备切换模式..."));
     }
-
-    log(tr("IAP命令已发送，关闭CH375设备..."));
-
-    ch375_close_device(device_index_);
-
-    log(tr("CH375设备已关闭，等待设备切换模式..."));
 
     for (int i = 0; i < 5; i++) {
         QThread::msleep(100);

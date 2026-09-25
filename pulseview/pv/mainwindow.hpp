@@ -97,6 +97,15 @@ public:
 
 	void remove_session(shared_ptr<Session> session);
 
+	/**
+	 * Point every session at the given device manager.
+	 *
+	 * A session only keeps a raw pointer to the manager, so replacing the
+	 * manager has to be propagated to all of them: updating just the focused
+	 * session leaves the rest holding a pointer to a deleted object.
+	 */
+	void update_sessions_device_manager(pv::DeviceManager *device_manager);
+
 	void add_session_with_file(string open_file_name, string open_file_format,
 		string open_setup_file_name);
 

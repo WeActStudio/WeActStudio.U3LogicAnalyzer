@@ -61,6 +61,15 @@ WchDeviceType get_wch_device_type(const QString& vendorName);
 WchDeviceType get_wch_device_type_by_driver(const string& driverName);
 bool is_wch_device(const QString& vendorName);
 
+/**
+ * Driver names that can reach a CH32H417, in preference order.
+ *
+ * The device is reachable either through the vendor CH375DLL or through
+ * libusb, depending on which driver the OS bound it to; the two can never
+ * claim the same device instance at the same time.
+ */
+const vector<string>& get_ch32h417_driver_names();
+
 enum class TimeUnit {
 	None = 0,
 	Time = 1,

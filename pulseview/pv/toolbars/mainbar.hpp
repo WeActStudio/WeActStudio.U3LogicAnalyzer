@@ -263,7 +263,14 @@ private:
 	bool sample_count_supported_;
 
 	atomic<bool> hot_plug_listen_;
-	bool iap_upgrading_;
+	/* Read from the hot-plug polling thread as well as the main thread. */
+	atomic<bool> iap_upgrading_;
+	/*
+	 * Monotonic deadline after which the upgrade flag is cleared even if the
+	 * device never came back, so a lost device cannot silence hot-plug for
+	 * good. Written on the main thread, read from the polling thread.
+	 */
+	atomic<int64_t> iap_upgrade_deadline_;
 
 	bool is_count_setting_default_;
 	bool is_rate_setting_default_;

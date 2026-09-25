@@ -63,9 +63,19 @@ WchDeviceType get_wch_device_type(const QString& vendorName) {
 WchDeviceType get_wch_device_type_by_driver(const string& driverName) {
 	if (driverName == "wch-ch569")
 		return WchDeviceType::CH569;
-	if (driverName == "wch-ch32h417")
+	/* The CH32H417 has two backends: the vendor CH375DLL and libusb. */
+	if (driverName == "wch-ch32h417" ||
+		driverName == "wch-ch32h417-libusb")
 		return WchDeviceType::CH32H417;
 	return WchDeviceType::None;
+}
+
+const vector<string>& get_ch32h417_driver_names() {
+	static const vector<string> names = {
+		"wch-ch32h417",
+		"wch-ch32h417-libusb",
+	};
+	return names;
 }
 
 bool is_wch_device(const QString& vendorName) {

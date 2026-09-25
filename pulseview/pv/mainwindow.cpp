@@ -196,7 +196,10 @@ MainWindow::~MainWindow()
 	sessions_.resize(0);
 	sub_windows_.clear();
 	if (device_manager_) {
-		free(device_manager_);
+		/* Created with new, so it has to go back with delete: free() would
+		 * mismatch the allocator and skip the destructor. */
+		delete device_manager_.load();
+		device_manager_.store(nullptr);
 	}
 }
 
@@ -519,6 +522,24 @@ shared_ptr<Session> MainWindow::add_session()
 	return session;
 }
 
+/*
+ * The CH32H417 is reachable through either the vendor CH375 driver or the
+ * libusb one, depending on which driver the OS bound the device to. Prefer
+ * whichever backend libsigrok actually has, so the name is not hardcoded to
+ * a single transport.
+ */
+static string ch32h417_driver_name(const shared_ptr<sigrok::Context>& context)
+{
+	const std::vector<std::string>& names = pv::util::get_ch32h417_driver_names();
+	const auto drivers = context->drivers();
+
+	for (const std::string& name : names)
+		if (drivers.find(name) != drivers.end())
+			return name;
+
+	return names.front();
+}
+
 void MainWindow::do_device_detach_switch()
 {
 	if (!last_focused_session_ || !last_focused_session_->main_bar()) {
@@ -528,13 +549,13 @@ void MainWindow::do_device_detach_switch()
 	last_focused_session_->device_detached();
 
 	shared_ptr<sigrok::Context> context = sigrok::Context::create();
-	string driver = "wch-ch32h417";
+	string driver = ch32h417_driver_name(context);
 	auto new_device_manager = new pv::DeviceManager(context, driver, true);
 	if (device_manager_) {
-		free(device_manager_);
+		delete device_manager_.load();
 	}
 	device_manager_.store(new_device_manager);
-	last_focused_session_->update_device_manager(new_device_manager);
+	update_sessions_device_manager(new_device_manager);
 
 	list< shared_ptr<devices::HardwareDevice> > devices = new_device_manager->devices();
 
@@ -679,19 +700,30 @@ void MainWindow::on_device_attached()
 
 	if (last_focused_session_ && last_focused_session_->device()) {
 		last_focused_session_->stop_capture();
-		last_focused_session_->device()->close();
+		/*
+		 * The previous device may already be gone, and libsigrok reports that
+		 * by throwing. Letting it escape from a Qt slot would terminate the
+		 * application, so swallow it: we are about to rescan anyway.
+		 */
+		try {
+			last_focused_session_->device()->close();
+		} catch (const sigrok::Error &e) {
+			qWarning() << "Error closing the previous device:" << e.what();
+		} catch (const QString &msg) {
+			qWarning() << "Error closing the previous device:" << msg;
+		}
 	}
 
 	// Initialise libsigrok
 	shared_ptr<sigrok::Context> context;
 	context = sigrok::Context::create();
-	string driver = "wch-ch32h417";
+	string driver = ch32h417_driver_name(context);
 
 	auto device_manager = new pv::DeviceManager(context, driver, true);
 	if (device_manager_)
-		free(device_manager_);
+		delete device_manager_.load();
 	device_manager_.store(device_manager);
-	last_focused_session_->update_device_manager(device_manager_);
+	update_sessions_device_manager(device_manager);
 
 	list< shared_ptr<devices::HardwareDevice> > devices =
 		device_manager->devices();
@@ -764,6 +796,17 @@ void MainWindow::on_device_attached()
 	}
 
 	attach_process_done = true;
+}
+
+void MainWindow::update_sessions_device_manager(pv::DeviceManager *device_manager)
+{
+	for (const shared_ptr<Session>& session : sessions_)
+		if (session)
+			session->update_device_manager(device_manager);
+
+	/* The focused session may already have been taken out of the list. */
+	if (last_focused_session_)
+		last_focused_session_->update_device_manager(device_manager);
 }
 
 void MainWindow::remove_session(shared_ptr<Session> session)
@@ -863,12 +906,13 @@ void MainWindow::add_default_session()
 		sleep_ex(100);
 		shared_ptr<sigrok::Context> context;
 		context = sigrok::Context::create();
-		string driver = "wch-ch32h417";
+		string driver = ch32h417_driver_name(context);
 		if (device_manager_)
-			free(device_manager_);
+			delete device_manager_.load();
 		device_manager_ = new pv::DeviceManager(context, driver, true);
+		update_sessions_device_manager(device_manager_.load());
 	}
-	
+
 	shared_ptr<Session> session = nullptr;
 	if( sessions_.size() == 0){
 		session = add_session();

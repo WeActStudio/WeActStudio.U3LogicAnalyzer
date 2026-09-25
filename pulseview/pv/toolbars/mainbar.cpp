@@ -1832,11 +1832,18 @@ namespace pv
 		{
 			uint16_t vid = WCH_VID;
 			uint16_t pid_ch569 = WCH_PID_CH569;
-			/* CH32H417 detection has moved to the CH375SetDeviceNotify callback */
+			uint16_t pid_ch32h417 = WCH_PID_CH32H417;
 
-			// Track the attach state of CH569 devices
+			/*
+			 * Track the attach state of CH569 devices. The CH32H417 is polled
+			 * here too: the CH375SetDeviceNotify callback only ever reports the
+			 * device when the vendor driver owns it, so a CH32H417 reached
+			 * through the libusb driver would otherwise never be announced.
+			 */
 			bool ch569_attached = false;
 			bool ch569_attached_pre = false;
+			bool ch32h417_attached = false;
+			bool ch32h417_attached_pre = false;
 
 			libusb_device **devlist = NULL;
 			libusb_context *libusb_ctx = NULL;
@@ -1856,6 +1863,7 @@ namespace pv
 			{
 				device_count = libusb_get_device_list(libusb_ctx, &devlist);
 				ch569_attached = false;
+				ch32h417_attached = false;
 
 				for (index = 0; index < device_count; index++)
 				{
@@ -1863,11 +1871,12 @@ namespace pv
 
 					if (libusb_get_device_descriptor(devlist[index], &des) != 0)
 						continue;
-					if (des.idVendor == vid && des.idProduct == pid_ch569)
-					{
+					if (des.idVendor != vid)
+						continue;
+					if (des.idProduct == pid_ch569)
 						ch569_attached = true;
-						break;
-					}
+					else if (des.idProduct == pid_ch32h417)
+						ch32h417_attached = true;
 				}
 				if (device_count >= 0)
 					libusb_free_device_list(devlist, 1);
@@ -1882,6 +1891,8 @@ namespace pv
 					// Get the currently selected device type
 					QString currentVendorName = get_vendorName();
 					bool is_using_ch569 = (currentVendorName == "USB3.0(CH569)");
+					bool is_using_ch32h417 =
+						(currentVendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]);
 
 					// Check for a CH569 state change
 					if (ch569_attached != ch569_attached_pre)
@@ -1900,10 +1911,72 @@ namespace pv
 						}
 						index_time = 0;
 					}
+
+					/*
+					 * Check for a CH32H417 state change. Devices owned by the
+					 * vendor driver are already reported by the CH375 notify
+					 * callback, and MainWindow drops an arrival that comes in
+					 * while another one is still being processed, so this only
+					 * adds coverage for the libusb driver.
+					 */
+					/*
+					 * Safety net: the upgrade flag is cleared by the device
+					 * coming back, and a device that never does would leave
+					 * hot-plug deaf for this board forever. Give up after a
+					 * minute so normal detection resumes.
+					 */
+					if (iap_upgrading_ &&
+						g_get_monotonic_time() >= iap_upgrade_deadline_.load())
+					{
+						qWarning() << "Firmware upgrade flag timed out, "
+									  "resuming CH32H417 hot-plug detection";
+						iap_upgrading_ = false;
+					}
+
+					if (ch32h417_attached != ch32h417_attached_pre)
+					{
+						if (ch32h417_attached)
+						{
+							if (iap_upgrading_)
+							{
+								/*
+								 * The device is back from a firmware upgrade.
+								 * Hand it to the same slot the CH375 notify
+								 * callback uses: that is what clears the
+								 * upgrade flag, reports success and refreshes
+								 * the device list, and it has to run on the
+								 * main thread. Without this the libusb backend
+								 * would never announce the device again after
+								 * an upgrade, because the CH375 callback only
+								 * fires for devices the vendor driver owns.
+								 */
+								QMetaObject::invokeMethod(this, "on_ch32h417_device_event",
+														  Qt::QueuedConnection,
+														  Q_ARG(unsigned long, CH375_DEVICE_ARRIVAL));
+							}
+							else
+							{
+								device_attached();
+							}
+						}
+						else if (!iap_upgrading_ && is_using_ch32h417)
+						{
+							/*
+							 * The device re-enumerates as a HID (PID 0xFE17)
+							 * while an upgrade runs; ignore that window, the
+							 * same way the CH375 notify callback does.
+							 */
+							set_vendorName("");
+							session_.stop_capture();
+							divice_detached();
+						}
+						index_time = 0;
+					}
 				}
 
 				g_usleep(100000);
 				ch569_attached_pre = ch569_attached;
+				ch32h417_attached_pre = ch32h417_attached;
 			}
 			libusb_exit(libusb_ctx);
 		}
@@ -2336,16 +2409,39 @@ namespace pv
 			progressDlg->setCancelButton(nullptr); /* cancellation disabled */
 			progressDlg->setWindowFlags(progressDlg->windowFlags() & ~Qt::WindowContextHelpButtonHint | Qt::WindowStaysOnTopHint);
 
-			/* Set the IAP flag so hot-plug detection does not report a false disconnect */
+			/*
+			 * Set the IAP flag so hot-plug detection does not report a false
+			 * disconnect. It is normally cleared when the device comes back and
+			 * reports through on_ch32h417_device_event(); the deadline is the
+			 * fallback for a device that never returns.
+			 */
 			iap_upgrading_ = true;
+			iap_upgrade_deadline_.store(g_get_monotonic_time() + 60 * G_USEC_PER_SEC);
 
-			pv::dialogs::IAPWorker *worker = new pv::dialogs::IAPWorker(0, firmwarePath, WCH_VID, WCH_PID_CH32H417_HID, is_ch32h417_hid);
+			/*
+			 * The "enter IAP" command has to go out on the backend that owns
+			 * the device: a device bound to WinUSB cannot be opened through the
+			 * CH375 DLL, so the write would simply fail. Fall back to CH375
+			 * when no hardware device is selected.
+			 */
+			bool iap_use_libusb = false;
+			shared_ptr<devices::HardwareDevice> iap_hw_device =
+				std::dynamic_pointer_cast<devices::HardwareDevice>(session_.device());
+			if (iap_hw_device)
+				iap_use_libusb = (string(iap_hw_device->hardware_device()->driver()->name()) ==
+								  "wch-ch32h417-libusb");
+
+			pv::dialogs::IAPWorker *worker = new pv::dialogs::IAPWorker(0, firmwarePath,
+				WCH_VID, WCH_PID_CH32H417_HID, is_ch32h417_hid, iap_use_libusb);
 			QThread *workerThread = new QThread();
 			worker->moveToThread(workerThread);
 
 			connect(workerThread, &QThread::started, worker, &pv::dialogs::IAPWorker::do_work);
 			connect(worker, &pv::dialogs::IAPWorker::progress_updated, progressDlg, &QProgressDialog::setValue);
-			connect(worker, &pv::dialogs::IAPWorker::finished, [=](bool success)
+			/* "this" as the context object: the worker emits from its own
+			 * thread, and without it the lambda would build the message box
+			 * there and Qt would complain about the parent's thread. */
+			connect(worker, &pv::dialogs::IAPWorker::finished, this, [=](bool success)
 					{
 				progressDlg->close();
 				if (!success) {

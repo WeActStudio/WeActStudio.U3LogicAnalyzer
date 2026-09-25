@@ -149,9 +149,14 @@ public:
      * @param firmware_path Firmware file path
      * @param iap_vid IAP mode VID
      * @param iap_pid IAP mode PID
+     * @param already_in_hid_mode Whether the device is already in HID mode
+     * @param use_libusb_backend Send the "enter IAP" command through the libusb
+     *        driver instead of the CH375 DLL. The command has to go out on the
+     *        backend that currently owns the device, otherwise the write fails.
      */
     IAPWorker(int device_index, const QString &firmware_path,
-              uint16_t iap_vid, uint16_t iap_pid, bool already_in_hid_mode = false);
+              uint16_t iap_vid, uint16_t iap_pid, bool already_in_hid_mode = false,
+              bool use_libusb_backend = false);
     ~IAPWorker();
 
     void start();
@@ -196,6 +201,7 @@ private:
 
     void *hid_handle_;              /* hidapi device handle */
     bool already_in_hid_mode_;      /* Whether the device is already in HID mode */
+    bool use_libusb_backend_;       /* Whether the command channel runs on libusb */
     bool cancelled_;                /* Cancellation flag */
     QMutex mutex_;                  /* Mutex */
 };
