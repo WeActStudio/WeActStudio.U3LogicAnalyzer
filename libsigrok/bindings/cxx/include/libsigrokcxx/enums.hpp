@@ -741,6 +741,7 @@ public:
 	static const ConfigKey * const HARDWARE_VERSION;
 	static const ConfigKey * const USB_VERSION;
 	static const ConfigKey * const SEGMENT_CLEAR;
+	static const ConfigKey * const LINK_STOP_REASON;
     /** Data type used for this configuration key. */
     const DataType *data_type() const;
     /** String identifier for this configuration key, suitable for CLI use. */
@@ -869,5 +870,6 @@ protected:
 	static const ConfigKey _HARDWARE_VERSION;
 	static const ConfigKey _USB_VERSION;
 	static const ConfigKey _SEGMENT_CLEAR;
+	static const ConfigKey _LINK_STOP_REASON;
 };
 }

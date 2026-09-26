@@ -56,6 +56,7 @@ static const uint32_t devopts[] = {
 	SR_CONF_THRESHOLD_VALUE_1 | SR_CONF_GET | SR_CONF_SET,
 	SR_CONF_HARDWARE_VERSION | SR_CONF_GET,
 	SR_CONF_USB_VERSION | SR_CONF_GET,
+	SR_CONF_LINK_STOP_REASON | SR_CONF_GET,
 };
 
 /* ADC channel group device options */
@@ -556,6 +557,10 @@ static int config_get(uint32_t key, GVariant **data,
 	case SR_CONF_USB_VERSION:
 		/* 2 means USB 2.0, 3 means USB 3.0 */
 		*data = g_variant_new_uint64(devc->is_usb2 ? 2 : 3);
+		break;
+	case SR_CONF_LINK_STOP_REASON:
+		/* See the LINK_STOP_* values in protocol.h. */
+		*data = g_variant_new_uint64((uint64_t)devc->link_stop_reason);
 		break;
 	case SR_CONF_ADC_PRECISION:
 		/* Return the ADC resolution: 8 or 10 */

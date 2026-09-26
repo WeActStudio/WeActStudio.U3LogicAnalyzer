@@ -104,6 +104,20 @@ enum ch32h417_mode {
 	MODE_ADC,
 };
 
+/*
+ * Why the driver stopped an acquisition, reported through
+ * SR_CONF_LINK_STOP_REASON. The values match the libusb driver.
+ *
+ * The device stops uploading on its own as soon as the USB link cannot
+ * carry the configured sample rate, so the only thing worth reporting is
+ * that samples stopped arriving before the capture was due to end. What
+ * the host could conclude from byte counts is guesswork next to that, and
+ * a host that is merely too slow to consume the data stays on
+ * LINK_STOP_NONE.
+ */
+#define LINK_STOP_NONE           0  /* Not stopped by the driver */
+#define LINK_STOP_NO_DATA        1  /* Device stopped sending data early */
+
 /* ADC channels */
 enum adc_channel {
 	ADC_CHANNEL_1 = 0,
@@ -159,6 +173,9 @@ struct dev_context {
 
 	/* USB speed */
 	gboolean is_usb2;
+
+	/* Why the driver stopped the last acquisition, LINK_STOP_* */
+	guint link_stop_reason;
 
 	/* CH375 device */
 	int device_index;          /* Device index */

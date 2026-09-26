@@ -884,6 +884,8 @@ static gpointer data_read_thread(gpointer arg)
 	
 	int64_t last_query_time = g_get_monotonic_time();
 	int64_t current_time = last_query_time;
+
+	unsigned int dbg_packets = 0;
 	while (!acquisition_aborted(devc)) {
 		processed_samples = 0;
 		current_time = g_get_monotonic_time();
@@ -900,8 +902,16 @@ static gpointer data_read_thread(gpointer arg)
 		if (transfer_count == 0) {
 			/* No data: check whether the device has stopped */
 			/* Track how long there has been no data */
-			int64_t no_data_time_ms = (current_time - last_query_time) / 1000;
+			const int64_t no_data_time_ms =
+				(current_time - last_query_time) / 1000;
 			if (no_data_time_ms >= no_data_timeout_ms) {
+				/*
+				 * Nothing arrived although the capture was not due to end.
+				 * A link that cannot sustain the configured rate is one
+				 * way this shows up, so report the stop instead of letting
+				 * the GUI present the truncated capture as complete.
+				 */
+				devc->link_stop_reason = LINK_STOP_NO_DATA;
 				send_stop_command_once(sdi);
 				/* Timed out with no data, the device may have stopped acquiring */
 				sr_info("No data for %" PRId64 " ms, device may have stopped", no_data_timeout_ms);
@@ -931,7 +941,11 @@ static gpointer data_read_thread(gpointer arg)
 			continue;
 		}
 
-		sr_dbg("Read %lu bytes from pipe %lu", length, pipe_num);
+		/* A line per read is far too expensive at SuperSpeed rates. */
+		if (++dbg_packets >= 256) {
+			dbg_packets = 0;
+			sr_dbg("Read %lu bytes from pipe %lu", length, pipe_num);
+		}
 
 		cur_sample_count = length / unitsize;
 
@@ -1108,6 +1122,7 @@ SR_PRIV int ch32h417_libusb_acquisition_start(const struct sr_dev_inst *sdi)
 	devc = sdi->priv;
 	devc->sent_samples = 0;
 	acquisition_set_aborted(devc, FALSE);
+	devc->link_stop_reason = LINK_STOP_NONE;
 	devc->num_frames = 0;
 	devc->acq_started = FALSE;
 

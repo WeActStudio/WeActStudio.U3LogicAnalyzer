@@ -1283,6 +1283,13 @@ enum sr_configkey {
 	SR_CONF_HARDWARE_VERSION,
 	SR_CONF_USB_VERSION,
 	SR_CONF_SEGMENT_CLEAR,
+	/* Why the driver stopped the last acquisition on its own:
+	 * 0 = normal, 1 = the device stopped sending data early. That is how
+	 * a link that cannot carry the configured sample rate shows up here:
+	 * the device gives up uploading before the host could tell anything
+	 * from byte counts. Read after a capture to explain the stop; a host
+	 * that is merely too slow to consume the data stays at 0. */
+	SR_CONF_LINK_STOP_REASON,
 };
 
 /**

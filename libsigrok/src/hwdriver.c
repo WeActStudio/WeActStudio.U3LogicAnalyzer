@@ -285,6 +285,8 @@ static struct sr_key_info sr_key_info_config[] = {
 		"usb version", NULL},
 	{SR_CONF_SEGMENT_CLEAR, SR_T_BOOL, "segment_clear",
 		"segment clear", NULL},
+	{SR_CONF_LINK_STOP_REASON, SR_T_UINT64, "link_stop_reason",
+		"link stop reason", NULL},
 	ALL_ZERO
 };
 

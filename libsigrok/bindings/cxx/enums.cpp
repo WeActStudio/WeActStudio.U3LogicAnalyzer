@@ -558,6 +558,7 @@ const ConfigKey ConfigKey::_REPEAT_ACQUISITION = ConfigKey(SR_CONF_REPEAT_ACQUIS
 const ConfigKey ConfigKey::_HARDWARE_VERSION = ConfigKey(SR_CONF_HARDWARE_VERSION, "HARDWARE_VERSION");
 const ConfigKey ConfigKey::_USB_VERSION = ConfigKey(SR_CONF_USB_VERSION, "USB_VERSION");
 const ConfigKey ConfigKey::_SEGMENT_CLEAR = ConfigKey(SR_CONF_SEGMENT_CLEAR, "SEGMENT_CLEAR");
+const ConfigKey ConfigKey::_LINK_STOP_REASON = ConfigKey(SR_CONF_LINK_STOP_REASON, "LINK_STOP_REASON");
 const ConfigKey * const ConfigKey::LOGIC_ANALYZER = &ConfigKey::_LOGIC_ANALYZER;
 const ConfigKey * const ConfigKey::OSCILLOSCOPE = &ConfigKey::_OSCILLOSCOPE;
 const ConfigKey * const ConfigKey::MULTIMETER = &ConfigKey::_MULTIMETER;
@@ -670,6 +671,7 @@ const ConfigKey * const ConfigKey::REPEAT_ACQUISITION = &ConfigKey::_REPEAT_ACQU
 const ConfigKey * const ConfigKey::HARDWARE_VERSION = &ConfigKey::_HARDWARE_VERSION;
 const ConfigKey * const ConfigKey::USB_VERSION = &ConfigKey::_USB_VERSION;
 const ConfigKey * const ConfigKey::SEGMENT_CLEAR = &ConfigKey::_SEGMENT_CLEAR;
+const ConfigKey * const ConfigKey::LINK_STOP_REASON = &ConfigKey::_LINK_STOP_REASON;
 template<> const SR_API std::map<const enum sr_configkey, const ConfigKey * const> EnumValue<ConfigKey, enum sr_configkey>::_values = {
 	{SR_CONF_LOGIC_ANALYZER, ConfigKey::LOGIC_ANALYZER},
 	{SR_CONF_OSCILLOSCOPE, ConfigKey::OSCILLOSCOPE},
@@ -783,6 +785,7 @@ template<> const SR_API std::map<const enum sr_configkey, const ConfigKey * cons
 	{SR_CONF_HARDWARE_VERSION, ConfigKey::HARDWARE_VERSION},
 	{SR_CONF_USB_VERSION, ConfigKey::USB_VERSION},
 	{SR_CONF_SEGMENT_CLEAR, ConfigKey::SEGMENT_CLEAR},
+	{SR_CONF_LINK_STOP_REASON, ConfigKey::LINK_STOP_REASON},
 };
 #include <config.h>
 
