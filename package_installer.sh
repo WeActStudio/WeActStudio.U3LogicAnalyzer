@@ -5,6 +5,15 @@
 #   Windows: U3LogicAnalyzer_Setup.exe                    (NSIS)
 #   Linux:   U3LogicAnalyzer-<ver>-linux-<arch>.tar.gz    (archive + install.sh)
 #            U3LogicAnalyzer-<ver>-linux-<arch>.deb       (needs dpkg-deb)
+#            U3LogicAnalyzer-<ver>-<arch>.AppImage        (needs appimagetool,
+#                                                          auto-downloaded)
+#
+#   The AppImage is accompanied by U3LogicAnalyzer-<ver>-<arch>.AppImage.run.sh.
+#   Ubuntu 24.04 and later do not ship libfuse2, so running the AppImage
+#   directly fails with "dlopen(): error loading libfuse.so.2"; use the
+#   .run.sh wrapper, --appimage-extract-and-run, or install libfuse2.
+#   Optionally drop uruntime-<arch> into dist/ to build an AppImage that
+#   runs without FUSE at all.
 #
 # Usage:
 #   ./package_installer.sh               # Build + package + create installer
