@@ -289,11 +289,21 @@ MainWindow::~MainWindow()
 	}
 }
 
-void MainWindow::show_session_error(const QString text, const QString info_text)
+void MainWindow::show_session_error(const QString text, const QString info_text,
+	QWidget *parent)
 {
 	// TODO Emulate noquote()
 	qDebug() << "Notifying user of session error:" << info_text;
-	QMessageBox msg;
+
+	/*
+	 * Without a parent the box is a window of its own: it gets its own task
+	 * bar entry, does not stay in front of the main window and does not
+	 * inherit its state. Callers with no window at hand fall back to
+	 * whatever the user is currently looking at.
+	 */
+	QWidget *owner = parent ? parent : QApplication::activeWindow();
+
+	QMessageBox msg(owner);
 	msg.setText(text + "\n\n" + info_text);
 	msg.setStandardButtons(QMessageBox::Ok);
 	msg.setIcon(QMessageBox::Warning);
@@ -591,6 +601,13 @@ shared_ptr<Session> MainWindow::add_session()
 		this, SLOT(on_session_device_changed()));
 	connect(session.get(), SIGNAL(capture_state_changed(int)),
 		this, SLOT(on_session_capture_state_changed(int)));
+	/*
+	 * Queued on purpose: the signal comes from the datafeed thread, and a
+	 * capture must not be stopped from inside the feed callback.
+	 */
+	connect(session.get(), SIGNAL(sample_rate_too_low(qulonglong, qulonglong)),
+		this, SLOT(on_sample_rate_too_low(qulonglong, qulonglong)),
+		Qt::QueuedConnection);
 
 	sessions_.push_back(session);
 	
@@ -881,6 +898,22 @@ void MainWindow::on_device_attached()
 			last_focused_session_->main_bar()->set_device_selector_name(device_name);
 			last_focused_session_->main_bar()->set_vendorName(vendor_name);
 			restore_sessions();
+		} else {
+			/*
+			 * Only the demo device is left. The device that was in use has
+			 * just been closed, so select the demo device again to keep the
+			 * session usable. This is where a manual rescan without any
+			 * hardware attached ends up.
+			 */
+			const shared_ptr<devices::Device> previous =
+				last_focused_session_->device();
+			const shared_ptr<devices::HardwareDevice> previous_hw =
+				dynamic_pointer_cast<devices::HardwareDevice>(previous);
+
+			/* Leave a file device that is in use alone. */
+			if (!previous || (previous_hw &&
+					previous_hw->hardware_device()->driver()->name() == "demo"))
+				last_focused_session_->select_device(nullptr);
 		}
 	}
 
@@ -1402,7 +1435,80 @@ bool MainWindow::restoreState(const QByteArray &state, int version)
 void MainWindow::on_show_error(QString err)
 {
 	// last_focused_session_->device_detach();
-	show_session_error(tr("Capture Failed"), err);
+	show_session_error(tr("Capture Failed"), err, this);
+}
+
+/*
+ * Sample rates are spelled the way the rate tables list them (192.5 MHz rather
+ * than 193 MHz), so that the number in the message can be compared with the
+ * setting directly.
+ */
+static QString format_sample_rate(qulonglong rate)
+{
+	QString number = (rate >= 1000000) ?
+		QString::number(rate / 1e6, 'f', 3) :
+		QString::number(rate / 1e3, 'f', 3);
+
+	while (number.contains('.') && number.endsWith('0'))
+		number.chop(1);
+	if (number.endsWith('.'))
+		number.chop(1);
+
+	return number + ((rate >= 1000000) ? " MHz" : " kHz");
+}
+
+/*
+ * The driver had to stop the capture because the device stopped sending
+ * samples early, which is what a link that cannot carry the configured
+ * rate looks like from here. The data that did arrive may be missing
+ * samples, and that leaves no trace in the waveform, so the user has to be
+ * told instead of being shown a capture that looks complete.
+ */
+void MainWindow::on_sample_rate_too_low(qulonglong configured, qulonglong reason)
+{
+	Session *session = qobject_cast<Session *>(sender());
+	if (session) {
+		/*
+		 * Stop a repeated acquisition as well: otherwise the next capture
+		 * is started from the event queue while this message is open.
+		 */
+		session->is_repeat_acquisition_ = false;
+		session->stop_capture();
+
+		/*
+		 * The button was put back to "Stop" when the state change was
+		 * announced, because the repeat was still marked as running at
+		 * that point. Refresh it now that the repeat has really ended.
+		 */
+		if (session->main_bar())
+			session->main_bar()->update_runstop_status(Session::Stopped);
+		if (session == last_focused_session_.get()) {
+			run_stop_button_->setIcon(icon_grey_);
+			run_stop_button_->setText(session->using_file_device() ?
+				tr("Reload") : tr("Run"));
+		}
+	}
+
+	/*
+	 * The message box below runs its own event loop, so another one of
+	 * these can be delivered while it is open. One warning is enough.
+	 */
+	if (link_stop_message_visible_)
+		return;
+	link_stop_message_visible_ = true;
+
+	qDebug() << "Capture stopped by the driver, reason" << reason
+		<< "at" << configured << "Hz";
+
+	show_session_error(tr("Device stopped sending data"),
+		tr("The device stopped sending samples before the capture was due to "
+		   "end, usually because the USB link cannot sustain the configured %1.\n\n"
+		   "The acquisition was stopped. The data captured before that may "
+		   "be incomplete or wrong. Try a lower sample rate, fewer "
+		   "channels, or another USB port.")
+			.arg(format_sample_rate(configured)), this);
+
+	link_stop_message_visible_ = false;
 }
 
 void MainWindow::on_get_repeat_acquisition(bool& is_repeat_acquisition_state)

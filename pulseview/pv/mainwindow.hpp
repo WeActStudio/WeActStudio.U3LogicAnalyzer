@@ -85,7 +85,8 @@ public:
 
 	~MainWindow();
 
-	static void show_session_error(const QString text, const QString info_text);
+	static void show_session_error(const QString text, const QString info_text,
+		QWidget *parent = nullptr);
  	
 	shared_ptr<views::ViewBase> get_active_view() const;
 
@@ -166,6 +167,8 @@ private Q_SLOTS:
 	void on_session_device_changed();
 	void on_session_capture_state_changed(int state);
 
+	void on_sample_rate_too_low(qulonglong configured, qulonglong reason);
+
 	void on_new_view(Session *session, int view_type);
 	void on_view_close_clicked();
 
@@ -225,6 +228,8 @@ private:
 	QShortcut *close_current_tab_shortcut_;
 	QString using_device_name;
 	bool is_repeat_acq_ = false;
+	/* True while the link stop warning is on screen. */
+	bool link_stop_message_visible_ = false;
 	bool is_wch_device_ = false;
 	bool attach_process_done = true;
 };

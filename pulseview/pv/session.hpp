@@ -88,6 +88,20 @@ using sigrok::Option;
 
 namespace pv {
 
+/*
+ * Why a driver stopped a capture on its own. Mirrors the LINK_STOP_* codes
+ * both wch-ch32h417 drivers (CH375 and libusb) report through
+ * SR_CONF_LINK_STOP_REASON.
+ *
+ * There is only one: the device stops uploading when the link cannot carry
+ * the configured sample rate, so all the driver ever sees is that the
+ * samples stopped arriving early.
+ */
+enum class LinkStopReason : unsigned {
+	None = 0,
+	DeviceStopped = 1,
+};
+
 class DeviceManager;
 
 namespace data {
@@ -269,6 +283,19 @@ private:
 	void data_feed_in(shared_ptr<sigrok::Device> device,
 		shared_ptr<sigrok::Packet> packet);
 
+	/*
+	 * report_link_stop_reason() asks the driver whether the last capture was
+	 * stopped because the device stopped sending data early, which is how a
+	 * link that cannot carry the configured rate shows up: the device gives
+	 * up uploading first. Deciding that (and stopping the acquisition) is the
+	 * driver's job, and a host that was merely too slow to consume the data
+	 * is not something to warn the user about.
+	 *
+	 * Returns the reason so that the caller can end a repeated acquisition:
+	 * restarting one would only repeat a capture known to be broken.
+	 */
+	LinkStopReason report_link_stop_reason();
+
 Q_SIGNALS:
 	void capture_state_changed(int state);
 	void device_changed();
@@ -289,6 +316,14 @@ Q_SIGNALS:
 	void mainwindow_show_error(QString err);
 	void mainwindow_show_info(QString info);
 	void mainwindow_close_decoder_dock(Session *session);
+
+	/*
+	 * Emitted when the driver stopped a capture because the link could not
+	 * deliver the configured sample rate, or because the device stopped
+	 * sending data early. reason is one of the LinkStopReason values. Sent
+	 * from the datafeed thread, so it is delivered through the event queue.
+	 */
+	void sample_rate_too_low(qulonglong configured, qulonglong reason);
 	
 	void get_repeat_acquisition(bool& is_repeat_acquisition);
 	void notify_acq_done();
@@ -330,6 +365,7 @@ private:
 	mutable recursive_mutex data_mutex_;
 	shared_ptr<data::Logic> logic_data_;
 	uint64_t cur_samplerate_;
+
 	shared_ptr<data::LogicSegment> cur_logic_segment_;
 	map< shared_ptr<sigrok::Channel>, shared_ptr<data::AnalogSegment> >
 		cur_analog_segments_;
@@ -354,6 +390,10 @@ private:
 
 public:
 	bool is_repeat_acquisition_;
+	/* Set when the driver stopped a capture because of the link, cleared
+	 * when the next capture starts. Keeps a repeated acquisition from
+	 * restarting itself into the same failure over and over. */
+	bool link_stop_reported_;
 	map<shared_ptr<data::DecodeSignal>, QString> decode_signal_map_;
 	QString decoder_name_last_;
 

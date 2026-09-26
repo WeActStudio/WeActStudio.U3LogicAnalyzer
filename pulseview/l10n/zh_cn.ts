@@ -168,6 +168,16 @@ Do you want to save the session?</source>
         <translation>采集失败</translation>
     </message>
     <message>
+        <location filename="../pv/mainwindow.cpp" line="1493"/>
+        <source>Device stopped sending data</source>
+        <translation>设备已停止发送数据</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="1494"/>
+        <source>The device stopped sending samples before the capture was due to end, usually because the USB link cannot sustain the configured %1.&#10;&#10;The acquisition was stopped. The data captured before that may be incomplete or wrong. Try a lower sample rate, fewer channels, or another USB port.</source>
+        <translation>设备在采集结束前就不再上传数据，通常是因为 USB 链路无法承受当前设置的 %1。&#10;&#10;采集已停止。在此之前采集到的数据可能不完整或不正确。请降低采样率、减少通道数，或换一个 USB 端口。</translation>
+    </message>
+    <message>
         <location filename="../pv/mainwindow.cpp" line="1338"/>
         <location filename="../pv/mainwindow.cpp" line="1364"/>
         <source>Confirm</source>
@@ -3234,6 +3244,11 @@ until (condition)
         <location filename="../pv/widgets/devicetoolbutton.cpp" line="87"/>
         <source>&lt;No Device&gt;</source>
         <translation>&lt;无设备&gt;</translation>
+    </message>
+    <message>
+        <location filename="../pv/widgets/devicetoolbutton.cpp" line="179"/>
+        <source>Refresh Device List</source>
+        <translation>刷新设备列表</translation>
     </message>
 </context>
 <context>
