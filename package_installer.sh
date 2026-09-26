@@ -32,10 +32,10 @@ CMAKE_LISTS="${SCRIPT_DIR}/pulseview/CMakeLists.txt"
 VERSION=$(sed -n 's/^[[:space:]]*set(PV_VERSION_STRING[[:space:]]*"\([^"]*\)".*/\1/p' \
     "${CMAKE_LISTS}" 2>/dev/null | head -1)
 if [ -z "${VERSION}" ]; then
-    echo "[警告] 无法从 ${CMAKE_LISTS} 读取 PV_VERSION_STRING，回退到 0.1.0"
+    echo "[warning] Could not read PV_VERSION_STRING from ${CMAKE_LISTS}, falling back to 0.1.0"
     VERSION=0.1.0
 fi
-echo ">>> 版本: ${VERSION} (来自 pulseview/CMakeLists.txt)"
+echo ">>> Version: ${VERSION} (from pulseview/CMakeLists.txt)"
 
 for arg in "$@"; do
     case $arg in
@@ -51,21 +51,21 @@ fi
 
 # --- Build + package ---
 if [ $SKIP_BUILD -eq 0 ]; then
-    echo ">>> 步骤 1/3: 编译 + 打包..."
+    echo ">>> Step 1/3: build and package..."
     bash "${SCRIPT_DIR}/build.sh" --clean --package
 else
     if [ $IS_WINDOWS -eq 1 ]; then
         [ -f "${DIST_DIR}/U3LogicAnalyzer.exe" ] || {
-            echo "[错误] 未找到 ${DIST_DIR}/U3LogicAnalyzer.exe，请先 ./build.sh --package"
+            echo "[error] ${DIST_DIR}/U3LogicAnalyzer.exe not found, run ./build.sh --package first"
             exit 1
         }
     else
         [ -f "${DIST_DIR}/U3LogicAnalyzer" ] || {
-            echo "[错误] 未找到 ${DIST_DIR}/U3LogicAnalyzer，请先 ./build.sh --package"
+            echo "[error] ${DIST_DIR}/U3LogicAnalyzer not found, run ./build.sh --package first"
             exit 1
         }
     fi
-    echo ">>> 跳过编译，使用已有 dist/U3LogicAnalyzer/"
+    echo ">>> Skipping the build, using the existing dist/U3LogicAnalyzer/"
 fi
 
 # ============================================================================
@@ -75,12 +75,12 @@ if [ $IS_WINDOWS -eq 1 ]; then
 
 # --- Check for NSIS ---
 if ! command -v makensis &>/dev/null; then
-    echo ">>> 安装 NSIS..."
+    echo ">>> Installing NSIS..."
     pacman -S --needed --noconfirm mingw-w64-x86_64-nsis
 fi
 
 # --- Generate the NSIS script ---
-echo ">>> 步骤 2/3: 生成安装脚本..."
+echo ">>> Step 2/3: generating the installer script..."
 
 OUTPUT="${DIST_DIR}/${SETUP_NAME}.exe"
 NSIS_SCRIPT="${SCRIPT_DIR}/dist/setup.nsi"
@@ -146,13 +146,13 @@ SectionEnd
 NSIEOF
 
 # --- Build the installer ---
-echo ">>> 步骤 3/3: 生成安装包..."
+echo ">>> Step 3/3: building the installer..."
 cd "${DIST_DIR}"
 makensis "${NSIS_SCRIPT}"
 
 echo ""
 echo "============================================"
-echo " 安装包生成完成！"
+echo " Installer done!"
 echo " ${OUTPUT}"
 echo "============================================"
 
@@ -194,7 +194,7 @@ else
     UDEV_DIR=""
 fi
 
-echo ">>> 安装到 ${PREFIX}"
+echo ">>> Installing to ${PREFIX}"
 mkdir -p "$PREFIX" "$APP_DIR" "$ICON_ROOT/48x48/apps" "$ICON_ROOT/scalable/apps"
 cp -r "$DIR"/. "$PREFIX"/
 rm -f "$PREFIX/install.sh" "$PREFIX/uninstall.sh"
@@ -209,12 +209,12 @@ if [ -n "$UDEV_DIR" ] && [ -f "$DIR/99-weact-ch32h417.rules" ]; then
     cp "$DIR/99-weact-ch32h417.rules" "$UDEV_DIR/"
     udevadm control --reload-rules 2>/dev/null || true
     udevadm trigger --subsystem-match=usb 2>/dev/null || true
-    echo ">>> 已安装 udev 权限规则"
+    echo ">>> Installed the udev access rules"
 fi
 
 update-desktop-database "$APP_DIR" 2>/dev/null || true
 gtk-update-icon-cache -f -t "$ICON_ROOT" 2>/dev/null || true
-echo ">>> 完成：菜单项 U3LogicAnalyzer"
+echo ">>> Done: menu entry U3LogicAnalyzer"
 INSEOF
 
 cat > "${SCRIPT_DIR}/dist/uninstall.sh" << 'UNESEOF'
@@ -241,12 +241,12 @@ rm -f "$APP_DIR/U3LogicAnalyzer.desktop"
 rm -f "$ICON_ROOT/48x48/apps/U3LogicAnalyzer.png" "$ICON_ROOT/scalable/apps/U3LogicAnalyzer.svg"
 update-desktop-database "$APP_DIR" 2>/dev/null || true
 gtk-update-icon-cache -f -t "$ICON_ROOT" 2>/dev/null || true
-echo ">>> 已卸载 U3LogicAnalyzer"
+echo ">>> Removed U3LogicAnalyzer"
 UNESEOF
 chmod +x "${SCRIPT_DIR}/dist/install.sh" "${SCRIPT_DIR}/dist/uninstall.sh"
 
 # --- tar.gz ---
-echo ">>> 步骤 2/4: 生成 tar.gz 归档..."
+echo ">>> Step 2/4: creating the tar.gz archive..."
 rm -rf "${STAGE}"
 mkdir -p "${STAGE}"
 cp -r "${DIST_DIR}/." "${STAGE}/"
@@ -257,7 +257,7 @@ tar czf "${TARBALL}" -C "${SCRIPT_DIR}/dist" "${BASENAME}"
 echo "  ${TARBALL}"
 
 # --- deb ---
-echo ">>> 步骤 3/4: 生成 deb 包..."
+echo ">>> Step 3/4: building the deb package..."
 if command -v dpkg-deb >/dev/null 2>&1; then
     DEB_ROOT="${SCRIPT_DIR}/dist/deb-root"
     rm -rf "${DEB_ROOT}"
@@ -357,11 +357,11 @@ PREOF
     rm -rf "${DEB_ROOT}"
     echo "  ${DEB}"
 else
-    echo "  (dpkg-deb 不可用，跳过 deb 包；apt install dpkg-dev 后再试)"
+    echo "  (dpkg-deb not available, skipping the deb package; install dpkg-dev and retry)"
 fi
 
 # --- AppImage ---
-echo ">>> 步骤 4/4: 生成 AppImage..."
+echo ">>> Step 4/4: building the AppImage..."
 
 case "${ARCH}" in
     amd64)  AI_ARCH=x86_64 ;;
@@ -451,7 +451,7 @@ AREOF
     RUNTIME_ARG=""
     if [ -f "${SCRIPT_DIR}/dist/uruntime-${AI_ARCH}" ]; then
         RUNTIME_ARG="--runtime-file ${SCRIPT_DIR}/dist/uruntime-${AI_ARCH}"
-        echo "  (使用 uruntime，生成的 AppImage 无需 FUSE)"
+        echo "  (using uruntime: the AppImage will run without FUSE)"
     fi
 
     # Extract-and-run avoids the FUSE requirement of the AppImage runtime.
@@ -475,38 +475,38 @@ fi
 exec "\${CACHE}/squashfs-root/AppRun" "\$@"
 WREOF
         chmod +x "${APPIMAGE}.run.sh"
-        echo "  ${APPIMAGE}.run.sh (无 FUSE 也能启动)"
+        echo "  ${APPIMAGE}.run.sh (runs without FUSE)"
     else
-        echo "  (appimagetool 执行失败，跳过 AppImage)"
+        echo "  (appimagetool failed, skipping the AppImage)"
         rm -f "${APPIMAGE}"
     fi
     rm -rf "${APPDIR}"
 else
-    echo "  (appimagetool 不可用，跳过 AppImage;"
-    echo "   可手动下载 appimagetool-${AI_ARCH}.AppImage 放到 dist/ 后重跑)"
+    echo "  (appimagetool not available, skipping the AppImage;"
+    echo "   download appimagetool-${AI_ARCH}.AppImage into dist/ and rerun)"
 fi
 
 echo ""
 echo "============================================"
-echo " 安装包生成完成！"
+echo " Installer done!"
 echo " ${TARBALL}"
 [ -f "${DEB}" ] && echo " ${DEB}"
 if [ -f "${APPIMAGE}" ]; then
     echo " ${APPIMAGE}"
     echo ""
     echo ""
-    echo " AppImage 运行说明（Ubuntu 24.04 起默认不带 libfuse2，直接双击会报"
-    echo " dlopen(): error loading libfuse.so.2）："
+    echo " How to run the AppImage (Ubuntu 24.04 and later omit libfuse2, so a"
+    echo " double click fails with: dlopen(): error loading libfuse.so.2):"
     echo "   1) ${APPIMAGE}.run.sh"
-    echo "      推荐。不用 root、不用 FUSE，首次自动解压到 ~/.cache 后启动。"
+    echo "      Recommended: no root, no FUSE; extracts to ~/.cache on first use."
     echo "   2) ${APPIMAGE} --appimage-extract-and-run"
-    echo "      免 root，每次解压到 /tmp 后运行。"
+    echo "      Without root: extracts to /tmp on every start."
     echo "   3) sudo apt install libfuse2"
-    echo "      装上后可直接双击 ${APPIMAGE##*/} 运行。"
-    [ -n "${RUNTIME_ARG}" ] && echo "      （本包已用 uruntime，无需此项即可双击运行）"
-    [ -z "${RUNTIME_ARG}" ] && echo "   4) 把 uruntime-${AI_ARCH} 放到 dist/ 后重跑本脚本，可生成免 FUSE 的 AppImage。"
+    echo "      After that ${APPIMAGE##*/} can be started by double clicking."
+    [ -n "${RUNTIME_ARG}" ] && echo "      (this package uses uruntime, so FUSE is not needed at all)"
+    [ -z "${RUNTIME_ARG}" ] && echo "   4) drop uruntime-${AI_ARCH} into dist/ and rerun to build a FUSE-free AppImage."
     echo ""
-    echo " AppImage 不会自动注册菜单项，需要菜单入口请改用 tar.gz 包里的 install.sh。"
+    echo " An AppImage does not register a menu entry: use install.sh from the archive."
 fi
 echo "============================================"
 

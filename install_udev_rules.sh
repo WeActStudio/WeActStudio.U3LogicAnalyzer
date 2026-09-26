@@ -59,18 +59,18 @@ $SUDO udevadm trigger --subsystem-match=usb 2>/dev/null || true
 cat <<'EOF'
 
 ============================================
- udev 规则安装完成
+ udev rules installed
 ============================================
 
-规则覆盖：
-  1a86:5537  运行态接口（命令 / 逻辑数据 / ADC 数据）
-  1a86:fe17  IAP 固件升级用的 HID 接口（含 hidraw 节点）
+Rules cover:
+  1a86:5537  runtime interfaces (command / logic data / ADC data)
+  1a86:fe17  HID interface used for the IAP firmware upgrade (incl. hidraw)
 
-验证：
+Verify with:
 
-  lsusb | grep 1a86          # 设备应可见（未接? 检查 VMware 透传）
-  ls -l /dev/bus/usb/*/*     # 对应节点应为 root:plugdev 且可写
+  lsusb | grep 1a86          # the device should be listed (missing? check passthrough)
+  ls -l /dev/bus/usb/*/*     # its node should be root:plugdev and writable
   udevadm verify /etc/udev/rules.d/99-weact-ch32h417.rules
 
-若安装时设备已经插着，拔插一次以触发规则。
+If the device was already plugged in, unplug and replug it to apply the rules.
 EOF

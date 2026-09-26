@@ -31,20 +31,20 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cat <<EOF
 
 ============================================
- 环境部署完成！
+ Environment setup complete!
 ============================================
 
-运行时环境变量（每次打开新终端需设置）：
+Runtime environment variables (set them in every new shell):
 
   export SIGROKDECODE_DIR=${SCRIPT_DIR}/install/share/libsigrokdecode/decoders
 
-（Linux 使用系统 Python，无需设置 PYTHONHOME）
+(Linux uses the system Python, PYTHONHOME is not needed)
 
-永久生效（写入 ~/.bashrc）：
+To make them permanent (append to ~/.bashrc):
 
   echo 'export SIGROKDECODE_DIR=${SCRIPT_DIR}/install/share/libsigrokdecode/decoders' >> ~/.bashrc
 
-现在可以运行:
+You can now run:
 
   ./build.sh         # build
   ./start_pv.sh      # run (uses build_cmake/logicanalyzer_build/U3LogicAnalyzer)
