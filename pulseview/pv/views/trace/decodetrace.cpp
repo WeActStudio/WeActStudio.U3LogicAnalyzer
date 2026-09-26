@@ -1358,11 +1358,8 @@ void DecodeTrace::on_show_message(QString err)
 	msg.exec();
 }
 
-void DecodeTrace::initialize_row_widgets(DecodeTraceRow* r, unsigned int row_id)
+void DecodeTrace::apply_row_theme_colors(DecodeTraceRow& r)
 {
-	// Set colors and fixed widths
-	QFontMetrics m(QApplication::font());
-
 	QPalette header_palette = owner_->view()->palette();
 	QPalette selector_palette = owner_->view()->palette();
 
@@ -1377,6 +1374,17 @@ void DecodeTrace::initialize_row_widgets(DecodeTraceRow* r, unsigned int row_id)
 		selector_palette.setColor(QPalette::Background,
 			QColor(0, 0, 0, ExpansionAreaAlpha));
 	}
+
+	r.header_container->setPalette(header_palette);
+	r.selector_container->setPalette(selector_palette);
+}
+
+void DecodeTrace::initialize_row_widgets(DecodeTraceRow* r, unsigned int row_id)
+{
+	// Set colors and fixed widths
+	QFontMetrics m(QApplication::font());
+
+	apply_row_theme_colors(*r);
 
 	const int w = m.boundingRect(r->decode_row->title()).width() + RowTitleMargin;
 	r->title_width = w;
@@ -1399,7 +1407,6 @@ void DecodeTrace::initialize_row_widgets(DecodeTraceRow* r, unsigned int row_id)
 	r->header_container->layout()->setContentsMargins(10, 1, 10, 1);
 
 	r->header_container->setAutoFillBackground(true);
-	r->header_container->setPalette(header_palette);
 
 	// Add widgets inside the header container
 	QCheckBox* cb = new QCheckBox();
@@ -1436,7 +1443,6 @@ void DecodeTrace::initialize_row_widgets(DecodeTraceRow* r, unsigned int row_id)
 	r->selector_container->setLayout(new FlowLayout(r->selector_container));
 
 	r->selector_container->setAutoFillBackground(true);
-	r->selector_container->setPalette(selector_palette);
 
 	// Add all classes that can be toggled
 	vector<AnnotationClass*> ann_classes = r->decode_row->ann_classes();
@@ -1595,6 +1601,10 @@ void DecodeTrace::on_setting_changed(const QString &key, const QVariant &value)
 
 	if (key == GlobalSettings::Key_Dec_AlwaysShowAllRows)
 		always_show_all_rows_ = value.toBool();
+
+	if (key == GlobalSettings::Key_General_Theme)
+		for (DecodeTraceRow& r : rows_)
+			apply_row_theme_colors(r);
 }
 
 void DecodeTrace::on_color_changed(const QColor &color)

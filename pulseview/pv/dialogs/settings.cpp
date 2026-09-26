@@ -256,10 +256,6 @@ QWidget *Settings::get_general_settings_form(QWidget *parent) const
 		this, SLOT(on_general_theme_changed(int)));
 	general_layout->addRow(tr("User interface theme"), theme_cb);
 
-	QLabel *description_1 = new QLabel(tr("(You may need to restart software for all UI elements to update)"));
-	description_1->setAlignment(Qt::AlignRight);
-	general_layout->addRow(description_1);
-
 	// Style combobox
 	QComboBox *style_cb = new QComboBox();
 	style_cb->addItem(tr("System Default"), "");
@@ -659,30 +655,6 @@ void Settings::on_general_theme_changed(int value)
 	GlobalSettings settings;
 	settings.setValue(GlobalSettings::Key_General_Theme, value);
 	settings.apply_theme();
-
-	QMessageBox msg(this);
-	msg.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-	msg.setIcon(QMessageBox::Question);
-	auto flags = msg.windowFlags();
-	msg.setWindowFlags(flags & ~Qt::WindowContextHelpButtonHint);
-
-	QFont font = msg.font();
-	font.setPointSize(font.pointSize() + 2);
-	msg.setFont(font);
-
-	if (settings.current_theme_is_dark()) {
-		msg.setText(tr("You selected a dark theme.\n" \
-			"Should I set the user-adjustable colors to better suit your choice?\n\n" \
-			"Please keep in mind that the application may need a restart to display correctly."));
-		if (msg.exec() == QMessageBox::Yes)
-			settings.set_dark_theme_default_colors();
-	} else {
-		msg.setText(tr("You selected a bright theme.\n" \
-			"Should I set the user-adjustable colors to better suit your choice?\n\n" \
-			"Please keep in mind that the application may need a restart to display correctly."));
-		if (msg.exec() == QMessageBox::Yes)
-			settings.set_bright_theme_default_colors();
-	}
 }
 
 void Settings::on_general_style_changed(int value)

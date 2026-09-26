@@ -1025,11 +1025,6 @@ Please check the device connection and firmware file.</source>
         <translation>主题</translation>
     </message>
     <message>
-        <location filename="../pv/dialogs/settings.cpp" line="252"/>
-        <source>(You may need to restart software for all UI elements to update)</source>
-        <translation>（您可能需要重新启动软件才能更新所有UI元素）</translation>
-    </message>
-    <message>
         <location filename="../pv/dialogs/settings.cpp" line="258"/>
         <source>System Default</source>
         <translation>默认风格</translation>
@@ -1254,26 +1249,6 @@ Please check the device connection and firmware file.</source>
         <location filename="../pv/dialogs/settings.cpp" line="592"/>
         <source>&amp;Pop out</source>
         <translation>独立弹出日志窗口</translation>
-    </message>
-    <message>
-        <location filename="../pv/dialogs/settings.cpp" line="661"/>
-        <source>You selected a dark theme.
-Should I set the user-adjustable colors to better suit your choice?
-
-Please keep in mind that the application may need a restart to display correctly.</source>
-        <translation>您选择了一个深色主题。
-是否相应地调整特定的颜色，以更好地协调？
-应用程序可能需要重新启动才能正确显示。</translation>
-    </message>
-    <message>
-        <location filename="../pv/dialogs/settings.cpp" line="667"/>
-        <source>You selected a bright theme.
-Should I set the user-adjustable colors to better suit your choice?
-
-Please keep in mind that the application may need a restart to display correctly.</source>
-        <translation>您选择了一个明亮主题。
-是否相应地调整特定的颜色，以更好地协调？
-应用程序可能需要重新启动才能正确显示。</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="838"/>

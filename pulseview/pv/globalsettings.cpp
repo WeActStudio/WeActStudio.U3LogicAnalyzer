@@ -26,11 +26,13 @@
 #include <QApplication>
 #include <QColor>
 #include <QDebug>
+#include <QEvent>
 #include <QFile>
 #include <QFontMetrics>
 #include <QPixmapCache>
 #include <QString>
 #include <QStyle>
+#include <QWidget>
 #include <QtGlobal>
 
 #include "globalsettings.hpp"
@@ -276,6 +278,37 @@ void GlobalSettings::apply_theme()
 	// }
 
 	QPixmapCache::clear();
+
+	/*
+	 * QApplication::setPalette() notifies the top level windows and lets
+	 * the widgets below them follow through the palette they inherit from
+	 * their parent. A widget that carries a style sheet is left out of
+	 * that propagation, so swapping out a theme that uses one - or coming
+	 * back from it - leaves the widgets that still had the style sheet
+	 * applied with the colors of the previous theme. Tell every widget
+	 * about the new palette instead of relying on the propagation.
+	 */
+	QEvent palette_event(QEvent::ApplicationPaletteChange);
+	const QWidgetList widgets = QApplication::allWidgets();
+	for (QWidget *widget : widgets)
+		QCoreApplication::sendEvent(widget, &palette_event);
+
+	/*
+	 * Widgets that draw with theme dependent colors of their own pick them
+	 * up when the setting is announced, so the announcement has to happen
+	 * once the palette and is_dark_theme_ are up to date.
+	 */
+	for (GlobalSettingsInterface *cb : callbacks_)
+		cb->on_setting_changed(Key_General_Theme, value(Key_General_Theme));
+
+	/*
+	 * The window decorations are not part of the style sheet and are set
+	 * per window, so every window that is already open has to be told
+	 * about the new theme; leaving that to the next QEvent::Show would
+	 * only reach the ones that have not been shown yet.
+	 */
+	for (QWidget *w : QApplication::topLevelWidgets())
+		util::apply_window_theme(w, is_dark_theme_);
 }
 
 void GlobalSettings::apply_language()

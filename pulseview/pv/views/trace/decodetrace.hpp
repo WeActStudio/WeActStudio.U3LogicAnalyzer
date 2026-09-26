@@ -242,6 +242,10 @@ private:
 
 	void export_annotations(deque<const Annotation*>& annotations) const;
 
+	/* Row colors follow the theme and are set when the row is built,
+	 * so they have to be applied again when the theme changes. */
+	void apply_row_theme_colors(DecodeTraceRow& r);
+
 	void initialize_row_widgets(DecodeTraceRow* r, unsigned int row_id);
 	void update_rows();
 

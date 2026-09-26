@@ -154,6 +154,29 @@ void LogicSignal::refresh_theme_colors()
     SamplingPointColor.setAlpha(255);
 }
 
+void LogicSignal::refresh_trigger_icons()
+{
+	GlobalSettings settings;
+	const char *suffix = settings.current_theme_is_dark() ? "" : "-normal";
+
+	const struct { QAction *action; const char *name; } entries[] = {
+		{trigger_none_, "none"},
+		{trigger_rising_, "rising"},
+		{trigger_high_, "high"},
+		{trigger_falling_, "falling"},
+		{trigger_low_, "low"},
+		{trigger_change_, "change"},
+	};
+
+	for (const auto &entry : entries) {
+		if (!entry.action)
+			continue;
+		const QByteArray path =
+			QString(":/icons/trigger-%1%2.svg").arg(entry.name, suffix).toUtf8();
+		entry.action->setIcon(*get_icon(path.constData()));
+	}
+}
+
 int LogicSignal::signal_height()
 {
 	const int signal_margin =
@@ -745,7 +768,7 @@ const QIcon* LogicSignal::get_icon(const char *path)
 		icon_cache_.insert(path, icon);
 	}
 
-	return icon_cache_.take(path);
+	return icon_cache_.object(path);
 }
 
 const QPixmap* LogicSignal::get_pixmap(const char *path)
@@ -755,7 +778,7 @@ const QPixmap* LogicSignal::get_pixmap(const char *path)
 		pixmap_cache_.insert(path, pixmap);
 	}
 
-	return pixmap_cache_.take(path);
+	return pixmap_cache_.object(path);
 }
 
 void LogicSignal::update_logic_level_offsets()
@@ -780,6 +803,7 @@ void LogicSignal::on_setting_changed(const QString &key, const QVariant &value)
 	if (key == GlobalSettings::Key_General_Theme)
 	{
 		refresh_theme_colors();
+		refresh_trigger_icons();
 	}
 }
 

@@ -230,6 +230,15 @@ void show_message(QWidget *parent, const QString &title, const QString &text,
 	QMessageBox::Icon icon, int min_width = 400, bool rich_text = false,
 	bool open_links = false, bool modal = true);
 
+/**
+ * Apply the current theme to the decorations the window manager draws.
+ *
+ * Those are not part of the Qt style sheet, so a title bar that was
+ * made dark has to be told about a switch back to a bright theme as
+ * well. Does nothing where the platform has no such attribute.
+ */
+void apply_window_theme(QWidget *window, bool dark);
+
 } // namespace util
 } // namespace pv
 

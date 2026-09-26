@@ -33,6 +33,11 @@
 #include <unistd.h>
 #endif
 
+#ifdef _WIN32
+#include <windows.h>
+#include <dwmapi.h>
+#endif
+
 #include <QDebug>
 #include <QTextStream>
 #include <QCoreApplication>
@@ -41,6 +46,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
+#include <QWidget>
 #include <QPixmap>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -516,6 +522,28 @@ bool install_udev_rules(const std::string &password, std::string &error_out)
 }
 
 #endif
+
+void apply_window_theme(QWidget *window, bool dark)
+{
+	if (!window)
+		return;
+
+#ifdef _WIN32
+	/* 20 is DWMWA_USE_IMMERSIVE_DARK_MODE, which older SDKs do not name. */
+	HWND hwnd = reinterpret_cast<HWND>(window->winId());
+	if (!hwnd)
+		return;
+
+	BOOL use_dark = dark ? TRUE : FALSE;
+	if (FAILED(DwmSetWindowAttribute(hwnd, 20, &use_dark, sizeof(use_dark))))
+		return;
+
+	MARGINS margins = {0, 0, 0, dark ? 1 : 0};
+	DwmExtendFrameIntoClientArea(hwnd, &margins);
+#else
+	(void)dark;
+#endif
+}
 
 } // namespace util
 } // namespace pv

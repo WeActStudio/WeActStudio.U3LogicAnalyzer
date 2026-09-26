@@ -1245,6 +1245,17 @@ void View::on_setting_changed(const QString &key, const QVariant &value)
 
 	if (key == GlobalSettings::Key_View_SnapDistance)
 		snap_distance_ = settings.value(GlobalSettings::Key_View_SnapDistance).toInt();
+
+	if (key == GlobalSettings::Key_General_Theme) {
+		/* The grid, the cursors and the traces pick their colors while
+		 * painting, so they only have to be told to paint again. */
+		viewport_->update();
+		if (ruler_)
+			ruler_->update();
+		if (header_)
+			header_->update();
+		update();
+	}
 }
 
 void View::trigger_event(int segment_id, util::Timestamp location)

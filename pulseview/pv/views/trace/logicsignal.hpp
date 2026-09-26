@@ -127,6 +127,10 @@ protected:
 	void modify_trigger();
 
 	static const QIcon* get_icon(const char *path);
+
+	/* The trigger icons exist once per theme and are picked when the
+	 * actions are created, so a theme change has to replace them. */
+	void refresh_trigger_icons();
 	static const QPixmap* get_pixmap(const char *path);
 
 	virtual void update_logic_level_offsets();

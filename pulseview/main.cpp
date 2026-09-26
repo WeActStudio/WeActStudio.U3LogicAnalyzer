@@ -49,10 +49,6 @@
 
 #include "config.h"
 
-#ifdef _WIN32
-#include <dwmapi.h>
-#endif
-
 #ifdef ENABLE_SIGNALS
 #include "signalhandler.hpp"
 #endif
@@ -512,19 +508,7 @@ int main(int argc, char *argv[])
 			pv::MainWindow w;
 			w.show();
 
-#ifdef _WIN32
-			if (settings.current_theme_is_dark()){
-				// Enable dark title bar on Windows 10/11
-				HWND hwnd = (HWND)w.winId();
-				BOOL useDark = TRUE;
-				HRESULT hr = DwmSetWindowAttribute(hwnd, 20, &useDark, sizeof(useDark));
-				if(SUCCEEDED(hr))
-				{
-					MARGINS margins = {0,0,0,1};
-					DwmExtendFrameIntoClientArea(hwnd, &margins);
-				}
-			}
-#endif
+			pv::util::apply_window_theme(&w, settings.current_theme_is_dark());
 			// if (restore_sessions){
 			// 	w.restore_sessions();
 			// }
