@@ -123,6 +123,17 @@ if(ENABLE_TESTS)
 	list(APPEND BOOSTCOMPS unit_test_framework)
 endif()
 
+# Boost.System has been header-only since 1.69 and its CMake package
+# was removed in Boost 1.89, so retry without it when the first
+# find_package() call fails on newer Boost releases.
+macro(find_boost_required _minver)
+	find_package(Boost ${_minver} QUIET COMPONENTS ${BOOSTCOMPS})
+	if(NOT Boost_FOUND)
+		list(REMOVE_ITEM BOOSTCOMPS system)
+		find_package(Boost ${_minver} COMPONENTS ${BOOSTCOMPS} REQUIRED)
+	endif()
+endmacro()
+
 if(ENABLE_STACKTRACE)
 	include(FindBacktrace)
 	if (Backtrace_FOUND)
@@ -132,9 +143,9 @@ if(ENABLE_STACKTRACE)
 		set(_Boost_STACKTRACE_BASIC_HEADERS     "boost/stacktrace.hpp")
 		list(APPEND BOOSTCOMPS stacktrace_basic)
 	endif()
-	find_package(Boost 1.65.1 COMPONENTS ${BOOSTCOMPS} REQUIRED)
+	find_boost_required(1.65.1)
 else()
-	find_package(Boost 1.55 COMPONENTS ${BOOSTCOMPS} REQUIRED)
+	find_boost_required(1.55)
 endif()
 
 # Find the platform's thread library (needed for C++11 threads).
@@ -682,6 +693,32 @@ set(PULSEVIEW_LINK_LIBS
 	${LIBATOMIC_LIBRARY}
 )
 
+# The hot-plug detection code in mainbar.cpp talks to libusb directly,
+# so the library must appear on the link line (Linux rejects transitive
+# dependencies pulled in via libsigrok).
+pkg_check_modules(LIBUSB_LINK QUIET libusb-1.0)
+if(LIBUSB_LINK_FOUND)
+	list(APPEND PULSEVIEW_LINK_LIBS ${LIBUSB_LINK_LIBRARIES})
+endif()
+
+# Same for hidapi: the IAP dialog talks to the HID IAP device directly.
+pkg_check_modules(HIDAPI_LINK QUIET hidapi-hidraw hidapi-libusb)
+if(NOT HIDAPI_LINK_FOUND)
+	pkg_check_modules(HIDAPI_LINK QUIET hidapi)
+endif()
+if(HIDAPI_LINK_FOUND)
+	list(APPEND PULSEVIEW_LINK_LIBS ${HIDAPI_LINK_LIBRARIES})
+endif()
+
+# Same for hidapi: the IAP dialog talks to the HID IAP device directly.
+pkg_check_modules(HIDAPI_LINK QUIET hidapi-hidraw hidapi-libusb)
+if(NOT HIDAPI_LINK_FOUND)
+	pkg_check_modules(HIDAPI_LINK QUIET hidapi)
+endif()
+if(HIDAPI_LINK_FOUND)
+	list(APPEND PULSEVIEW_LINK_LIBS ${HIDAPI_LINK_LIBRARIES})
+endif()
+
 if(STATIC_PKGDEPS_LIBS)
 	link_directories(${PKGDEPS_STATIC_LIBRARY_DIRS})
 	list(APPEND PULSEVIEW_LINK_LIBS ${PKGDEPS_STATIC_LDFLAGS})
@@ -732,6 +769,18 @@ target_link_libraries(${PROJECT_NAME} ${PULSEVIEW_LINK_LIBS})
 
 # Rename output to LogicAnalyzer.exe
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME LogicAnalyzer)
+
+# The packaged application carries libsigrok/libsigrokcxx/libsigrokdecode
+# right next to the executable. Adding $ORIGIN to the RPATH lets the loader
+# find them without a wrapper script exporting LD_LIBRARY_PATH, so the
+# binary can be started directly (and from a .desktop file).
+if(APPLE)
+	set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY BUILD_RPATH "@executable_path/../Frameworks")
+	set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH "@executable_path/../Frameworks")
+elseif(UNIX)
+	set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY BUILD_RPATH "\$ORIGIN")
+	set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH "\$ORIGIN")
+endif()
 
 if(WIN32 AND NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 	# Pass -mwindows so that no "DOS box" opens when PulseView is started.
