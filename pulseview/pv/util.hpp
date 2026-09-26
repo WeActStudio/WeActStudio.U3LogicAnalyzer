@@ -205,6 +205,26 @@ void show_message(QWidget *parent, const QString &title, const QString &text,
 	const QPixmap &icon, int min_width = 400, bool rich_text = false,
 	bool open_links = false, bool modal = true);
 
+/**
+ * Whether the udev access rules of the CH32H417 are installed.
+ *
+ * Without them the /dev/bus/usb nodes stay owned by root and libusb_open()
+ * fails with LIBUSB_ERROR_ACCESS: the device shows up in lsusb but is
+ * invisible to the application. Always true where udev does not exist.
+ */
+bool udev_rules_installed();
+
+/**
+ * Install those rules as root, authenticating with @a password, which is
+ * fed to "sudo -S" on stdin. An empty password works when the process
+ * already runs as root or when sudo does not ask for one.
+ *
+ * @param[in] password The user's password, never passed on a command line.
+ * @param[out] error_out Human readable reason on failure.
+ * @retval true The rules are installed and udev has been reloaded.
+ */
+bool install_udev_rules(const std::string &password, std::string &error_out);
+
 /** Overload taking one of the standard message box icons. */
 void show_message(QWidget *parent, const QString &title, const QString &text,
 	QMessageBox::Icon icon, int min_width = 400, bool rich_text = false,

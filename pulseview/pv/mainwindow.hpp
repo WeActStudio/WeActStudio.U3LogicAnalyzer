@@ -78,6 +78,9 @@ private:
 
 public:
 	static bool checkSystemRequirements();
+
+	/** Offer to install the udev access rules (Linux only, no-op elsewhere). */
+	static bool checkUdevRules();
 	explicit MainWindow(QWidget *parent = nullptr);
 
 	~MainWindow();
@@ -186,6 +189,15 @@ private Q_SLOTS:
 private:
 	atomic<DeviceManager *> device_manager_;
 	// DeviceManager *device_manager_;
+
+	/*
+	 * The one and only libsigrok Context of this process. Every
+	 * sigrok::Context destructor calls sr_exit(), which tears down the
+	 * global backend and frees the device instances of *all* drivers,
+	 * including those created by a newer context. Rescans must therefore
+	 * always reuse this context instead of creating a second one.
+	 */
+	shared_ptr<sigrok::Context> sigrok_context_;
 
 	list< shared_ptr<Session> > sessions_;
 	shared_ptr<Session> last_focused_session_;

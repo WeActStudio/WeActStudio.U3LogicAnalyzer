@@ -40,6 +40,11 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
+#ifdef __linux__
+#include <unistd.h>
+#endif
+#include <QInputDialog>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QSettings>
 #include <QShortcut>
@@ -104,8 +109,8 @@ MainWindow::MainWindow(QWidget *parent) :
     qApp->installEventFilter(this);
 
 	//Check memory size
-	shared_ptr<sigrok::Context> context = sigrok::Context::create();
-	device_manager_ = new pv::DeviceManager(context, "", true);
+	sigrok_context_ = sigrok::Context::create();
+	device_manager_ = new pv::DeviceManager(sigrok_context_, "", true);
 	sessions_.resize(0);
 	setup_ui();
 	restore_ui_settings();
@@ -113,7 +118,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
 bool MainWindow::checkSystemRequirements()
 {
-	int memFree;
+	int memFree = 0;
 
 #ifdef _WIN32
 	MEMORYSTATUSEX statex;
@@ -134,9 +139,28 @@ bool MainWindow::checkSystemRequirements()
 		}
 	}
 #else
-	struct sysinfo si;
-	if (sysinfo(&si) == 0)
-		memFree = si.freeram / GB;
+	/*
+	 * Linux: prefer /proc/meminfo MemAvailable, the accurate estimate of
+	 * allocatable memory. sysinfo().freeram excludes the page cache and
+	 * therefore under-reports on almost every system.
+	 */
+	long avail_kb = -1;
+	FILE *f = fopen("/proc/meminfo", "r");
+	if (f) {
+		char line[256];
+		while (fgets(line, sizeof(line), f)) {
+			if (sscanf(line, "MemAvailable: %ld kB", &avail_kb) == 1)
+				break;
+		}
+		fclose(f);
+	}
+	if (avail_kb >= 0)
+		memFree = (int)(avail_kb / (1024 * 1024));
+	else {
+		struct sysinfo si;
+		if (sysinfo(&si) == 0)
+			memFree = (int)(si.freeram * si.mem_unit / GB);
+	}
 #endif
 
 	if (memFree < 4){
@@ -184,6 +208,68 @@ bool MainWindow::checkSystemRequirements()
 		return (dialog.exec() == QDialog::Accepted);
 	}
 	return true;
+}
+
+bool MainWindow::checkUdevRules()
+{
+#ifndef __linux__
+	return true;
+#else
+	if (pv::util::udev_rules_installed())
+		return true;
+
+	/* Already root: no password needed. */
+	if (geteuid() == 0) {
+		std::string err;
+		if (pv::util::install_udev_rules(std::string(), err))
+			return true;
+	}
+
+	const QString intro = MainWindow::tr(
+		"No udev access rules were found for the CH32H417. Without them the "
+		"device (VID 1a86 / PID 5537) cannot be opened by an unprivileged "
+		"user, so the logic analyzer will not be detected.\n\n"
+		"Enter your administrator password to install:\n"
+		"/etc/udev/rules.d/99-weact-ch32h417.rules");
+
+	/* Allow a couple of typos before giving up. */
+	for (int attempt = 0; attempt < 3; ++attempt) {
+		bool ok = false;
+		const QString password = QInputDialog::getText(nullptr,
+			MainWindow::tr("Administrator privileges required"), intro,
+			QLineEdit::Password,
+			QString(), &ok);
+		if (!ok)
+			break;
+
+		std::string err;
+		if (pv::util::install_udev_rules(password.toStdString(), err)) {
+			pv::util::show_message(nullptr,
+				MainWindow::tr("Access rules installed"),
+				MainWindow::tr("The udev rules have been installed.\n\n"
+					"If the device is already plugged in, unplug and replug "
+					"it before scanning again."),
+				QMessageBox::Information);
+			return true;
+		}
+
+		QMessageBox::warning(nullptr, MainWindow::tr("Installation failed"),
+			MainWindow::tr("Could not install the udev rules:\n\n%1\n\n"
+				"Please try again, or cancel to skip.")
+				.arg(QString::fromStdString(err)));
+	}
+
+	pv::util::show_message(nullptr,
+		MainWindow::tr("Skipped installing access rules"),
+		MainWindow::tr("The udev rules are not installed, so the device may "
+			"not be detected.\n\nYou can run this application as root "
+			"later, or copy 99-weact-ch32h417.rules from the repository to "
+			"/etc/udev/rules.d/ and replug the device."),
+		QMessageBox::Warning);
+
+	/* Never refuse to start over this. */
+	return true;
+#endif
 }
 
 MainWindow::~MainWindow()
@@ -548,7 +634,9 @@ void MainWindow::do_device_detach_switch()
 
 	last_focused_session_->device_detached();
 
-	shared_ptr<sigrok::Context> context = sigrok::Context::create();
+	/* Reuse the global context: a second Context would sr_exit() the
+	 * shared backend when destroyed, freeing every device instance. */
+	shared_ptr<sigrok::Context> context = sigrok_context_;
 	string driver = ch32h417_driver_name(context);
 	auto new_device_manager = new pv::DeviceManager(context, driver, true);
 	if (device_manager_) {
@@ -714,9 +802,10 @@ void MainWindow::on_device_attached()
 		}
 	}
 
-	// Initialise libsigrok
+	// Reuse the global context: a second Context would sr_exit() the
+	// shared backend when destroyed, freeing every device instance.
 	shared_ptr<sigrok::Context> context;
-	context = sigrok::Context::create();
+	context = sigrok_context_;
 	string driver = ch32h417_driver_name(context);
 
 	auto device_manager = new pv::DeviceManager(context, driver, true);
@@ -904,8 +993,11 @@ void MainWindow::add_default_session()
 	qDebug() << "add_default_session devices size: " << devices.size();
 	if (found_device_type == WchDeviceType::None){
 		sleep_ex(100);
+		/* Reuse the global context: creating a second Context here would
+		 * destroy the shared libsigrok backend (sr_exit) as soon as the
+		 * old devices are released, freeing the freshly scanned ones too. */
 		shared_ptr<sigrok::Context> context;
-		context = sigrok::Context::create();
+		context = sigrok_context_;
 		string driver = ch32h417_driver_name(context);
 		if (device_manager_)
 			delete device_manager_.load();
@@ -1111,8 +1203,7 @@ void MainWindow::setup_ui()
 	run_stop_shortcut_->setAutoRepeat(false);
 
 	settings_button_ = new QToolButton();
-	settings_button_->setIcon(QIcon::fromTheme("preferences-system",
-		QIcon(":/icons/preferences-system.png")));
+	settings_button_->setIcon(QIcon(":/icons/preferences-system.png"));
 	settings_button_->setToolTip(tr("Settings"));
 	settings_button_->setAutoRaise(true);
 

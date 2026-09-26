@@ -493,6 +493,60 @@ Do you want to save the session?</source>
         <source>Save</source>
         <translation type="vanished">保存</translation>
     </message>
+    <message>
+        <source>No udev access rules were found for the CH32H417. Without them the device (VID 1a86 / PID 5537) cannot be opened by an unprivileged user, so the logic analyzer will not be detected.
+
+Enter your administrator password to install:
+/etc/udev/rules.d/99-weact-ch32h417.rules</source>
+        <translation>未检测到 CH32H417 的 udev 权限规则。缺少该规则时普通用户无法访问设备（VID 1a86 / PID 5537），软件将扫描不到逻辑分析仪。
+
+请输入管理员密码以安装规则：
+/etc/udev/rules.d/99-weact-ch32h417.rules</translation>
+    </message>
+    <message>
+        <source>Administrator privileges required</source>
+        <translation>需要管理员权限</translation>
+    </message>
+    <message>
+        <source>Access rules installed</source>
+        <translation>权限规则已安装</translation>
+    </message>
+    <message>
+        <source>The udev rules have been installed.
+
+If the device is already plugged in, unplug and replug it before scanning again.</source>
+        <translation>udev 规则安装完成。
+
+若设备此时已经插上，请拔插一次后再扫描。</translation>
+    </message>
+    <message>
+        <source>Installation failed</source>
+        <translation>安装失败</translation>
+    </message>
+    <message>
+        <source>Could not install the udev rules:
+
+%1
+
+Please try again, or cancel to skip.</source>
+        <translation>无法安装 udev 规则：
+
+%1
+
+请重试，或选择取消跳过。</translation>
+    </message>
+    <message>
+        <source>Skipped installing access rules</source>
+        <translation>已跳过权限规则安装</translation>
+    </message>
+    <message>
+        <source>The udev rules are not installed, so the device may not be detected.
+
+You can run this application as root later, or copy 99-weact-ch32h417.rules from the repository to /etc/udev/rules.d/ and replug the device.</source>
+        <translation>未安装 udev 规则，软件可能扫描不到设备。
+
+可之后以管理员身份运行本软件，或把仓库中的 99-weact-ch32h417.rules 复制到 /etc/udev/rules.d/ 后拔插设备。</translation>
+    </message>
 </context>
 <context>
     <name>pv::Session</name>

@@ -39,9 +39,10 @@
 #include <QCheckBox>
 #include <QDebug>
 #include <QDir>
+#include <QGuiApplication>
+#include <QIcon>
 #include <QFile>
 #include <QFileInfo>
-#include <QGuiApplication>
 #include <QMessageBox>
 #include <QSettings>
 #include <QTextStream>
@@ -208,6 +209,17 @@ static void setEnvIfNotExist(const QString &key, const QString &defaultValue)
     QString envEntry = QString("%1=%2").arg(key, defaultValue);
     _wputenv(reinterpret_cast<const wchar_t*>(envEntry.utf16()));
 }
+#else
+static void setEnvIfNotExist(const QString &key, const QString &defaultValue)
+{
+    QByteArray existing = qgetenv(key.toLatin1().constData());
+    if (!existing.isEmpty())
+        return;
+
+    /* qputenv() updates the CRT environment too, so C code calling
+     * getenv() - libsigrokdecode does - picks the value up. */
+    qputenv(key.toLatin1().constData(), defaultValue.toLocal8Bit());
+}
 #endif
 
 int main(int argc, char *argv[])
@@ -232,16 +244,49 @@ int main(int argc, char *argv[])
 #endif
 
 	Application a(argc, argv);
+
+	/*
+	 * Application wide icon. Without it every window that is not the main
+	 * one (dialogs, popups) falls back to the generic icon, and on Linux
+	 * the task bar shows the default icon too.
+	 */
+	a.setWindowIcon(QIcon(":/icons/pulseview.png"));
+
+	/*
+	 * Let the Wayland compositor resolve the app id, so the shell uses the
+	 * icon of the installed LogicAnalyzer.desktop instead of a placeholder.
+	 */
+	QGuiApplication::setDesktopFileName(QStringLiteral("LogicAnalyzer"));
 	
-	#ifdef _WIN32
+	// Directory that holds the executable: everything shipped with the
+	// application sits next to it.
 	QString exeDir = QCoreApplication::applicationDirPath();
 
+	/*
+	 * SIGROKDECODE_DIR: point libsigrokdecode at the protocol decoders of
+	 * this package. Doing it here is what lets the application run without
+	 * a wrapper script (no run.sh / run.bat) that exports the variable.
+	 * A value coming from the environment always wins.
+	 */
+	{
+		const QStringList decoder_paths = QStringList()
+			<< QDir(exeDir).filePath("share/libsigrokdecode/decoders")
+			<< QDir(exeDir).filePath("decoders")
+			<< QDir(exeDir).filePath("../Resources/decoders")
+			<< QDir(exeDir).filePath("../../install/share/libsigrokdecode/decoders")
+			<< QDir(exeDir).filePath("../../../install/share/libsigrokdecode/decoders");
+
+		for (const QString &path : decoder_paths) {
+			if (QFileInfo(path).isDir()) {
+				setEnvIfNotExist("SIGROKDECODE_DIR", path);
+				break;
+			}
+		}
+	}
+
+	#ifdef _WIN32
     // Set the process working directory (equivalent to cd /d %~dp0)
     // SetCurrentDirectoryW(reinterpret_cast<const wchar_t*>(exeDir.utf16()));
-
-    // SIGROKDECODE_DIR: keep it if set, otherwise use exeDir/decoders
-    // QString sigrokDefault = QDir(exeDir).filePath("decoders");
-    // setEnvIfNotExist("SIGROKDECODE_DIR", sigrokDefault);
 
     // PYTHONHOME: keep it if set, otherwise use exeDir/python-portable
     QString pythonHomeDefault = QDir(exeDir).filePath("python-portable");
@@ -442,6 +487,8 @@ int main(int argc, char *argv[])
 		if (!pv::MainWindow::checkSystemRequirements()) {
         	return 0;
     	}
+		/* Linux: offer to install the udev access rules before scanning. */
+		pv::MainWindow::checkUdevRules();
 		pv::DeviceManager device_manager(context, driver, false);
 
 		a.collect_version_info(device_manager);

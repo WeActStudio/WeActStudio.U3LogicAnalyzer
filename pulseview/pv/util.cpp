@@ -25,7 +25,13 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
 #include <sstream>
+
+#ifdef __linux__
+#include <unistd.h>
+#endif
 
 #include <QDebug>
 #include <QTextStream>
@@ -409,6 +415,107 @@ void show_message(QWidget *parent, const QString &title, const QString &text,
 	show_message(parent, title, text, QMessageBox::standardIcon(icon),
 		min_width, rich_text, open_links, modal);
 }
+
+#ifdef __linux__
+
+namespace {
+
+const char *kUdevRulesPath = "/etc/udev/rules.d/99-weact-ch32h417.rules";
+
+/* Kept here so no extra file has to be shipped next to the binary. */
+const char *kUdevRulesText =
+	"# WeAct Studio CH32H417 Logic Analyzer - udev access rules\n"
+	"# 5537: runtime interfaces (command / logic data / ADC data)\n"
+	"# fe17: HID interface used for the IAP firmware upgrade\n"
+	"SUBSYSTEM==\"usb\", ATTRS{idVendor}==\"1a86\", ATTRS{idProduct}==\"5537\", MODE=\"0666\", GROUP=\"plugdev\", TAG+=\"uaccess\"\n"
+	"SUBSYSTEM==\"usb\", ATTRS{idVendor}==\"1a86\", ATTRS{idProduct}==\"fe17\", MODE=\"0666\", GROUP=\"plugdev\", TAG+=\"uaccess\"\n"
+	"SUBSYSTEM==\"hidraw\", ATTRS{idVendor}==\"1a86\", ATTRS{idProduct}==\"fe17\", MODE=\"0666\", GROUP=\"plugdev\", TAG+=\"uaccess\"\n";
+
+} // namespace
+
+bool udev_rules_installed()
+{
+	return access(kUdevRulesPath, F_OK) == 0;
+}
+
+bool install_udev_rules(const std::string &password, std::string &error_out)
+{
+	error_out.clear();
+
+	/* Stage the file in /tmp first: sudo only copies it into place. */
+	char tmp_path[] = "/tmp/ch32h417-udev-XXXXXX";
+	int fd = mkstemp(tmp_path);
+	if (fd < 0) {
+		error_out = "Failed to create a temporary file";
+		return false;
+	}
+	FILE *f = fdopen(fd, "w");
+	if (!f) {
+		close(fd);
+		unlink(tmp_path);
+		error_out = "Failed to write the temporary rules file";
+		return false;
+	}
+	fputs(kUdevRulesText, f);
+	fclose(f);
+
+	const std::string err_path = std::string(tmp_path) + ".err";
+	std::string cmd = "sudo -S -p '' sh -c '";
+	cmd += "cp " + std::string(tmp_path) + " " + kUdevRulesPath;
+	cmd += std::string(" && chmod 0644 ") + kUdevRulesPath;
+	cmd += " && (udevadm control --reload-rules || true)";
+	cmd += " && (udevadm trigger --subsystem-match=usb || true)";
+	cmd += "' 2>" + err_path;
+
+	FILE *p = popen(cmd.c_str(), "w");
+	if (!p) {
+		unlink(tmp_path);
+		error_out = "Failed to run sudo";
+		return false;
+	}
+	/* The password travels on stdin only, it never hits a command line. */
+	if (!password.empty())
+		fwrite(password.data(), 1, password.size(), p);
+	fputc('\n', p);
+	const int rc = pclose(p);
+	unlink(tmp_path);
+
+	if (rc != 0) {
+		if (FILE *ef = fopen(err_path.c_str(), "r")) {
+			char line[512];
+			bool any = false;
+			while (fgets(line, sizeof(line), ef)) {
+				error_out += line;
+				any = true;
+			}
+			fclose(ef);
+			if (!any)
+				error_out = "sudo rejected the password, or sudo is not available";
+		} else {
+			error_out = "sudo rejected the password, or sudo is not available";
+		}
+		unlink(err_path.c_str());
+		return false;
+	}
+	unlink(err_path.c_str());
+	return true;
+}
+
+#else
+
+bool udev_rules_installed()
+{
+	return true;
+}
+
+bool install_udev_rules(const std::string &password, std::string &error_out)
+{
+	(void)password;
+	error_out = "udev rules only apply to Linux";
+	return false;
+}
+
+#endif
 
 } // namespace util
 } // namespace pv
