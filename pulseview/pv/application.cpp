@@ -25,7 +25,6 @@
 #include <QDebug>
 #include <QDir>
 #include <QLibraryInfo>
-#include <QMessageBox>
 #include <QEvent>
 #include <QWidget>
 
@@ -164,34 +163,6 @@ void Application::switch_language(const QString& language)
 			deliver_language_change(widget);
 			widget->update();
 		}
-
-		QWidget* parentWnd = nullptr;
-		const QWidgetList topWindows = qApp->topLevelWidgets();
-
-		// Walk backwards to find the last visible top-level window that is not a QMessageBox
-		for (auto it = topWindows.rbegin(); it != topWindows.rend(); ++it)
-		{
-			QWidget* w = *it;
-			if (w->isVisible() && !qobject_cast<QMessageBox*>(w))
-			{
-				parentWnd = w;
-				break;
-			}
-		}
-		QMessageBox msg(parentWnd);
-		msg.setText(tr("Some parts of the application may still " \
-				"use the previous language. Re-opening the affected windows or " \
-				"restarting the application will remedy this."));
-		msg.setStandardButtons(QMessageBox::Ok);
-		msg.setIcon(QMessageBox::Information);
-		auto flags = msg.windowFlags();
-		msg.setWindowFlags(flags & ~Qt::WindowContextHelpButtonHint);
-		
-		QFont font = msg.font();
-		font.setPointSize(font.pointSize() + 2);
-		msg.setFont(font);
-
-		msg.exec();
 	}
 }
 

@@ -2,13 +2,6 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="zh_CN" sourcelanguage="en">
 <context>
-    <name>Application</name>
-    <message>
-        <source>Some parts of the application may still use the previous language. Re-opening the affected windows or restarting the application will remedy this.</source>
-        <translation>应用程序的某些部分可能仍然使用以前的语言。重新打开受影响的窗口或重新启动应用程序将解决此问题。</translation>
-    </message>
-</context>
-<context>
     <name>Channels</name>
 </context>
 <context>
