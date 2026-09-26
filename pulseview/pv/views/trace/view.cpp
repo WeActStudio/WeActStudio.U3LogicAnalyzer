@@ -1408,7 +1408,20 @@ void View::update_scroll()
 
 		// Limit min scroll to extents.first to prevent scrolling above signals
 		int min_scroll = max(extents.first, extents.first - areaSize.height() + top_margin);
-		vscrollbar->setRange(min_scroll, extents.second - btm_margin);
+
+		// The max scroll value is reached when the bottom of the traces is
+		// aligned with the bottom of the viewport. Using extents.second here
+		// would allow the traces to be scrolled completely out of the visible
+		// area, leaving an empty viewport and a shortened scrollbar slider.
+		int max_scroll = extents.second - areaSize.height() + btm_margin;
+
+		// If the traces fit into the viewport, there is nothing to scroll at
+		// all, so collapse the range into a single value. This disables
+		// scrolling while keeping the default alignment (extents.first).
+		if (max_scroll < min_scroll)
+			max_scroll = min_scroll;
+
+		vscrollbar->setRange(min_scroll, max_scroll);
 	}
 
 	// Restore vertical position that setRange/setPageStep may have changed
