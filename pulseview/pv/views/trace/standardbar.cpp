@@ -154,6 +154,7 @@ void StandardBar::retranslate_ui()
 void StandardBar::changeEvent(QEvent *event)
 {
 	if (event->type() == QEvent::LanguageChange)
+		retranslate_ui();
 
 	QToolBar::changeEvent(event);
 }

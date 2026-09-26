@@ -485,6 +485,7 @@ namespace pv
 		/* Not passed on to the base class: it would only translate its own
 		 * entries, which retranslate_ui() has already done. */
 		if (event->type() == QEvent::LanguageChange)
+			retranslate_ui();
 
 		QToolBar::changeEvent(event);
 	}
