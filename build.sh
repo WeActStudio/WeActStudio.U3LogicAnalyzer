@@ -692,6 +692,116 @@ EOF
         echo ""
         echo "To distribute: copy dist/LogicAnalyzer/ (LogicAnalyzer.app + run.sh)."
         echo "To run: open LogicAnalyzer.app or ./run.sh"
+    else
+        # Linux: bundle our sigrok libraries + decoders; Qt and other system
+        # libraries are expected to be provided by the distribution.
+        echo "  LogicAnalyzer"
+        cp "$BUILD_DIR/logicanalyzer_build/LogicAnalyzer" "$DIST_DIR/"
+        chmod +x "$DIST_DIR/LogicAnalyzer"
+
+        echo "  sigrok libraries..."
+        for lib in "$PREFIX/lib"/libsigrok.so* "$PREFIX/lib"/libsigrokcxx.so* \
+                   "$PREFIX/lib"/libsigrokdecode.so*; do
+            [ -e "$lib" ] || continue
+            cp -L "$lib" "$DIST_DIR/"
+        done
+        ls "$DIST_DIR"/libsigrok* 2>/dev/null | while read -r f; do echo "  $(basename "$f")"; done
+
+        echo "  Protocol decoders..."
+        DECODERS_SRC="$PREFIX/share/libsigrokdecode/decoders"
+        if [ -d "$DECODERS_SRC" ]; then
+            mkdir -p "$DIST_DIR/share/libsigrokdecode"
+            cp -r "$DECODERS_SRC" "$DIST_DIR/share/libsigrokdecode/decoders"
+            echo "    $(ls "$DIST_DIR/share/libsigrokdecode/decoders" | wc -l) decoders"
+        fi
+
+        echo "  Qt translations..."
+        QT_TRANSLATIONS_SRC="/usr/share/qt5/translations"
+        LANGUAGES="zh_CN en de es"
+        if [ -d "$QT_TRANSLATIONS_SRC" ]; then
+            mkdir -p "$DIST_DIR/share/qt5/translations"
+            for lang in $LANGUAGES; do
+                cp "$QT_TRANSLATIONS_SRC"/*_${lang}.qm "$DIST_DIR/share/qt5/translations/" 2>/dev/null || true
+            done
+        fi
+
+        echo "  Application icon + desktop launcher..."
+        ICON_SRC="$SCRIPT_DIR/pulseview/icons/pulseview.png"
+        ICON_SVG_SRC="$SCRIPT_DIR/pulseview/icons/pulseview.svg"
+        if [ -f "$ICON_SRC" ]; then
+            mkdir -p "$DIST_DIR/share/icons"
+            cp "$ICON_SRC" "$DIST_DIR/share/icons/LogicAnalyzer.png"
+            [ -f "$ICON_SVG_SRC" ] && cp "$ICON_SVG_SRC" "$DIST_DIR/share/icons/LogicAnalyzer.svg"
+
+            # Portable desktop file (not usable from the menu until installed
+            # by install_desktop.sh, which rewrites the paths to absolute).
+            cat > "$DIST_DIR/LogicAnalyzer.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=LogicAnalyzer
+Comment=CH32H417 Logic Analyzer (WeAct Studio)
+Exec=LogicAnalyzer
+Icon=LogicAnalyzer
+Terminal=false
+Categories=Development;Electronics;
+StartupWMClass=LogicAnalyzer
+EOF
+
+            # Helper that registers the icon + menu entry for the current user.
+            cat > "$DIST_DIR/install_desktop.sh" << 'EOF'
+#!/bin/bash
+# Install (default) or remove (--remove) the menu entry and its icons.
+DIR="$(cd "$(dirname "$0")" && pwd)"
+HICOLOR_DIR="$HOME/.local/share/icons/hicolor"
+# The shipped PNG is 200x200: 256x256 is the directory that matches it.
+ICON_DIR="$HICOLOR_DIR/256x256/apps"
+ICON_DIR_48="$HICOLOR_DIR/48x48/apps"
+PIXMAP_DIR="$HOME/.local/share/pixmaps"
+DESKTOP_DIR="$HOME/.local/share/applications"
+
+if [ "$1" = "--remove" ] || [ "$1" = "--uninstall" ]; then
+    rm -f "$DESKTOP_DIR/LogicAnalyzer.desktop"
+    rm -f "$ICON_DIR/LogicAnalyzer.png"
+    rm -f "$ICON_DIR_48/LogicAnalyzer.png"
+    rm -f "$PIXMAP_DIR/LogicAnalyzer.png"
+    rm -f "$HICOLOR_DIR/scalable/apps/LogicAnalyzer.svg"
+    gtk-update-icon-cache -f -t "$HICOLOR_DIR" 2>/dev/null || true
+    update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+    echo "Removed LogicAnalyzer menu entry and icons"
+    exit 0
+fi
+
+mkdir -p "$ICON_DIR" "$ICON_DIR_48" "$PIXMAP_DIR" "$DESKTOP_DIR"
+if [ -f "$DIR/share/icons/LogicAnalyzer.svg" ]; then
+    SVG_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
+    mkdir -p "$SVG_DIR"
+    cp "$DIR/share/icons/LogicAnalyzer.svg" "$SVG_DIR/"
+fi
+cp "$DIR/share/icons/LogicAnalyzer.png" "$ICON_DIR/"
+cp "$DIR/share/icons/LogicAnalyzer.png" "$ICON_DIR_48/"
+cp "$DIR/share/icons/LogicAnalyzer.png" "$PIXMAP_DIR/"
+sed "s|^Exec=.*|Exec=$DIR/LogicAnalyzer|; s|^Icon=.*|Icon=LogicAnalyzer|" \
+    "$DIR/LogicAnalyzer.desktop" > "$DESKTOP_DIR/LogicAnalyzer.desktop"
+gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+echo "Installed menu entry: $DESKTOP_DIR/LogicAnalyzer.desktop"
+EOF
+            chmod +x "$DIST_DIR/install_desktop.sh"
+            echo "    LogicAnalyzer.png, LogicAnalyzer.desktop, install_desktop.sh"
+        else
+            echo "  (icon source not found, skipping)"
+        fi
+
+        echo "  License file..."
+        if [ -f "$SCRIPT_DIR/LICENSE" ]; then
+            cp "$SCRIPT_DIR/LICENSE" "$DIST_DIR/"
+        else
+            echo "  (LICENSE not found, skipping)"
+        fi
+
+        echo ""
+        echo "To distribute: copy dist/LogicAnalyzer/."
+        echo "To run: ./LogicAnalyzer (Qt5 and other system libraries must be installed)."
     fi
 
     echo ""

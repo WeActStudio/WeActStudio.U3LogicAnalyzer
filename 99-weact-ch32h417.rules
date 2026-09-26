@@ -1,0 +1,22 @@
+# WeAct Studio CH32H417 Logic Analyzer - udev access rules
+#
+# Install once:
+#
+#   sudo cp 99-weact-ch32h417.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger --subsystem-match=usb
+#   # (unplug and replug the device afterwards)
+#
+# Without these rules /dev/bus/usb/xxx/yyy nodes are owned by root:root
+# and libusb_open() fails with LIBUSB_ERROR_ACCESS (hidraw behaves the
+# same way), so the device is enumerated by lsusb but invisible to
+# PulseView unless it runs as root.
+#
+# 5537 : runtime interfaces (command / logic data / ADC data)
+# fe17 : HID interface used for the IAP firmware upgrade
+
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="5537", MODE="0666", GROUP="plugdev", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="fe17", MODE="0666", GROUP="plugdev", TAG+="uaccess"
+
+# hidraw node created for the IAP interface (needed by hidapi)
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="fe17", MODE="0666", GROUP="plugdev", TAG+="uaccess"
