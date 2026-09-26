@@ -63,7 +63,7 @@ class Viewport : public ViewWidget, public GlobalSettingsInterface
 	Q_OBJECT
 
 Q_SIGNALS:
-	add_rule_flag(QMouseEvent *);
+	void add_rule_flag(QMouseEvent *event);
 
 public:
 	explicit Viewport(View &parent);
