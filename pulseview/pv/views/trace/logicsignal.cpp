@@ -137,7 +137,15 @@ std::map<QString, QVariant> LogicSignal::save_settings() const
 void LogicSignal::refresh_theme_colors()
 {
     GlobalSettings settings;
-    if (settings.value(GlobalSettings::Key_General_Theme).toInt() == 1){
+    /*
+     * The traces are drawn on the palette, so they have to follow the
+     * theme that was applied rather than the stored setting. The two
+     * are not the same for as long as the settings dialog is open, and
+     * the setting can be put back without the theme being applied
+     * again, which used to leave the traces in the colors of the theme
+     * that was not displayed.
+     */
+    if (settings.current_theme_is_dark()){
         EdgeColor = QColor(0xFF, 0xFB, 0xF0);
         HighColor = QColor(0xFF, 0xFB, 0xF0);
         LowColor = QColor(0xFF, 0xFB, 0xF0);

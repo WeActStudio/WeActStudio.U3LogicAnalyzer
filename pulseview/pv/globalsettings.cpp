@@ -364,10 +364,26 @@ void GlobalSettings::undo_tracked_changes()
 {
 	tracking_ = false;
 
-	for (auto& entry : tracked_changes_)
+	bool appearance_reverted = false;
+
+	for (auto& entry : tracked_changes_) {
+		if (entry.first == Key_General_Theme || entry.first == Key_General_Style)
+			appearance_reverted = true;
 		setValue(entry.first, entry.second);
+	}
 
 	tracked_changes_.clear();
+
+	/*
+	 * The theme and the style take effect as soon as they are picked, so
+	 * putting the settings back has to put the appearance back with
+	 * them. Restoring only the values would leave the palette on the
+	 * theme the user just undid while the widgets that read the settings
+	 * move on - the traces end up drawn in the colors of the theme that
+	 * is not displayed.
+	 */
+	if (appearance_reverted)
+		apply_theme();
 }
 
 void GlobalSettings::store_gvariant(QSettings &settings, GVariant *v)
