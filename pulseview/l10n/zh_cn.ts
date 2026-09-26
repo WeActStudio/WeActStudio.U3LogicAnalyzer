@@ -429,33 +429,6 @@ Do you want to save the session?</source>
         <translation type="vanished">WCH PulseView</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="105"/>
-        <source>提示</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../pv/mainwindow.cpp" line="501"/>
-        <location filename="../pv/mainwindow.cpp" line="1072"/>
-        <source>警告</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../pv/mainwindow.cpp" line="502"/>
-        <source>设备已断开！
-是否保存会话？</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../pv/mainwindow.cpp" line="504"/>
-        <source>保存</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../pv/mainwindow.cpp" line="505"/>
-        <source>不保存</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>&lt;h3&gt;Unsaved Capture Data&lt;/h3&gt;&lt;p&gt;Data will be permanently lost on exit.&lt;/p&gt;</source>
         <translation>&lt;h3&gt;有未保存的采集数据&lt;/h3&gt;&lt;p&gt;退出后数据将永久丢失。&lt;/p&gt;</translation>
     </message>
@@ -1012,63 +985,63 @@ Please check the device connection and firmware file.</source>
     <name>pv::dialogs::IAPWorker</name>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="294"/>
-        <source>hidapi初始化失败</source>
-        <translation type="unfinished"></translation>
+        <source>Could not initialise hidapi</source>
+        <translation>hidapi初始化失败</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="302"/>
-        <source>未找到IAP设备 (VID=0x%1, PID=0x%2)</source>
-        <translation type="unfinished"></translation>
+        <source>IAP device not found (VID=0x%1, PID=0x%2)</source>
+        <translation>未找到IAP设备 (VID=0x%1, PID=0x%2)</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="308"/>
-        <source>找到IAP设备</source>
-        <translation type="unfinished"></translation>
+        <source>IAP device found</source>
+        <translation>找到IAP设备</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="415"/>
-        <source>发送IAP模式进入命令...</source>
-        <translation type="unfinished"></translation>
+        <source>Sending the enter-IAP-mode command...</source>
+        <translation>发送IAP模式进入命令...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="423"/>
-        <source>发送IAP命令失败</source>
-        <translation type="unfinished"></translation>
+        <source>Failed to send the IAP command</source>
+        <translation>发送IAP命令失败</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="457"/>
-        <source>擦除FLASH...地址: 0x%1</source>
-        <translation type="unfinished"></translation>
+        <source>Erasing flash... address: 0x%1</source>
+        <translation>擦除FLASH...地址: 0x%1</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="458"/>
-        <source>擦除FLASH...</source>
-        <translation type="unfinished"></translation>
+        <source>Erasing flash...</source>
+        <translation>擦除FLASH...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="469"/>
-        <source>发送擦除命令失败</source>
-        <translation type="unfinished"></translation>
+        <source>Failed to send the erase command</source>
+        <translation>发送擦除命令失败</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="475"/>
-        <source>擦除响应超时</source>
-        <translation type="unfinished"></translation>
+        <source>Erase response timed out</source>
+        <translation>擦除响应超时</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="484"/>
-        <source>擦除成功</source>
-        <translation type="unfinished"></translation>
+        <source>Erase succeeded</source>
+        <translation>擦除成功</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="490"/>
-        <source>编程FLASH...数据长度: %1字节</source>
-        <translation type="unfinished"></translation>
+        <source>Programming flash... data length: %1 bytes</source>
+        <translation>编程FLASH...数据长度: %1字节</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="491"/>
-        <source>编程FLASH...</source>
-        <translation type="unfinished"></translation>
+        <source>Programming flash...</source>
+        <translation>编程FLASH...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="410"/>
@@ -1078,199 +1051,199 @@ Please check the device connection and firmware file.</source>
         <location filename="../pv/dialogs/iapdialog.cpp" line="581"/>
         <location filename="../pv/dialogs/iapdialog.cpp" line="791"/>
         <location filename="../pv/dialogs/iapdialog.cpp" line="804"/>
-        <source>用户取消升级</source>
-        <translation type="unfinished"></translation>
+        <source>Upgrade cancelled by the user</source>
+        <translation>用户取消升级</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="342"/>
-        <source>写入被取消</source>
-        <translation type="unfinished"></translation>
+        <source>Write cancelled</source>
+        <translation>写入被取消</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="358"/>
-        <source>HID写入失败</source>
-        <translation type="unfinished"></translation>
+        <source>HID write failed</source>
+        <translation>HID写入失败</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="364"/>
-        <source>HID写入超时 (%1ms)</source>
-        <translation type="unfinished"></translation>
+        <source>HID write timed out (%1 ms)</source>
+        <translation>HID写入超时 (%1ms)</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="381"/>
-        <source>读取被取消</source>
-        <translation type="unfinished"></translation>
+        <source>Read cancelled</source>
+        <translation>读取被取消</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="397"/>
-        <source>HID读取错误</source>
-        <translation type="unfinished"></translation>
+        <source>HID read error</source>
+        <translation>HID读取错误</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="401"/>
-        <source>HID读取超时 (%1ms)</source>
-        <translation type="unfinished"></translation>
+        <source>HID read timed out (%1 ms)</source>
+        <translation>HID读取超时 (%1ms)</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="427"/>
-        <source>IAP命令已发送，关闭CH375设备...</source>
-        <translation type="unfinished"></translation>
+        <source>IAP command sent, closing the CH375 device...</source>
+        <translation>IAP命令已发送，关闭CH375设备...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="431"/>
-        <source>CH375设备已关闭，等待设备切换模式...</source>
-        <translation type="unfinished"></translation>
+        <source>CH375 device closed, waiting for the mode switch...</source>
+        <translation>CH375设备已关闭，等待设备切换模式...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="480"/>
-        <source>擦除失败，错误码: %1</source>
-        <translation type="unfinished"></translation>
+        <source>Erase failed, error code: %1</source>
+        <translation>擦除失败，错误码: %1</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="516"/>
-        <source>写入数据失败，偏移: %1</source>
-        <translation type="unfinished"></translation>
+        <source>Failed to write data, offset: %1</source>
+        <translation>写入数据失败，偏移: %1</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="527"/>
-        <source>编程响应超时，偏移: %1</source>
-        <translation type="unfinished"></translation>
+        <source>Program response timed out, offset: %1</source>
+        <translation>编程响应超时，偏移: %1</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="537"/>
-        <source>编程失败，错误码: %1，偏移: %2</source>
-        <translation type="unfinished"></translation>
+        <source>Programming failed, error code: %1, offset: %2</source>
+        <translation>编程失败，错误码: %1，偏移: %2</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="551"/>
-        <source>编程FLASH... %1%</source>
-        <translation type="unfinished"></translation>
+        <source>Programming flash... %1%</source>
+        <translation>编程FLASH... %1%</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="562"/>
-        <source>编程完成</source>
-        <translation type="unfinished"></translation>
+        <source>Programming complete</source>
+        <translation>编程完成</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="568"/>
         <location filename="../pv/dialogs/iapdialog.cpp" line="569"/>
-        <source>校验FLASH...</source>
-        <translation type="unfinished"></translation>
+        <source>Verifying flash...</source>
+        <translation>校验FLASH...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="599"/>
-        <source>发送校验命令失败，偏移: %1</source>
-        <translation type="unfinished"></translation>
+        <source>Failed to send the verify command, offset: %1</source>
+        <translation>发送校验命令失败，偏移: %1</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="610"/>
-        <source>校验响应超时，偏移: %1</source>
-        <translation type="unfinished"></translation>
+        <source>Verify response timed out, offset: %1</source>
+        <translation>校验响应超时，偏移: %1</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="620"/>
-        <source>校验失败，错误码: %1，地址: 0x%2</source>
-        <translation type="unfinished"></translation>
+        <source>Verify failed, error code: %1, address: 0x%2</source>
+        <translation>校验失败，错误码: %1，地址: 0x%2</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="637"/>
-        <source>校验FLASH... %1%</source>
-        <translation type="unfinished"></translation>
+        <source>Verifying flash... %1%</source>
+        <translation>校验FLASH... %1%</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="640"/>
-        <source>校验成功</source>
-        <translation type="unfinished"></translation>
+        <source>Verify succeeded</source>
+        <translation>校验成功</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="646"/>
-        <source>发送升级结束命令...</source>
-        <translation type="unfinished"></translation>
+        <source>Sending the finish-upgrade command...</source>
+        <translation>发送升级结束命令...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="647"/>
-        <source>完成升级...</source>
-        <translation type="unfinished"></translation>
+        <source>Finishing the upgrade...</source>
+        <translation>完成升级...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="654"/>
-        <source>发送结束命令失败</source>
-        <translation type="unfinished"></translation>
+        <source>Failed to send the finish command</source>
+        <translation>发送结束命令失败</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="658"/>
-        <source>升级结束命令已发送</source>
-        <translation type="unfinished"></translation>
+        <source>Finish-upgrade command sent</source>
+        <translation>升级结束命令已发送</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="663"/>
-        <source>设备确认升级完成</source>
-        <translation type="unfinished"></translation>
+        <source>Device confirmed the upgrade</source>
+        <translation>设备确认升级完成</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="666"/>
-        <source>设备已重启(无响应为正常情况)</source>
-        <translation type="unfinished"></translation>
+        <source>Device restarted (no response is expected)</source>
+        <translation>设备已重启(无响应为正常情况)</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="676"/>
-        <source>无法打开固件文件: %1</source>
-        <translation type="unfinished"></translation>
+        <source>Could not open the firmware file: %1</source>
+        <translation>无法打开固件文件: %1</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="684"/>
-        <source>检测到HEX格式文件，正在转换...</source>
-        <translation type="unfinished"></translation>
+        <source>HEX file detected, converting...</source>
+        <translation>检测到HEX格式文件，正在转换...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="686"/>
-        <source>HEX转换失败</source>
-        <translation type="unfinished"></translation>
+        <source>HEX conversion failed</source>
+        <translation>HEX转换失败</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="689"/>
-        <source>HEX转换成功，起始地址: 0x%1, 数据大小: %2字节</source>
-        <translation type="unfinished"></translation>
+        <source>HEX conversion succeeded, start address: 0x%1, size: %2 bytes</source>
+        <translation>HEX转换成功，起始地址: 0x%1, 数据大小: %2字节</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="695"/>
-        <source>读取BIN文件，数据大小: %1字节</source>
-        <translation type="unfinished"></translation>
+        <source>Reading the BIN file, size: %1 bytes</source>
+        <translation>读取BIN文件，数据大小: %1字节</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="765"/>
-        <source>读取固件文件...</source>
-        <translation type="unfinished"></translation>
+        <source>Reading the firmware file...</source>
+        <translation>读取固件文件...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="773"/>
-        <source>固件数据为空</source>
-        <translation type="unfinished"></translation>
+        <source>Firmware data is empty</source>
+        <translation>固件数据为空</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="778"/>
-        <source>进入IAP模式...</source>
-        <translation type="unfinished"></translation>
+        <source>Entering IAP mode...</source>
+        <translation>进入IAP模式...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="784"/>
-        <source>查找HID设备...</source>
-        <translation type="unfinished"></translation>
+        <source>Looking for the HID device...</source>
+        <translation>查找HID设备...</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="815"/>
-        <source>等待HID设备... (%1/10)</source>
-        <translation type="unfinished"></translation>
+        <source>Waiting for the HID device... (%1/10)</source>
+        <translation>等待HID设备... (%1/10)</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="820"/>
-        <source>无法找到IAP HID设备</source>
-        <translation type="unfinished"></translation>
+        <source>Could not find the IAP HID device</source>
+        <translation>无法找到IAP HID设备</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="856"/>
-        <source>升级完成</source>
-        <translation type="unfinished"></translation>
+        <source>Upgrade complete</source>
+        <translation>升级完成</translation>
     </message>
 </context>
 <context>
@@ -2349,8 +2322,8 @@ Please connect the CH32H417 device and try again.</source>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2218"/>
-        <source>提示信息</source>
-        <translation type="unfinished"></translation>
+        <source>Information</source>
+        <translation>提示信息</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2254"/>
@@ -2375,24 +2348,11 @@ Device already restart.</source>
         <translation>升级失败</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2140"/>
-        <source>警告</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2189"/>
         <source>Firmware Update Failed!
 Please check the device connection and firmware file.</source>
         <translation>固件升级失败！
 请检查设备连接和固件文件。</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2219"/>
-        <source>找不到PDF文件：
-%1
-
-请确认 doc 目录和用户手册文件是否存在。</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2233"/>
@@ -2401,8 +2361,8 @@ Please check the device connection and firmware file.</source>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2234"/>
-        <source>无法打开PDF文件，请确认系统已安装PDF阅读器。</source>
-        <translation type="unfinished"></translation>
+        <source>The PDF file could not be opened. Make sure a PDF reader is installed.</source>
+        <translation>无法打开PDF文件，请确认系统已安装PDF阅读器。</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1497"/>

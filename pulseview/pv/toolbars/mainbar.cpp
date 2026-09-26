@@ -2479,8 +2479,8 @@ namespace pv
 			QFileInfo fileInfo(pdfPath);
 			if (!fileInfo.exists())
 			{
-				pv::util::show_message(this, tr("提示信息"),
-					tr("找不到PDF文件：\n%1\n\n请确认 doc 目录和用户手册文件是否存在。").arg(pdfPath),
+				pv::util::show_message(this, tr("Information"),
+					tr("PDF file not found:\n%1\n\nMake sure the doc directory and the user manual are present.").arg(pdfPath),
 					QMessageBox::standardIcon(QMessageBox::Information), 500);
 				return;
 			}
@@ -2491,7 +2491,7 @@ namespace pv
 			if (!opened)
 			{
 				pv::util::show_message(this, tr("Open Failed"),
-					tr("无法打开PDF文件，请确认系统已安装PDF阅读器。"),
+					tr("The PDF file could not be opened. Make sure a PDF reader is installed."),
 					QMessageBox::standardIcon(QMessageBox::Warning));
 			}
 		}
