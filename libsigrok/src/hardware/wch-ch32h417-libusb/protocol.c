@@ -19,6 +19,7 @@
  */
 
 #include <config.h>
+#include <inttypes.h>
 #include "protocol.h"
 #include <math.h>
 
@@ -903,7 +904,7 @@ static gpointer data_read_thread(gpointer arg)
 			if (no_data_time_ms >= no_data_timeout_ms) {
 				send_stop_command_once(sdi);
 				/* Timed out with no data, the device may have stopped acquiring */
-				sr_info("No data for %d ms, device may have stopped", no_data_timeout_ms);
+				sr_info("No data for %" PRId64 " ms, device may have stopped", no_data_timeout_ms);
 				g_free(buffer);
 				/* Flag the thread as exiting; the timer callback handles the stop */
 				acquisition_set_aborted(devc, TRUE);
@@ -1062,7 +1063,7 @@ static void ch32h417_libusb_flush_cmd_endpoint(unsigned long index)
 
 	/* Set the timeout to 0 ms */
 	if (!ch32h417_libusb_set_timeout_ex(index, 1, 1, 1, 1)) {
-		sr_warn("Failed to set timeout ex for device at index %d", index);
+		sr_warn("Failed to set timeout ex for device at index %lu", index);
 	}
 	g_usleep(1000);
 
@@ -1080,7 +1081,7 @@ static void ch32h417_libusb_flush_cmd_endpoint(unsigned long index)
 		retry_count++;
 		if(retry_count > 10)
 		{
-			sr_err("Timeout while flushing command endpoint for device at index %d", index);
+			sr_err("Timeout while flushing command endpoint for device at index %lu", index);
 			break;
 		}
 		g_usleep(1000);
@@ -1088,7 +1089,7 @@ static void ch32h417_libusb_flush_cmd_endpoint(unsigned long index)
 
 	/* Restore the timeout */
 	if (!ch32h417_libusb_set_timeout_ex(index, USB_TIMEOUT, USB_TIMEOUT, USB_TIMEOUT, USB_TIMEOUT)) {
-		sr_warn("Failed to set timeout ex for device at index %d", index);
+		sr_warn("Failed to set timeout ex for device at index %lu", index);
 	}
 
 	g_usleep(1000);

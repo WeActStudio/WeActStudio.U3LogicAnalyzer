@@ -133,7 +133,7 @@ enum header_items_enum {
 	YMULT = 2,
 	XINCR = 3,
 	BYTNR = 4,
-	BYTE_ORDER = 5,
+	HDR_BYTE_ORDER = 5,
 	BN_FMT = 6,
 	ENCODING = 7,
 
@@ -149,7 +149,7 @@ static const char *header_items[] = {
 	[YMULT] = "YMULT ",
 	[XINCR] = "XINCR ",
 	[BYTNR] = "BYT_NR ",
-	[BYTE_ORDER] = "BYT_OR ",
+	[HDR_BYTE_ORDER] = "BYT_OR ",
 	[BN_FMT] = "BN_FMT ",
 	[ENCODING] = "ENCDG ",
 	[WFID] = "WFID ",
@@ -375,7 +375,7 @@ static int process_header_item(const char *buf, size_t buflen, struct context *i
 			return SR_ERR_DATA;
 		break;
 
-	case BYTE_ORDER:
+	case HDR_BYTE_ORDER:
 		find_string_value(buf, buflen, byte_order_buf, BYTE_ORDER_BUFFER_SIZE);
 		if (strcmp(byte_order_buf, "LSB") == 0)
 			inc->byte_order = LSB;

@@ -20,6 +20,7 @@
 
 #include <config.h>
 #include "protocol.h"
+#include <ctype.h>
 #include <math.h>
 
 /* Supported devices */
@@ -89,7 +90,7 @@ static void ch32h417_libusb_flush_cmd_endpoint(unsigned long index)
 
 	/* Set the timeout to 0 ms */
 	if (!ch32h417_libusb_set_timeout_ex(index, 1, 1, 1, 1)) {
-		sr_warn("Failed to set timeout ex for device at index %d", index);
+		sr_warn("Failed to set timeout ex for device at index %lu", index);
 	}
 	g_usleep(1000);
 
@@ -107,7 +108,7 @@ static void ch32h417_libusb_flush_cmd_endpoint(unsigned long index)
 		retry_count++;
 		if(retry_count > 10)
 		{
-			sr_err("Timeout while flushing command endpoint for device at index %d", index);
+			sr_err("Timeout while flushing command endpoint for device at index %lu", index);
 			break;
 		}
 		g_usleep(1000);
@@ -171,7 +172,7 @@ static int extract_usb_serial(const char *dev_path, char *out_sn, size_t buf_sz)
     p2 = strchr(p1, '#');
     if (p2 == NULL)
         return -1;
-	p2++;
+    p2++;
 
 	// Find the third '#'
     p3 = strchr(p2, '#');
@@ -212,7 +213,6 @@ static int str_startswith(const char *str, const char *prefix)
 /* Scan for devices */
 static GSList *scan(struct sr_dev_driver *di, GSList *options)
 {
-	struct drv_context *drvc;
 	struct dev_context *devc;
 	struct sr_dev_inst *sdi;
 	struct sr_channel *ch;
@@ -229,8 +229,6 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	unsigned long usb_id;
 	uint16_t vid, pid;
 
-	drvc = di->context;
-
 	conn = NULL;
 	for (l = options; l; l = l->next)
 	{
@@ -242,6 +240,9 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 			break;
 		}
 	}
+
+	if (conn)
+		sr_dbg("Ignoring conn option \"%s\", scanning all devices", conn);
 
 	devices = NULL;
 
@@ -632,7 +633,7 @@ static int config_set(uint32_t key, GVariant *data,
 		if (mode_idx < 0)
 			return SR_ERR_ARG;
 
-		if (mode_idx == devc->mode)
+		if (mode_idx == (int)devc->mode)
 			break;
 
 		devc->mode = (enum ch32h417_libusb_mode)mode_idx;
