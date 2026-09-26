@@ -374,6 +374,12 @@ namespace pv
 			connect(&device_selector_, SIGNAL(device_selected()),
 					this, SLOT(on_device_selected()));
 
+			/* Rescanning is the same as hot-plug detection, so route the request
+			 * through the same signal. Queued so that the device manager is only
+			 * rebuilt once the popup menu is gone. */
+			connect(&device_selector_, SIGNAL(refresh_requested()),
+					this, SIGNAL(device_attached()), Qt::QueuedConnection);
+
 			// Setup the decoder button
 #ifdef ENABLE_DECODE
 			add_decoder_button_->setIcon(QIcon(":/icons/add-decoder.png"));

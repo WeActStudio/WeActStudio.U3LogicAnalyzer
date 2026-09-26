@@ -246,6 +246,18 @@ int main(int argc, char *argv[])
 	Application a(argc, argv);
 
 	/*
+	 * Say which binary is running. The application is often installed next
+	 * to a build tree, so "the change is not in the build I started" has to
+	 * be answerable from the log alone.
+	 */
+	{
+		const QFileInfo exe_info(QCoreApplication::applicationFilePath());
+		qDebug().noquote() << "U3LogicAnalyzer" << PV_VERSION_STRING << "running from"
+			<< exe_info.absoluteFilePath() << "built"
+			<< exe_info.lastModified().toString("yyyy-MM-dd HH:mm:ss");
+	}
+
+	/*
 	 * Application wide icon. Without it every window that is not the main
 	 * one (dialogs, popups) falls back to the generic icon, and on Linux
 	 * the task bar shows the default icon too.

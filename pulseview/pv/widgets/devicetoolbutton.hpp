@@ -102,6 +102,13 @@ private:
 	 */
 	void set_label(const QString &label);
 
+	/**
+	 * Returns true when the device list holds nothing but the demo
+	 * device, so that scanning the buses again is the only way to get a
+	 * usable device.
+	 */
+	bool only_demo_device() const;
+
 private Q_SLOTS:
 	void on_action(QObject *action);
 	void on_menu_hovered(QAction *action);
@@ -110,6 +117,12 @@ private Q_SLOTS:
 
 Q_SIGNALS:
 	void device_selected();
+
+	/**
+	 * Emitted when the user asked for a new device scan because no
+	 * hardware device was available.
+	 */
+	void refresh_requested();
 
 private:
 	DeviceManager * device_manager_;
@@ -124,6 +137,10 @@ private:
 	vector< weak_ptr<devices::Device> > devices_;
 
 	QString device_tooltip_;
+
+	/* Kept alive across menu rebuilds: deleting an action while its own
+	 * triggered() signal is being handled is not safe. */
+	QAction *const refresh_action_;
 };
 
 }  // namespace widgets

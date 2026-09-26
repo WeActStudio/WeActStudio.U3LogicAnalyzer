@@ -28,9 +28,11 @@
 
 #include <pv/devicemanager.hpp>
 #include <pv/devices/device.hpp>
+#include <pv/devices/hardwaredevice.hpp>
 
 #include "devicetoolbutton.hpp"
 
+using std::dynamic_pointer_cast;
 using std::list;
 using std::shared_ptr;
 using std::string;
@@ -50,7 +52,8 @@ DeviceToolButton::DeviceToolButton(QWidget *parent,
 	connect_action_(connect_action),
 	menu_(this),
 	mapper_(this),
-	devices_()
+	devices_(),
+	refresh_action_(new QAction(this))
 {
 	setPopupMode(QToolButton::MenuButtonPopup);
 	setMenu(&menu_);
@@ -63,6 +66,9 @@ DeviceToolButton::DeviceToolButton(QWidget *parent,
 
 	connect(&menu_, SIGNAL(hovered(QAction*)),
 		this, SLOT(on_menu_hovered(QAction*)));
+
+	connect(refresh_action_, SIGNAL(triggered()),
+		this, SIGNAL(refresh_requested()));
 
 	update_minimum_width();
 }
@@ -121,6 +127,30 @@ void DeviceToolButton::set_label(const QString &label)
 	update_minimum_width();
 }
 
+static bool is_demo_device(const shared_ptr<Device> &dev)
+{
+	const shared_ptr<devices::HardwareDevice> hw_device =
+		dynamic_pointer_cast<devices::HardwareDevice>(dev);
+
+	return hw_device && (hw_device->hardware_device()->driver()->name() == "demo");
+}
+
+bool DeviceToolButton::only_demo_device() const
+{
+	/* A file device in use is not something a rescan would replace, so
+	 * keep the entry out of the way while one is loaded. */
+	if (selected_device_ && !is_demo_device(selected_device_))
+		return false;
+
+	for (const weak_ptr<Device> &dev_weak_ptr : devices_) {
+		shared_ptr<Device> dev(dev_weak_ptr.lock());
+		if (dev && !is_demo_device(dev))
+			return false;
+	}
+
+	return true;
+}
+
 void DeviceToolButton::update_device_list()
 {
 	menu_.clear();
@@ -141,6 +171,14 @@ void DeviceToolButton::update_device_list()
 		connect(a, SIGNAL(triggered()), &mapper_, SLOT(map()));
 
 		menu_.addAction(a);
+	}
+
+	if (only_demo_device()) {
+		/* No hardware device was found. Offer a rescan where the devices
+		 * would be listed, as that is the only way to get one. */
+		refresh_action_->setText(tr("Refresh Device List"));
+		menu_.addSeparator();
+		menu_.addAction(refresh_action_);
 	}
 
 	if(selected_device_ != nullptr)
