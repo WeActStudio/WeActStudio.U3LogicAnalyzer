@@ -1,9 +1,14 @@
 #!/bin/bash
 # ============================================================================
-# package_installer.sh - build the Windows installer LogicAnalyzer_Setup.exe
+# package_installer.sh - build the installer of the current platform
+#
+#   Windows: LogicAnalyzer_Setup.exe                    (NSIS)
+#   Linux:   LogicAnalyzer-<ver>-linux-<arch>.tar.gz    (archive + install.sh)
+#            LogicAnalyzer-<ver>-linux-<arch>.deb       (needs dpkg-deb)
+#
 # Usage:
-#   ./package_installer.sh               # Build + package + create the installer
-#   ./package_installer.sh --skip-build  # Skip the build, package the existing dist/LogicAnalyzer/
+#   ./package_installer.sh               # Build + package + create installer
+#   ./package_installer.sh --skip-build  # Skip the build, package existing dist/
 # ============================================================================
 set -e
 
@@ -11,6 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/build_cmake"
 DIST_DIR="${SCRIPT_DIR}/dist/LogicAnalyzer"
 SETUP_NAME="LogicAnalyzer_Setup"
+VERSION=0.2
 SKIP_BUILD=0
 
 for arg in "$@"; do
@@ -19,17 +25,35 @@ for arg in "$@"; do
     esac
 done
 
+if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ -n "$MSYSTEM" ]]; then
+    IS_WINDOWS=1
+else
+    IS_WINDOWS=0
+fi
+
 # --- Build + package ---
 if [ $SKIP_BUILD -eq 0 ]; then
     echo ">>> 步骤 1/3: 编译 + 打包..."
     bash "${SCRIPT_DIR}/build.sh" --clean --package
 else
-    if [ ! -f "${DIST_DIR}/LogicAnalyzer.exe" ]; then
-        echo "[错误] 未找到 ${DIST_DIR}/LogicAnalyzer.exe，请先 ./build.sh --package"
-        exit 1
+    if [ $IS_WINDOWS -eq 1 ]; then
+        [ -f "${DIST_DIR}/LogicAnalyzer.exe" ] || {
+            echo "[错误] 未找到 ${DIST_DIR}/LogicAnalyzer.exe，请先 ./build.sh --package"
+            exit 1
+        }
+    else
+        [ -f "${DIST_DIR}/LogicAnalyzer" ] || {
+            echo "[错误] 未找到 ${DIST_DIR}/LogicAnalyzer，请先 ./build.sh --package"
+            exit 1
+        }
     fi
     echo ">>> 跳过编译，使用已有 dist/LogicAnalyzer/"
 fi
+
+# ============================================================================
+# Windows: NSIS installer
+# ============================================================================
+if [ $IS_WINDOWS -eq 1 ]; then
 
 # --- Check for NSIS ---
 if ! command -v makensis &>/dev/null; then
@@ -40,7 +64,6 @@ fi
 # --- Generate the NSIS script ---
 echo ">>> 步骤 2/3: 生成安装脚本..."
 
-VERSION=0.2
 OUTPUT="${DIST_DIR}/${SETUP_NAME}.exe"
 NSIS_SCRIPT="${SCRIPT_DIR}/dist/setup.nsi"
 
@@ -114,3 +137,359 @@ echo "============================================"
 echo " 安装包生成完成！"
 echo " ${OUTPUT}"
 echo "============================================"
+
+# ============================================================================
+# Linux: tar.gz archive (+ .deb when dpkg-deb is available)
+# ============================================================================
+else
+
+ARCH=$(dpkg --print-architecture 2>/dev/null || echo "")
+[ -z "${ARCH}" ] && ARCH=$(uname -m)
+case "${ARCH}" in
+    x86_64|amd64) ARCH=amd64 ;;
+    aarch64|arm64) ARCH=arm64 ;;
+esac
+
+BASENAME="LogicAnalyzer-${VERSION}-linux-${ARCH}"
+STAGE="${SCRIPT_DIR}/dist/${BASENAME}"
+TARBALL="${STAGE}.tar.gz"
+DEB="${STAGE}.deb"
+
+# --- install.sh / uninstall.sh shipped inside the archive ---
+cat > "${SCRIPT_DIR}/dist/install.sh" << 'INSEOF'
+#!/bin/bash
+# Install LogicAnalyzer: program files, menu entry, icons and udev rules.
+#   sudo ./install.sh           # system wide: /opt/LogicAnalyzer
+#   ./install.sh --user         # current user only
+set -e
+DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [ "$(id -u)" -eq 0 ] && [ "$1" != "--user" ]; then
+    PREFIX=/opt/LogicAnalyzer
+    APP_DIR=/usr/share/applications
+    ICON_ROOT=/usr/share/icons/hicolor
+    UDEV_DIR=/etc/udev/rules.d
+else
+    PREFIX="$HOME/.local/opt/LogicAnalyzer"
+    APP_DIR="$HOME/.local/share/applications"
+    ICON_ROOT="$HOME/.local/share/icons/hicolor"
+    UDEV_DIR=""
+fi
+
+echo ">>> 安装到 ${PREFIX}"
+mkdir -p "$PREFIX" "$APP_DIR" "$ICON_ROOT/48x48/apps" "$ICON_ROOT/scalable/apps"
+cp -r "$DIR"/. "$PREFIX"/
+rm -f "$PREFIX/install.sh" "$PREFIX/uninstall.sh"
+chmod +x "$PREFIX/LogicAnalyzer"
+
+sed "s|^Exec=.*|Exec=$PREFIX/LogicAnalyzer|; s|^Icon=.*|Icon=LogicAnalyzer|" \
+    "$DIR/LogicAnalyzer.desktop" > "$APP_DIR/LogicAnalyzer.desktop"
+cp "$DIR/share/icons/LogicAnalyzer.png" "$ICON_ROOT/48x48/apps/" 2>/dev/null || true
+cp "$DIR/share/icons/LogicAnalyzer.svg" "$ICON_ROOT/scalable/apps/" 2>/dev/null || true
+
+if [ -n "$UDEV_DIR" ] && [ -f "$DIR/99-weact-ch32h417.rules" ]; then
+    cp "$DIR/99-weact-ch32h417.rules" "$UDEV_DIR/"
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger --subsystem-match=usb 2>/dev/null || true
+    echo ">>> 已安装 udev 权限规则"
+fi
+
+update-desktop-database "$APP_DIR" 2>/dev/null || true
+gtk-update-icon-cache -f -t "$ICON_ROOT" 2>/dev/null || true
+echo ">>> 完成：菜单项 LogicAnalyzer"
+INSEOF
+
+cat > "${SCRIPT_DIR}/dist/uninstall.sh" << 'UNESEOF'
+#!/bin/bash
+# Remove what install.sh added.
+#   sudo ./uninstall.sh         # system wide
+#   ./uninstall.sh --user      # current user only
+set -e
+
+if [ "$(id -u)" -eq 0 ] && [ "$1" != "--user" ]; then
+    PREFIX=/opt/LogicAnalyzer
+    APP_DIR=/usr/share/applications
+    ICON_ROOT=/usr/share/icons/hicolor
+    UDEV_DIR=/etc/udev/rules.d
+else
+    PREFIX="$HOME/.local/opt/LogicAnalyzer"
+    APP_DIR="$HOME/.local/share/applications"
+    ICON_ROOT="$HOME/.local/share/icons/hicolor"
+    UDEV_DIR="$HOME/.local/share/udev"
+fi
+
+rm -rf "$PREFIX" "$UDEV_DIR/99-weact-ch32h417.rules"
+rm -f "$APP_DIR/LogicAnalyzer.desktop"
+rm -f "$ICON_ROOT/48x48/apps/LogicAnalyzer.png" "$ICON_ROOT/scalable/apps/LogicAnalyzer.svg"
+update-desktop-database "$APP_DIR" 2>/dev/null || true
+gtk-update-icon-cache -f -t "$ICON_ROOT" 2>/dev/null || true
+echo ">>> 已卸载 LogicAnalyzer"
+UNESEOF
+chmod +x "${SCRIPT_DIR}/dist/install.sh" "${SCRIPT_DIR}/dist/uninstall.sh"
+
+# --- tar.gz ---
+echo ">>> 步骤 2/4: 生成 tar.gz 归档..."
+rm -rf "${STAGE}"
+mkdir -p "${STAGE}"
+cp -r "${DIST_DIR}/." "${STAGE}/"
+cp "${SCRIPT_DIR}/dist/install.sh" "${SCRIPT_DIR}/dist/uninstall.sh" "${STAGE}/"
+cp "${SCRIPT_DIR}/99-weact-ch32h417.rules" "${STAGE}/" 2>/dev/null || true
+chmod +x "${STAGE}/install.sh" "${STAGE}/uninstall.sh"
+tar czf "${TARBALL}" -C "${SCRIPT_DIR}/dist" "${BASENAME}"
+echo "  ${TARBALL}"
+
+# --- deb ---
+echo ">>> 步骤 3/4: 生成 deb 包..."
+if command -v dpkg-deb >/dev/null 2>&1; then
+    DEB_ROOT="${SCRIPT_DIR}/dist/deb-root"
+    rm -rf "${DEB_ROOT}"
+    mkdir -p "${DEB_ROOT}/DEBIAN" \
+             "${DEB_ROOT}/opt/LogicAnalyzer" \
+             "${DEB_ROOT}/usr/share/applications" \
+             "${DEB_ROOT}/usr/share/icons/hicolor/48x48/apps" \
+             "${DEB_ROOT}/usr/share/icons/hicolor/scalable/apps" \
+             "${DEB_ROOT}/etc/udev/rules.d"
+
+    cp -r "${DIST_DIR}/." "${DEB_ROOT}/opt/LogicAnalyzer/"
+    chmod +x "${DEB_ROOT}/opt/LogicAnalyzer/LogicAnalyzer"
+
+    sed "s|^Exec=.*|Exec=/opt/LogicAnalyzer/LogicAnalyzer|; s|^Icon=.*|Icon=LogicAnalyzer|; \
+         s|^Categories=.*|Categories=Development;Electronics;|" \
+        "${DIST_DIR}/LogicAnalyzer.desktop" \
+        > "${DEB_ROOT}/usr/share/applications/LogicAnalyzer.desktop"
+    # Version=1.0 keeps desktop-file-validate happy on strict distributions.
+    grep -q '^Version=' "${DEB_ROOT}/usr/share/applications/LogicAnalyzer.desktop" || \
+        sed -i 's/^\[Desktop Entry\]/[Desktop Entry]\nVersion=1.0/' \
+            "${DEB_ROOT}/usr/share/applications/LogicAnalyzer.desktop"
+
+    # The shipped PNG is 200x200, so it belongs in 256x256 (and as an
+    # unthemed pixmap) rather than in 48x48 where the size would not match.
+    mkdir -p "${DEB_ROOT}/usr/share/icons/hicolor/256x256/apps" \
+             "${DEB_ROOT}/usr/share/icons/hicolor/48x48/apps" \
+             "${DEB_ROOT}/usr/share/pixmaps"
+    cp "${DIST_DIR}/share/icons/LogicAnalyzer.png" \
+       "${DEB_ROOT}/usr/share/icons/hicolor/256x256/apps/" 2>/dev/null || true
+    cp "${DIST_DIR}/share/icons/LogicAnalyzer.png" \
+       "${DEB_ROOT}/usr/share/icons/hicolor/48x48/apps/" 2>/dev/null || true
+    cp "${DIST_DIR}/share/icons/LogicAnalyzer.png" \
+       "${DEB_ROOT}/usr/share/pixmaps/" 2>/dev/null || true
+    cp "${DIST_DIR}/share/icons/LogicAnalyzer.svg" \
+       "${DEB_ROOT}/usr/share/icons/hicolor/scalable/apps/" 2>/dev/null || true
+    cp "${SCRIPT_DIR}/99-weact-ch32h417.rules" \
+       "${DEB_ROOT}/etc/udev/rules.d/" 2>/dev/null || true
+
+    # Installed-Size is what software centres show as the download size;
+    # without it they display "0 B".
+    INSTALLED_KB=$(du -sk "${DEB_ROOT}" 2>/dev/null | awk '{print $1}')
+    [ -z "${INSTALLED_KB}" ] && INSTALLED_KB=0
+
+    cat > "${DEB_ROOT}/DEBIAN/control" << CTRLEOF
+Package: logicanalyzer
+Version: ${VERSION}
+Section: electronics
+Priority: optional
+Architecture: ${ARCH}
+Installed-Size: ${INSTALLED_KB}
+Maintainer: WeAct Studio
+Homepage: https://github.com/WeActStudio
+License: GPL-3+
+Depends: libqt5widgets5, libqt5svg5, python3
+Description: CH32H417 Logic Analyzer (WeAct Studio)
+ PulseView based acquisition software for the WeAct Studio
+ CH32H417 logic analyzer. Installed to /opt/LogicAnalyzer.
+CTRLEOF
+
+    # Debian policy wants a copyright file, and software centres read the
+    # licence from there as well.
+    mkdir -p "${DEB_ROOT}/usr/share/doc/logicanalyzer"
+    cp "${SCRIPT_DIR}/LICENSE" "${DEB_ROOT}/usr/share/doc/logicanalyzer/copyright" 2>/dev/null || true
+
+    cat > "${DEB_ROOT}/DEBIAN/postinst" << 'PIEOF'
+#!/bin/sh
+set -e
+chmod +x /opt/LogicAnalyzer/LogicAnalyzer
+update-desktop-database /usr/share/applications 2>/dev/null || true
+gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+udevadm control --reload-rules 2>/dev/null || true
+udevadm trigger --subsystem-match=usb 2>/dev/null || true
+exit 0
+PIEOF
+
+    cat > "${DEB_ROOT}/DEBIAN/postrm" << 'PREOF'
+#!/bin/sh
+set -e
+rm -f /usr/share/applications/LogicAnalyzer.desktop
+rm -f /usr/share/icons/hicolor/256x256/apps/LogicAnalyzer.png
+rm -f /usr/share/icons/hicolor/48x48/apps/LogicAnalyzer.png
+rm -f /usr/share/icons/hicolor/scalable/apps/LogicAnalyzer.svg
+rm -f /usr/share/pixmaps/LogicAnalyzer.png
+rm -rf /opt/LogicAnalyzer
+update-desktop-database /usr/share/applications 2>/dev/null || true
+gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+# The udev rules file is owned by the package and removed by dpkg; reload
+# so the rule disappears from the running system too.
+udevadm control --reload-rules 2>/dev/null || true
+udevadm trigger --subsystem-match=usb 2>/dev/null || true
+exit 0
+PREOF
+
+    chmod 0755 "${DEB_ROOT}/DEBIAN/postinst" "${DEB_ROOT}/DEBIAN/postrm"
+    dpkg-deb --build --root-owner-group "${DEB_ROOT}" "${DEB}" 2>/dev/null \
+        || dpkg-deb --build "${DEB_ROOT}" "${DEB}"
+    rm -rf "${DEB_ROOT}"
+    echo "  ${DEB}"
+else
+    echo "  (dpkg-deb 不可用，跳过 deb 包；apt install dpkg-dev 后再试)"
+fi
+
+# --- AppImage ---
+echo ">>> 步骤 4/4: 生成 AppImage..."
+
+case "${ARCH}" in
+    amd64)  AI_ARCH=x86_64 ;;
+    arm64)  AI_ARCH=aarch64 ;;
+    *)      AI_ARCH="${ARCH}" ;;
+esac
+
+APPIMAGE="${SCRIPT_DIR}/dist/LogicAnalyzer-${VERSION}-${AI_ARCH}.AppImage"
+TOOL=""
+for c in appimagetool "appimagetool-${AI_ARCH}.AppImage" "appimagetool-x86_64.AppImage"; do
+    if command -v "$c" >/dev/null 2>&1; then TOOL="$c"; break; fi
+done
+
+# Download helper: curl -> wget -> python3, whichever is available.
+download_file() {
+    local url="$1" out="$2"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL -o "${out}" "${url}"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O "${out}" "${url}"
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -c "import urllib.request, sys; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" \
+            "${url}" "${out}"
+    else
+        return 1
+    fi
+}
+
+if [ -z "${TOOL}" ]; then
+    TOOL="${SCRIPT_DIR}/dist/appimagetool-${AI_ARCH}.AppImage"
+    if [ ! -f "${TOOL}" ]; then
+        if ! download_file \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${AI_ARCH}.AppImage" \
+            "${TOOL}" 2>/dev/null; then
+            rm -f "${TOOL}"
+            TOOL=""
+        else
+            chmod +x "${TOOL}"
+        fi
+    fi
+fi
+
+if [ -n "${TOOL}" ] && [ -f "${DIST_DIR}/LogicAnalyzer" ]; then
+    APPDIR="${SCRIPT_DIR}/dist/LogicAnalyzer.AppDir"
+    rm -rf "${APPDIR}"
+    mkdir -p "${APPDIR}/usr/bin" "${APPDIR}/usr/lib" \
+             "${APPDIR}/usr/share/applications" \
+             "${APPDIR}/usr/share/icons/hicolor/256x256/apps" \
+             "${APPDIR}/usr/share/icons/hicolor/48x48/apps" \
+             "${APPDIR}/usr/share/pixmaps" \
+             "${APPDIR}/usr/share/libsigrokdecode"
+
+    cp "${DIST_DIR}/LogicAnalyzer" "${APPDIR}/usr/bin/"
+    cp -P "${DIST_DIR}"/libsigrok*.so* "${APPDIR}/usr/lib/" 2>/dev/null || true
+    cp -r "${DIST_DIR}/share/libsigrokdecode/decoders" \
+          "${APPDIR}/usr/share/libsigrokdecode/" 2>/dev/null || true
+
+    sed "s|^Exec=.*|Exec=LogicAnalyzer|; s|^Icon=.*|Icon=LogicAnalyzer|" \
+        "${DIST_DIR}/LogicAnalyzer.desktop" > "${APPDIR}/LogicAnalyzer.desktop"
+    grep -q '^Version=' "${APPDIR}/LogicAnalyzer.desktop" || \
+        sed -i 's/^\[Desktop Entry\]/[Desktop Entry]\nVersion=1.0/' \
+            "${APPDIR}/LogicAnalyzer.desktop"
+    cp "${APPDIR}/LogicAnalyzer.desktop" "${APPDIR}/usr/share/applications/"
+
+    # Copy (not link) the icon: the root icon is what file managers show.
+    cp "${DIST_DIR}/share/icons/LogicAnalyzer.png" "${APPDIR}/LogicAnalyzer.png"
+    cp "${APPDIR}/LogicAnalyzer.png" "${APPDIR}/.DirIcon"
+    cp "${APPDIR}/LogicAnalyzer.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/"
+    cp "${APPDIR}/LogicAnalyzer.png" "${APPDIR}/usr/share/icons/hicolor/48x48/apps/"
+    cp "${APPDIR}/LogicAnalyzer.png" "${APPDIR}/usr/share/pixmaps/"
+    [ -f "${DIST_DIR}/share/icons/LogicAnalyzer.svg" ] && \
+        cp "${DIST_DIR}/share/icons/LogicAnalyzer.svg" \
+           "${APPDIR}/usr/share/icons/hicolor/scalable/apps/" 2>/dev/null || true
+
+    cat > "${APPDIR}/AppRun" << 'AREOF'
+#!/bin/sh
+HERE="$(dirname "$(readlink -f "$0")")"
+export LD_LIBRARY_PATH="$HERE/usr/lib:${LD_LIBRARY_PATH}"
+export SIGROKDECODE_DIR="$HERE/usr/share/libsigrokdecode/decoders"
+exec "$HERE/usr/bin/LogicAnalyzer" "$@"
+AREOF
+    chmod +x "${APPDIR}/AppRun"
+
+    # A uruntime binary next to dist/ makes the AppImage run without FUSE,
+    # so it can simply be double-clicked. Optional: download
+    # uruntime-${AI_ARCH} from the AppImageCommunity releases when wanted.
+    RUNTIME_ARG=""
+    if [ -f "${SCRIPT_DIR}/dist/uruntime-${AI_ARCH}" ]; then
+        RUNTIME_ARG="--runtime-file ${SCRIPT_DIR}/dist/uruntime-${AI_ARCH}"
+        echo "  (使用 uruntime，生成的 AppImage 无需 FUSE)"
+    fi
+
+    # Extract-and-run avoids the FUSE requirement of the AppImage runtime.
+    if APPIMAGE_EXTRACT_AND_RUN=1 ARCH="${AI_ARCH}" "${TOOL}" ${RUNTIME_ARG} "${APPDIR}" "${APPIMAGE}"; then
+        echo "  ${APPIMAGE}"
+
+        # Ubuntu 22.04+ no longer ships libfuse2, so a plain AppImage run
+        # fails with "dlopen(): error loading libfuse.so.2". This wrapper
+        # extracts on first use and then starts AppRun, no FUSE needed.
+        cat > "${APPIMAGE}.run.sh" << WREOF
+#!/bin/sh
+# Start the AppImage without FUSE: extract once into a cache directory.
+set -e
+HERE="\$(cd "\$(dirname "\$(readlink -f "\$0")")" && pwd)"
+AI="\${HERE}/LogicAnalyzer-${VERSION}-${AI_ARCH}.AppImage"
+CACHE="\${XDG_CACHE_HOME:-\$HOME/.cache}/LogicAnalyzer-appimage"
+if [ ! -x "\${CACHE}/squashfs-root/AppRun" ]; then
+    mkdir -p "\${CACHE}"
+    (cd "\${CACHE}" && "\${AI}" --appimage-extract >/dev/null 2>&1)
+fi
+exec "\${CACHE}/squashfs-root/AppRun" "\$@"
+WREOF
+        chmod +x "${APPIMAGE}.run.sh"
+        echo "  ${APPIMAGE}.run.sh (无 FUSE 也能启动)"
+    else
+        echo "  (appimagetool 执行失败，跳过 AppImage)"
+        rm -f "${APPIMAGE}"
+    fi
+    rm -rf "${APPDIR}"
+else
+    echo "  (appimagetool 不可用，跳过 AppImage;"
+    echo "   可手动下载 appimagetool-${AI_ARCH}.AppImage 放到 dist/ 后重跑)"
+fi
+
+echo ""
+echo "============================================"
+echo " 安装包生成完成！"
+echo " ${TARBALL}"
+[ -f "${DEB}" ] && echo " ${DEB}"
+if [ -f "${APPIMAGE}" ]; then
+    echo " ${APPIMAGE}"
+    echo ""
+    echo ""
+    echo " AppImage 运行说明（Ubuntu 24.04 起默认不带 libfuse2，直接双击会报"
+    echo " dlopen(): error loading libfuse.so.2）："
+    echo "   1) ${APPIMAGE}.run.sh"
+    echo "      推荐。不用 root、不用 FUSE，首次自动解压到 ~/.cache 后启动。"
+    echo "   2) ${APPIMAGE} --appimage-extract-and-run"
+    echo "      免 root，每次解压到 /tmp 后运行。"
+    echo "   3) sudo apt install libfuse2"
+    echo "      装上后可直接双击 ${APPIMAGE##*/} 运行。"
+    [ -n "${RUNTIME_ARG}" ] && echo "      （本包已用 uruntime，无需此项即可双击运行）"
+    [ -z "${RUNTIME_ARG}" ] && echo "   4) 把 uruntime-${AI_ARCH} 放到 dist/ 后重跑本脚本，可生成免 FUSE 的 AppImage。"
+    echo ""
+    echo " AppImage 不会自动注册菜单项，需要菜单入口请改用 tar.gz 包里的 install.sh。"
+fi
+echo "============================================"
+
+fi
