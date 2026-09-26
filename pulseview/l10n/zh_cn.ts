@@ -10,126 +10,6 @@
 </context>
 <context>
     <name>Channels</name>
-    <message>
-        <source>All</source>
-        <translation type="obsolete">全部</translation>
-    </message>
-    <message>
-        <source>None</source>
-        <translation type="obsolete">全关</translation>
-    </message>
-    <message>
-        <source>Trigger Threshold(0~7 Channel)</source>
-        <translation type="obsolete">触发阈值(0~7 通道)</translation>
-    </message>
-    <message>
-        <source>Trigger Threshold(8~15 Channel)</source>
-        <translation type="obsolete">触发阈值(8~15 通道)</translation>
-    </message>
-    <message>
-        <source>Use 2 channels (Max 1GHz)</source>
-        <translation type="obsolete">使用2通道 (最高 1GHz)</translation>
-    </message>
-    <message>
-        <source>Use 2 channels (Max 40MHz)</source>
-        <translation type="obsolete">使用2通道 (最高 40MHz)</translation>
-    </message>
-    <message>
-        <source>Use 4 channels (Max 40MHz)</source>
-        <translation type="obsolete">使用4通道 (最高 40MHz)</translation>
-    </message>
-    <message>
-        <source>Use 8 channels (Max 40MHz)</source>
-        <translation type="obsolete">使用8通道(最高 40MHz)</translation>
-    </message>
-    <message>
-        <source>Use 16 channels (Max 20MHz)</source>
-        <translation type="obsolete">使用16通道(最高 20MHz)</translation>
-    </message>
-    <message>
-        <source>Use 2 channels (Max 200MHz)</source>
-        <translation type="obsolete">使用2通道 (最高 200MHz)</translation>
-    </message>
-    <message>
-        <source>Use 4 channels (Max 200MHz)</source>
-        <translation type="obsolete">使用4通道 (最高 200MHz)</translation>
-    </message>
-    <message>
-        <source>Use 8 channels (Max 200MHz)</source>
-        <translation type="obsolete">使用8通道 (最高 200MHz)</translation>
-    </message>
-    <message>
-        <source>Use 16 channels (Max 200MHz)</source>
-        <translation type="obsolete">使用16通道 (最高 200MHz)</translation>
-    </message>
-    <message>
-        <source>Use 4 channels (Max 500MHz)</source>
-        <translation type="obsolete">使用4通道 (最高 500MHz)</translation>
-    </message>
-    <message>
-        <source>Use 8 channels (Max 250MHz)</source>
-        <translation type="obsolete">使用8通道 (最高 250MHz)</translation>
-    </message>
-    <message>
-        <source>Use 16 channels (Max 125MHz)</source>
-        <translation type="obsolete">使用16通道 (最高 125MHz)</translation>
-    </message>
-    <message>
-        <source>Use 2 channels (Max 500MHz)</source>
-        <translation type="obsolete">使用2通道(最高 500MHz)</translation>
-    </message>
-    <message>
-        <source>Use 4 channels (Max 250MHz)</source>
-        <translation type="obsolete">使用4通道(最高 250MHz)</translation>
-    </message>
-    <message>
-        <source>Use 8 channels (Max 125MHz)</source>
-        <translation type="obsolete">使用8通道(最高 125MHz)</translation>
-    </message>
-    <message>
-        <source>Use 16 channels (Max 62.5MHz)</source>
-        <translation type="obsolete">使用16通道(最高 62.5MHz)</translation>
-    </message>
-    <message>
-        <source>Logic Analyzer</source>
-        <translation type="obsolete">逻辑分析仪</translation>
-    </message>
-    <message>
-        <source>ADC</source>
-        <translation type="obsolete">ADC</translation>
-    </message>
-    <message>
-        <source>Device Mode</source>
-        <translation type="obsolete">设备模式</translation>
-    </message>
-    <message>
-        <source>Threshold Level</source>
-        <translation type="obsolete">阈值电平</translation>
-    </message>
-    <message>
-        <source>ADC Channel 0</source>
-        <translation type="obsolete">ADC通道0</translation>
-    </message>
-    <message>
-        <source>ADC Channel 1</source>
-        <translation type="obsolete">ADC通道1</translation>
-    </message>
-    <message>
-        <source>ADC Channel</source>
-        <translation type="obsolete">ADC通道</translation>
-    </message>
-    <message>
-        <source>ADC Precision</source>
-        <translation type="obsolete">ADC精度</translation>
-    </message>
-    <message>
-        <source>Information</source>
-        <translation type="obsolete">信息</translation>
-    </message>
-    <message>
-        <source>The current mode does not support opening this channel.</source>
-        <translation type="obsolete">当前模式不支持该通道</translation>
-    </message>
 </context>
 <context>
     <name>QApplication</name>
@@ -191,130 +71,15 @@ A human-readable form has been saved to disk and was written to the log. You may
 </context>
 <context>
     <name>SubWindow</name>
-    <message>
-        <source>Protocol decoder &lt;b&gt;%1&lt;/b&gt; requires input type &lt;b&gt;%2&lt;/b&gt; which several decoders provide.&lt;br&gt;Choose which one to use:&lt;br&gt;</source>
-        <translation type="obsolete">协议解码器 &lt;b&gt;%1&lt;/b&gt; 有不同的&lt;b&gt;%2&lt;/b&gt; 协议类型。&lt;br&gt;选择要使用的：&lt;br&gt;</translation>
-    </message>
-    <message>
-        <source>Choose Decoder</source>
-        <translation type="obsolete">选择解码器</translation>
-    </message>
 </context>
 <context>
     <name>View</name>
-    <message>
-        <source>Decoder:</source>
-        <translation type="obsolete">解码器：</translation>
-    </message>
-    <message>
-        <source>Show data as</source>
-        <translation type="obsolete">数据显示格式</translation>
-    </message>
-    <message>
-        <source>&amp;Save...</source>
-        <translation type="obsolete">保存... ( &amp;S )</translation>
-    </message>
-    <message>
-        <source>Save Binary Data</source>
-        <translation type="obsolete">保存二进制数据</translation>
-    </message>
-    <message>
-        <source>File %1 could not be written to.</source>
-        <translation type="obsolete">文件 %1 无法保存。</translation>
-    </message>
 </context>
 <context>
     <name>pv</name>
-    <message>
-        <source>Decoder Selector</source>
-        <translation type="obsolete">协议解码器</translation>
-    </message>
-    <message>
-        <source>Session %1</source>
-        <translation type="obsolete">会话 %1</translation>
-    </message>
-    <message>
-        <source>Warning</source>
-        <translation type="obsolete">警告</translation>
-    </message>
-    <message>
-        <source>device detached!</source>
-        <translation type="obsolete">设备拔出!</translation>
-    </message>
-    <message>
-        <source>Do you want to save the session?</source>
-        <translation type="obsolete">是否需要保存数据？</translation>
-    </message>
-    <message>
-        <source>Save</source>
-        <translation type="obsolete">保存</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="obsolete">取消</translation>
-    </message>
-    <message>
-        <source>Create New Session</source>
-        <translation type="obsolete">创建新会话</translation>
-    </message>
-    <message>
-        <source>device detached!
-Do you want to save the session?</source>
-        <translation type="obsolete">设备拔出!
-是否保存当前会话?</translation>
-    </message>
-    <message>
-        <source>Start/Stop Acquisition</source>
-        <translation type="obsolete">开始/停止 采集</translation>
-    </message>
-    <message>
-        <source>Repeat Acquisition</source>
-        <translation type="obsolete">重复采样</translation>
-    </message>
-    <message>
-        <source>Settings</source>
-        <translation type="obsolete">设置</translation>
-    </message>
-    <message>
-        <source>Reload</source>
-        <translation type="obsolete">重复采集</translation>
-    </message>
-    <message>
-        <source>Run</source>
-        <translation type="obsolete">开始</translation>
-    </message>
-    <message>
-        <source>Stop</source>
-        <translation type="obsolete">停止</translation>
-    </message>
-    <message>
-        <source>Confirmation</source>
-        <translation type="obsolete">确认</translation>
-    </message>
-    <message>
-        <source>There is unsaved data. Close anyway?</source>
-        <translation type="obsolete">数据未保存。是否关闭？</translation>
-    </message>
-    <message>
-        <source>This session contains unsaved data. Close it anyway?</source>
-        <translation type="obsolete">此会话数据未保存。是否关闭？</translation>
-    </message>
 </context>
 <context>
     <name>pv::MainWindow</name>
-    <message>
-        <source>Binary Decoder Output View</source>
-        <translation>二进制解码器</translation>
-    </message>
-    <message>
-        <source>Tabular Decoder Output View</source>
-        <translation>表格解码器</translation>
-    </message>
-    <message>
-        <location filename="../pv/mainwindow.cpp" line="76"/>
-        <source>LogicAnalyzer</source>
-        <translation>LogicAnalyzer</translation>
-    </message>
     <message>
         <source>Current available memory size is less than 4GB and will affect usage effect. 
 Do you want to continue to use?</source>
@@ -338,10 +103,6 @@ Do you want to save the session?</source>
 是否保存当前会话?</translation>
     </message>
     <message>
-        <source>Create New Session</source>
-        <translation type="vanished">创建新会话</translation>
-    </message>
-    <message>
         <location filename="../pv/mainwindow.cpp" line="927"/>
         <source>Start/Stop Acquisition</source>
         <translation>开始/停止 采集</translation>
@@ -357,10 +118,6 @@ Do you want to save the session?</source>
         <translation>设置</translation>
     </message>
     <message>
-        <source>Information</source>
-        <translation type="obsolete">信息</translation>
-    </message>
-    <message>
         <location filename="../pv/mainwindow.cpp" line="1002"/>
         <location filename="../pv/mainwindow.cpp" line="1010"/>
         <source>Run</source>
@@ -372,34 +129,10 @@ Do you want to save the session?</source>
         <translation>停止</translation>
     </message>
     <message>
-        <source>Confirmation</source>
-        <translation type="vanished">确认</translation>
-    </message>
-    <message>
-        <source>There is unsaved data. Close anyway?</source>
-        <translation type="vanished">数据未保存。是否关闭？</translation>
-    </message>
-    <message>
-        <source>Capture failed</source>
-        <translation type="vanished">采集失败，请检查当前硬件连接</translation>
-    </message>
-    <message>
-        <source>This session contains unsaved data. Close it anyway?</source>
-        <translation type="vanished">此会话数据未保存。是否关闭？</translation>
-    </message>
-    <message>
         <location filename="../pv/mainwindow.cpp" line="930"/>
         <location filename="../pv/mainwindow.cpp" line="931"/>
         <source>Repeat Acquisition</source>
         <translation>重复采样</translation>
-    </message>
-    <message>
-        <source>Logic Analyzer</source>
-        <translation type="obsolete">逻辑分析仪</translation>
-    </message>
-    <message>
-        <source>Notice</source>
-        <translation type="vanished">提示</translation>
     </message>
     <message>
         <location filename="../pv/mainwindow.cpp" line="108"/>
@@ -416,17 +149,9 @@ Do you want to save the session?</source>
         <translation>警告</translation>
     </message>
     <message>
-        <source>Don&apos;t Save</source>
-        <translation type="vanished">不保存</translation>
-    </message>
-    <message>
         <location filename="../pv/mainwindow.cpp" line="1066"/>
         <source>Untitled</source>
         <translation>未命名</translation>
-    </message>
-    <message>
-        <source>WCH PulseView</source>
-        <translation type="vanished">WCH PulseView</translation>
     </message>
     <message>
         <source>&lt;h3&gt;Unsaved Capture Data&lt;/h3&gt;&lt;p&gt;Data will be permanently lost on exit.&lt;/p&gt;</source>
@@ -453,14 +178,6 @@ Do you want to save the session?</source>
         <location filename="../pv/mainwindow.cpp" line="1365"/>
         <source>This session contains unsaved data. Close anyway?</source>
         <translation>此会话包含未保存的数据。确定关闭？</translation>
-    </message>
-    <message>
-        <source>device detached!</source>
-        <translation type="vanished">设备拔出!</translation>
-    </message>
-    <message>
-        <source>Do you want to save the session?</source>
-        <translation type="vanished">是否需要保存数据？</translation>
     </message>
     <message>
         <source>Save</source>
@@ -529,17 +246,9 @@ You can run this application as root later, or copy 99-weact-ch32h417.rules from
         <translation>无法还原生成的未知类型的信号 %1 (%2)</translation>
     </message>
     <message>
-        <source>Failed to select device</source>
-        <translation type="vanished">无法选择的设备</translation>
-    </message>
-    <message>
-        <source>Failed to open device</source>
-        <translation type="vanished">无法打开的设备</translation>
-    </message>
-    <message>
         <location filename="../pv/session.cpp" line="808"/>
         <source>Error</source>
-        <translation></translation>
+        <translation>错误</translation>
     </message>
     <message>
         <location filename="../pv/session.cpp" line="809"/>
@@ -606,10 +315,6 @@ You can run this application as root later, or copy 99-weact-ch32h417.rules from
         <source>Error while saving: </source>
         <translation>保存时出错： </translation>
     </message>
-    <message>
-        <source>Repeat Acquisition</source>
-        <translation type="vanished">重复采样</translation>
-    </message>
 </context>
 <context>
     <name>pv::binding::Device</name>
@@ -668,7 +373,7 @@ You can run this application as root later, or copy 99-weact-ch32h417.rules from
     <message>
         <location filename="../pv/data/mathsignal.cpp" line="107"/>
         <source>Math%1</source>
-        <translation></translation>
+        <translation>数学%1</translation>
     </message>
     <message>
         <location filename="../pv/data/mathsignal.cpp" line="306"/>
@@ -703,22 +408,22 @@ You can run this application as root later, or copy 99-weact-ch32h417.rules from
     <message>
         <location filename="../pv/data/signalbase.cpp" line="522"/>
         <source>0.9V (for 1.8V CMOS)</source>
-        <translation></translation>
+        <translation>0.9V（适用于 1.8V CMOS）</translation>
     </message>
     <message>
         <location filename="../pv/data/signalbase.cpp" line="523"/>
         <source>1.8V (for 3.3V CMOS)</source>
-        <translation></translation>
+        <translation>1.8V（适用于 3.3V CMOS）</translation>
     </message>
     <message>
         <location filename="../pv/data/signalbase.cpp" line="524"/>
         <source>2.5V (for 5.0V CMOS)</source>
-        <translation></translation>
+        <translation>2.5V（适用于 5.0V CMOS）</translation>
     </message>
     <message>
         <location filename="../pv/data/signalbase.cpp" line="525"/>
         <source>1.5V (for TTL)</source>
-        <translation></translation>
+        <translation>1.5V（适用于 TTL）</translation>
     </message>
     <message>
         <location filename="../pv/data/signalbase.cpp" line="530"/>
@@ -728,22 +433,22 @@ You can run this application as root later, or copy 99-weact-ch32h417.rules from
     <message>
         <location filename="../pv/data/signalbase.cpp" line="531"/>
         <source>0.3V/1.2V (for 1.8V CMOS)</source>
-        <translation></translation>
+        <translation>0.3V/1.2V（适用于 1.8V CMOS）</translation>
     </message>
     <message>
         <location filename="../pv/data/signalbase.cpp" line="532"/>
         <source>0.7V/2.5V (for 3.3V CMOS)</source>
-        <translation></translation>
+        <translation>0.7V/2.5V（适用于 3.3V CMOS）</translation>
     </message>
     <message>
         <location filename="../pv/data/signalbase.cpp" line="533"/>
         <source>1.3V/3.7V (for 5.0V CMOS)</source>
-        <translation></translation>
+        <translation>1.3V/3.7V（适用于 5.0V CMOS）</translation>
     </message>
     <message>
         <location filename="../pv/data/signalbase.cpp" line="534"/>
         <source>0.8V/2.0V (for TTL)</source>
-        <translation></translation>
+        <translation>0.8V/2.0V（适用于 TTL）</translation>
     </message>
 </context>
 <context>
@@ -766,7 +471,7 @@ You can run this application as root later, or copy 99-weact-ch32h417.rules from
     <message>
         <location filename="../pv/dialogs/connect.cpp" line="79"/>
         <source>&amp;USB</source>
-        <translation></translation>
+        <translation>USB(&amp;U)</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/connect.cpp" line="80"/>
@@ -776,7 +481,7 @@ You can run this application as root later, or copy 99-weact-ch32h417.rules from
     <message>
         <location filename="../pv/dialogs/connect.cpp" line="81"/>
         <source>&amp;TCP/IP</source>
-        <translation></translation>
+        <translation>TCP/IP(&amp;T)</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/connect.cpp" line="116"/>
@@ -809,7 +514,7 @@ You can run this application as root later, or copy 99-weact-ch32h417.rules from
     <message>
         <location filename="../pv/dialogs/decoder_channel_dialog.cpp" line="84"/>
         <source>&lt;b&gt;%1&lt;/b&gt;&lt;br/&gt;&lt;i&gt;%2&lt;/i&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;%1&lt;/b&gt;&lt;br/&gt;&lt;i&gt;%2&lt;/i&gt;</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/decoder_channel_dialog.cpp" line="97"/>
@@ -839,7 +544,7 @@ You can run this application as root later, or copy 99-weact-ch32h417.rules from
     <message>
         <location filename="../pv/dialogs/decoder_channel_dialog.cpp" line="195"/>
         <source>&lt;b&gt;%1&lt;/b&gt; (%2)%3</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;%1&lt;/b&gt;（%2）%3</translation>
     </message>
 </context>
 <context>
@@ -924,7 +629,7 @@ You can run this application as root later, or copy 99-weact-ch32h417.rules from
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="189"/>
         <source>IAP VID: 0x%1, PID: 0x%2</source>
-        <translation type="unfinished"></translation>
+        <translation>IAP VID：0x%1，PID：0x%2</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/iapdialog.cpp" line="211"/>
@@ -1245,7 +950,31 @@ Please check the device connection and firmware file.</source>
         <source>Upgrade complete</source>
         <translation>升级完成</translation>
     </message>
-</context>
+<message>
+        <location filename="lu_src/pulseview/pv/dialogs/iapdialog.cpp" line="335"/>
+        <source>HID write too long (%1 &gt; %2), rejected</source>
+        <translation>HID 写入数据过长（%1 &gt; %2），已拒绝</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/dialogs/iapdialog.cpp" line="457"/>
+        <source>IAP command sent, closing the libusb device...</source>
+        <translation>IAP 命令已发送，正在关闭 libusb 设备...</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/dialogs/iapdialog.cpp" line="461"/>
+        <source>libusb device closed, waiting for the mode switch...</source>
+        <translation>libusb 设备已关闭，等待设备切换模式...</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/dialogs/iapdialog.cpp" line="478"/>
+        <source>On this platform the IAP command can only be sent through libusb</source>
+        <translation>当前平台仅支持通过 libusb 发送 IAP 命令</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/dialogs/iapdialog.cpp" line="829"/>
+        <source>Device already in HID/IAP mode, skipping the mode switch</source>
+        <translation>设备已处于 HID/IAP 模式，跳过模式切换</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/dialogs/iapdialog.cpp" line="830"/>
+        <source>Device already in IAP mode...</source>
+        <translation>设备已处于 IAP 模式...</translation>
+    </message></context>
 <context>
     <name>pv::dialogs::Settings</name>
     <message>
@@ -1309,11 +1038,6 @@ Please check the device connection and firmware file.</source>
         <location filename="../pv/dialogs/settings.cpp" line="280"/>
         <source>Save session &amp;setup along with .sr file</source>
         <translation>将会话设置与 .sr文件一起保存</translation>
-    </message>
-    <message>
-        <location filename="../pv/dialogs/settings.cpp" line="284"/>
-        <source>Start acquisition for all open sessions when clicking &apos;Run&apos;</source>
-        <translation>单击“开始”时启动所有打开会话的采集</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="299"/>
@@ -1395,17 +1119,17 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="369"/>
         <source>None</source>
-        <translation></translation>
+        <translation>无</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="370"/>
         <source>Background</source>
-        <translation></translation>
+        <translation>背景</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="371"/>
         <source>Dots</source>
-        <translation></translation>
+        <translation>点</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="376"/>
@@ -1440,22 +1164,22 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="430"/>
         <source>%s = sample range; %d: decoder name; %r: row name; %c: class name</source>
-        <translation></translation>
+        <translation>%s = 采样范围；%d：解码器名称；%r：行名称；%c：类名</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="433"/>
         <source>%1: longest annotation text; %a: all annotation texts; %q: use quotation marks</source>
-        <translation></translation>
+        <translation>%1：最长的注释文本；%a：全部注释文本；%q：使用引号</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="453"/>
         <source>%1&lt;br /&gt;&lt;a href=&quot;http://%2&quot;&gt;%2&lt;/a&gt;</source>
-        <translation></translation>
+        <translation>%1&lt;br /&gt;&lt;a href=&quot;http://%2&quot;&gt;%2&lt;/a&gt;</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="454"/>
         <source>GNU GPL, version 3 or later</source>
-        <translation></translation>
+        <translation>GNU GPL 第 3 版或更高版本</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="465"/>
@@ -1549,7 +1273,7 @@ Please keep in mind that the application may need a restart to display correctly
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="838"/>
         <source>Log Files (*.txt *.log);;All Files (*)</source>
-        <translation></translation>
+        <translation>日志文件 (*.txt *.log);;所有文件 (*)</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="850"/>
@@ -1564,7 +1288,7 @@ Please keep in mind that the application may need a restart to display correctly
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="860"/>
         <source>Error</source>
-        <translation></translation>
+        <translation>错误</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="860"/>
@@ -1574,9 +1298,13 @@ Please keep in mind that the application may need a restart to display correctly
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="874"/>
         <source>%1 Log</source>
-        <translation></translation>
+        <translation>%1 日志</translation>
     </message>
-</context>
+<message>
+        <location filename="lu_src/pulseview/pv/dialogs/settings.cpp" line="489"/>
+        <source>&lt;tr&gt;&lt;td colspan=&quot;2&quot;&gt;(Note: Set environment variable SIGROKDECODE_DIR to add a custom directory)&lt;/td&gt;&lt;/tr&gt;</source>
+        <translation>&lt;tr&gt;&lt;td colspan=&quot;2&quot;&gt;（提示：设置环境变量 SIGROKDECODE_DIR 可添加自定义目录）&lt;/td&gt;&lt;/tr&gt;</translation>
+    </message></context>
 <context>
     <name>pv::dialogs::StoreProgress</name>
     <message>
@@ -1598,49 +1326,9 @@ Please keep in mind that the application may need a restart to display correctly
 <context>
     <name>pv::popups::Channels</name>
     <message>
-        <source>All</source>
-        <translation type="vanished">全部</translation>
-    </message>
-    <message>
-        <source>Logic</source>
-        <translation type="vanished">逻辑</translation>
-    </message>
-    <message>
-        <source>Analog</source>
-        <translation type="vanished">模拟</translation>
-    </message>
-    <message>
-        <source>Named</source>
-        <translation type="vanished">更名过</translation>
-    </message>
-    <message>
-        <source>Unnamed</source>
-        <translation type="vanished">未更名</translation>
-    </message>
-    <message>
-        <source>Changing</source>
-        <translation type="vanished">有数据的</translation>
-    </message>
-    <message>
-        <source>Non-changing</source>
-        <translation type="vanished">无数据的</translation>
-    </message>
-    <message>
-        <source>Disable: </source>
-        <translation type="vanished">禁用： </translation>
-    </message>
-    <message>
-        <source>Enable: </source>
-        <translation type="vanished">启用： </translation>
-    </message>
-    <message>
         <location filename="../pv/popups/channels.cpp" line="953"/>
         <source>The current mode does not support opening this channel.</source>
         <translation>当前模式不支持该通道</translation>
-    </message>
-    <message>
-        <source>None</source>
-        <translation type="vanished">全关</translation>
     </message>
     <message>
         <location filename="../pv/popups/channels.cpp" line="348"/>
@@ -1755,22 +1443,6 @@ Please keep in mind that the application may need a restart to display correctly
         <translation type="unfinished">使用2通道 (最高 200MHz)</translation>
     </message>
     <message>
-        <source>Use 2 channels (Max 50MHz)</source>
-        <translation type="vanished">使用2通道 (最高 50MHz)</translation>
-    </message>
-    <message>
-        <source>Use 4 channels (Max 50MHz)</source>
-        <translation type="vanished">使用4通道 (最高 50MHz)</translation>
-    </message>
-    <message>
-        <source>Use 8 channels (Max 50MHz)</source>
-        <translation type="vanished">使用8通道 (最高 50MHz)</translation>
-    </message>
-    <message>
-        <source>Use 16 channels (Max 50MHz)</source>
-        <translation type="vanished">使用16通道 (最高 50MHz)</translation>
-    </message>
-    <message>
         <location filename="../pv/popups/channels.cpp" line="285"/>
         <location filename="../pv/popups/channels.cpp" line="1091"/>
         <source>Use 4 channels (Max 200MHz)</source>
@@ -1815,12 +1487,12 @@ Please keep in mind that the application may need a restart to display correctly
     <message>
         <location filename="../pv/popups/channels.cpp" line="395"/>
         <source>8-bit</source>
-        <translation type="unfinished"></translation>
+        <translation>8 位</translation>
     </message>
     <message>
         <location filename="../pv/popups/channels.cpp" line="396"/>
         <source>10-bit</source>
-        <translation type="unfinished"></translation>
+        <translation>10 位</translation>
     </message>
     <message>
         <location filename="../pv/popups/channels.cpp" line="400"/>
@@ -1849,7 +1521,11 @@ Please keep in mind that the application may need a restart to display correctly
         <source>Use 4 channels (Max 40MHz)</source>
         <translation>使用4通道 (最高 40MHz)</translation>
     </message>
-</context>
+<message>
+        <location filename="lu_src/pulseview/pv/popups/channels.cpp" line="189"/>
+        <source>SN:</source>
+        <translation>序列号：</translation>
+    </message></context>
 <context>
     <name>pv::prop::Bool</name>
     <message>
@@ -1910,7 +1586,7 @@ Please keep in mind that the application may need a restart to display correctly
     <message>
         <location filename="../pv/subwindows/decoder_selector/model.cpp" line="44"/>
         <source>ID</source>
-        <translation></translation>
+        <translation>ID</translation>
     </message>
     <message>
         <location filename="../pv/subwindows/decoder_selector/model.cpp" line="51"/>
@@ -1928,12 +1604,12 @@ Please keep in mind that the application may need a restart to display correctly
     <message>
         <location filename="../pv/subwindows/decoder_selector/subwindow.cpp" line="253"/>
         <source>, %1</source>
-        <translation type="unfinished"></translation>
+        <translation>，%1</translation>
     </message>
     <message>
         <location filename="../pv/subwindows/decoder_selector/subwindow.cpp" line="270"/>
         <source>&lt;p align=&apos;right&apos;&gt;Tags: %1&lt;/p&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;p align='right'&gt;标签：%1&lt;/p&gt;</translation>
     </message>
     <message>
         <location filename="../pv/subwindows/decoder_selector/subwindow.cpp" line="309"/>
@@ -1950,57 +1626,9 @@ Please keep in mind that the application may need a restart to display correctly
 </context>
 <context>
     <name>pv::toolbars</name>
-    <message>
-        <source>Failed to configure sample count:</source>
-        <translation type="obsolete">无法配置采样计数：</translation>
-    </message>
-    <message>
-        <source>Missing Cursors</source>
-        <translation type="obsolete">缺少光标</translation>
-    </message>
-    <message>
-        <source>You need to set the cursors before you can save the data enclosed by them to a session file (e.g. using the Show Cursors button).</source>
-        <translation type="obsolete">您需要设置光标，然后才能将光标范围内的数据保存到会话文件中（例如，使用“显示光标”按钮）。</translation>
-    </message>
-    <message>
-        <source>Invalid Range</source>
-        <translation type="obsolete">无效的范围</translation>
-    </message>
-    <message>
-        <source>The cursors don&apos;t define a valid range of samples.</source>
-        <translation type="obsolete">光标没有定义有效的采样范围。</translation>
-    </message>
-    <message>
-        <source>All Files</source>
-        <translation type="obsolete">所有文件</translation>
-    </message>
-    <message>
-        <source>Save File</source>
-        <translation type="obsolete">保存文件</translation>
-    </message>
-    <message>
-        <source>Export %1</source>
-        <translation type="obsolete">导出 %1</translation>
-    </message>
-    <message>
-        <source>Import File</source>
-        <translation type="obsolete">导入文件</translation>
-    </message>
-    <message>
-        <source>Import %1</source>
-        <translation type="obsolete">导入 %1</translation>
-    </message>
-    <message>
-        <source>Open File</source>
-        <translation type="obsolete">打开文件</translation>
-    </message>
 </context>
 <context>
     <name>pv::toolbars::MainBar</name>
-    <message>
-        <source>New &amp;View</source>
-        <translation type="vanished">新建视图</translation>
-    </message>
     <message>
         <source>Warning</source>
         <translation>警告</translation>
@@ -2023,10 +1651,6 @@ Please keep in mind that the application may need a restart to display correctly
         <location filename="../pv/toolbars/mainbar.cpp" line="211"/>
         <source>Restore Session Setu&amp;p...</source>
         <translation>从文件打开会话设置...</translation>
-    </message>
-    <message>
-        <source>&amp;Save...</source>
-        <translation type="vanished">保存... ( &amp;S )</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="222"/>
@@ -2080,14 +1704,6 @@ Please keep in mind that the application may need a restart to display correctly
         <translation>添加协议解码器</translation>
     </message>
     <message>
-        <source>Add math signal</source>
-        <translation type="vanished">添加 math 信号</translation>
-    </message>
-    <message>
-        <source>Configure Device</source>
-        <translation type="vanished">设备配置</translation>
-    </message>
-    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="398"/>
         <source>Configure Channels</source>
         <translation>配置</translation>
@@ -2107,27 +1723,23 @@ Please keep in mind that the application may need a restart to display correctly
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1684"/>
         <source>Failed to set CH32H417 mode on device switch:</source>
-        <translation type="unfinished"></translation>
+        <translation>设备切换时设置 CH32H417 模式失败：</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1886"/>
         <source>sigrok Sessions (*.sr);;All Files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>sigrok 会话 (*.sr);;所有文件 (*)</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1928"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="1944"/>
         <source>PulseView Session Setups (*.pvs);;All Files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>PulseView 会话设置 (*.pvs);;所有文件 (*)</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2017"/>
         <source>Total Sampling Count: %1</source>
         <translation>总采样数：%1</translation>
-    </message>
-    <message>
-        <source>Failed to get sample rate:</source>
-        <translation type="vanished">无法获取采样率：</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="198"/>
@@ -2156,18 +1768,9 @@ Please keep in mind that the application may need a restart to display correctly
         <translation>版本信息</translation>
     </message>
     <message>
-        <source>feedback</source>
-        <translation type="vanished">在线反馈</translation>
-    </message>
-    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="290"/>
         <source>FW Update</source>
         <translation>固件升级</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="291"/>
-        <source>User Guide</source>
-        <translation>使用帮助</translation>
     </message>
     <message>
         <source>About</source>
@@ -2196,17 +1799,17 @@ Please keep in mind that the application may need a restart to display correctly
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="962"/>
         <source>Failed to configure pattern mode:</source>
-        <translation type="unfinished"></translation>
+        <translation>配置工作模式失败：</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="983"/>
         <source>Failed to configure ADC channel:</source>
-        <translation type="unfinished"></translation>
+        <translation>配置 ADC 通道失败：</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1006"/>
         <source>Failed to configure ADC precision:</source>
-        <translation type="unfinished"></translation>
+        <translation>配置 ADC 精度失败：</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1356"/>
@@ -2241,7 +1844,7 @@ Please keep in mind that the application may need a restart to display correctly
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1555"/>
         <source>%1 files </source>
-        <translation type="unfinished"></translation>
+        <translation>%1 个文件 </translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1560"/>
@@ -2263,7 +1866,7 @@ Please keep in mind that the application may need a restart to display correctly
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1609"/>
         <source>%1 files</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 个文件</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1619"/>
@@ -2390,25 +1993,76 @@ Please check the device connection and firmware file.</source>
         <source>Device Options</source>
         <translation>设备选项</translation>
     </message>
-    <message>
-        <source>Total sampling time: %1</source>
-        <translation type="vanished">总采样时间： %1</translation>
+<message>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="163"/>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1088"/>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1107"/>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1145"/>
+        <source>Demo</source>
+        <translation>演示</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="164"/>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1089"/>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1108"/>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1146"/>
+        <source>Device Status: Demo</source>
+        <translation>设备状态：演示</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="727"/>
+        <source>Failed to get sample rate value:</source>
+        <translation>获取采样率数值失败：</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="982"/>
+        <source>Failed to configure pre-trigger:</source>
+        <translation>配置预触发失败：</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1095"/>
+        <source>File</source>
+        <translation>文件</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1096"/>
+        <source>Device Status: File</source>
+        <translation>设备状态：文件</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1132"/>
+        <source>USB2.0</source>
+        <translation>USB2.0</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1133"/>
+        <source>Device Status: USB 2.0</source>
+        <translation>设备状态：USB 2.0</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1136"/>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1141"/>
+        <source>USB3.0</source>
+        <translation>USB3.0</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1137"/>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1142"/>
+        <source>Device Status: USB 3.0</source>
+        <translation>设备状态：USB 3.0</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="1641"/>
+        <source>Error</source>
+        <translation>错误</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="2342"/>
+        <source>&lt;b&gt;FPGA Version:&lt;/b&gt; %1</source>
+        <translation>&lt;b&gt;FPGA 版本：&lt;/b&gt;%1</translation>
     </message>
-</context>
+<message>
+        <location filename="lu_src/pulseview/pv/toolbars/mainbar.cpp" line="2483"/>
+        <source>PDF file not found:
+%1
+
+Make sure the doc directory and the user manual are present.</source>
+        <translation>找不到 PDF 文件：
+%1
+
+请确认 doc 目录和用户手册文件是否存在。</translation>
+    </message></context>
 <context>
     <name>pv::views</name>
-    <message>
-        <source>Trace View</source>
-        <translation type="obsolete">采集视图</translation>
-    </message>
-    <message>
-        <source>Binary Decoder Output View</source>
-        <translation>二进制解码器</translation>
-    </message>
-    <message>
-        <source>Tabular Decoder Output View</source>
-        <translation>表格解码器</translation>
-    </message>
 </context>
 <context>
     <name>pv::views::decoder_binary::View</name>
@@ -2464,7 +2118,7 @@ Please check the device connection and firmware file.</source>
         <location filename="../pv/views/decoder_binary/view.cpp" line="362"/>
         <location filename="../pv/views/decoder_binary/view.cpp" line="414"/>
         <source>Error</source>
-        <translation type="unfinished"></translation>
+        <translation>错误</translation>
     </message>
     <message>
         <location filename="../pv/views/decoder_binary/view copy.cpp" line="391"/>
@@ -2513,36 +2167,16 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/views/tabular_decoder/model.cpp" line="85"/>
         <source>s</source>
-        <translation></translation>
+        <translation>s</translation>
     </message>
     <message>
         <location filename="../pv/views/tabular_decoder/model.cpp" line="85"/>
         <source>sa</source>
-        <translation></translation>
+        <translation>sa</translation>
     </message>
 </context>
 <context>
     <name>pv::views::tabular_decoder::View</name>
-    <message>
-        <source>CSV, commas escaped</source>
-        <translation>CSV, 逗号已转义</translation>
-    </message>
-    <message>
-        <source>CSV, fields quoted</source>
-        <translation>CSV, 字段已加引号</translation>
-    </message>
-    <message>
-        <source>Show all</source>
-        <translation>全部显示</translation>
-    </message>
-    <message>
-        <source>Show all and focus on newest</source>
-        <translation>全部显示并锁定最新内容</translation>
-    </message>
-    <message>
-        <source>Show visible in main view</source>
-        <translation>只显示当前主窗口内数据的解码</translation>
-    </message>
     <message>
         <location filename="../pv/views/tabular_decoder/view copy.cpp" line="177"/>
         <location filename="../pv/views/tabular_decoder/view.cpp" line="183"/>
@@ -2577,7 +2211,7 @@ Please check the device connection and firmware file.</source>
         <location filename="../pv/views/tabular_decoder/view copy.cpp" line="507"/>
         <location filename="../pv/views/tabular_decoder/view.cpp" line="510"/>
         <source>Error</source>
-        <translation></translation>
+        <translation>错误</translation>
     </message>
     <message>
         <location filename="../pv/views/tabular_decoder/view copy.cpp" line="507"/>
@@ -2588,22 +2222,6 @@ Please check the device connection and firmware file.</source>
 </context>
 <context>
     <name>pv::views::trace</name>
-    <message>
-        <source>Width: </source>
-        <translation type="obsolete">宽度: </translation>
-    </message>
-    <message>
-        <source>Period: </source>
-        <translation type="obsolete">周期: </translation>
-    </message>
-    <message>
-        <source>Frequency: </source>
-        <translation type="obsolete">频率: </translation>
-    </message>
-    <message>
-        <source>Duty Cycle: </source>
-        <translation type="obsolete">占空比: </translation>
-    </message>
 </context>
 <context>
     <name>pv::views::trace::AnalogSignal</name>
@@ -2620,7 +2238,7 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/views/trace/analogsignal.cpp" line="902"/>
         <source> pixels</source>
-        <translation></translation>
+        <translation> 像素</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/analogsignal.cpp" line="906"/>
@@ -2630,7 +2248,7 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/views/trace/analogsignal.cpp" line="925"/>
         <source>V/div</source>
-        <translation></translation>
+        <translation>V/格</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/analogsignal.cpp" line="929"/>
@@ -2686,18 +2304,6 @@ Please check the device connection and firmware file.</source>
         <location filename="../pv/views/trace/analogsignal.cpp" line="979"/>
         <source>Show traces for</source>
         <translation>显示采集</translation>
-    </message>
-    <message>
-        <source>Voltage: </source>
-        <translation type="vanished">电压: </translation>
-    </message>
-    <message>
-        <source>Period: </source>
-        <translation type="obsolete">周期: </translation>
-    </message>
-    <message>
-        <source>Frequency: </source>
-        <translation type="obsolete">频率: </translation>
     </message>
 </context>
 <context>
@@ -2802,12 +2408,13 @@ Please check the device connection and firmware file.</source>
         <location filename="../pv/views/trace/decodetrace.cpp" line="1177"/>
         <source>%1:
 %2</source>
-        <translation></translation>
+        <translation>%1：
+%2</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/decodetrace.cpp" line="1221"/>
         <source>&lt;b&gt;%1&lt;/b&gt; (%2) %3</source>
-        <translation></translation>
+        <translation>&lt;b&gt;%1&lt;/b&gt;（%2）%3</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/decodetrace.cpp" line="1290"/>
@@ -2817,13 +2424,13 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/views/trace/decodetrace.cpp" line="1290"/>
         <source>Text Files (*.txt);;All Files (*)</source>
-        <translation></translation>
+        <translation>文本文件 (*.txt);;所有文件 (*)</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/decodetrace.cpp" line="1355"/>
         <location filename="../pv/views/trace/decodetrace.cpp" line="1364"/>
         <source>Error</source>
-        <translation></translation>
+        <translation>错误</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/decodetrace.cpp" line="1355"/>
@@ -2851,7 +2458,7 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/views/trace/flag.cpp" line="146"/>
         <source>Text</source>
-        <translation></translation>
+        <translation>文本</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/flag.cpp" line="155"/>
@@ -2907,7 +2514,7 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/views/trace/logicsignal.cpp" line="610"/>
         <source> pixels</source>
-        <translation></translation>
+        <translation> 像素</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/logicsignal.cpp" line="614"/>
@@ -2930,353 +2537,354 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="95"/>
         <source>Inputs:</source>
-        <translation type="unfinished"></translation>
+        <translation>输入：</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="101"/>
         <source>Variables:</source>
-        <translation type="unfinished"></translation>
+        <translation>变量：</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="103"/>
         <source>Basic operators:</source>
-        <translation type="unfinished"></translation>
+        <translation>基本运算符：</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="110"/>
         <source>Assignments:</source>
-        <translation type="unfinished"></translation>
+        <translation>赋值：</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="120"/>
         <source>General purpose functions:</source>
-        <translation type="unfinished"></translation>
+        <translation>通用函数：</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="121"/>
         <source>abs(x)		Absolute value of x</source>
-        <translation type="unfinished"></translation>
+        <translation>abs(x)		x 的绝对值</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="122"/>
         <source>avg(x, y, ...)	Average of all input values</source>
-        <translation type="unfinished"></translation>
+        <translation>avg(x, y, ...)	Average of all input values</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="123"/>
         <source>ceil(x)		Smallest integer that is greater than or equal to x</source>
-        <translation type="unfinished"></translation>
+        <translation>ceil(x)		大于或等于 x 的最小整数</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="124"/>
         <source>clamp(lb, x, ub)	Clamp x in range between lb and ub, where lb &lt; ub</source>
-        <translation type="unfinished"></translation>
+        <translation>clamp(lb, x, ub)	Clamp x in range between lb and ub, where lb &lt; ub</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="125"/>
         <source>equal(x, y)	Equality test between x and y using normalised epsilon</source>
-        <translation type="unfinished"></translation>
+        <translation>equal(x, y)	Equality test between x and y using normalised epsilon</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="126"/>
         <source>erf(x)		Error function of x</source>
-        <translation type="unfinished"></translation>
+        <translation>erf(x)		x 的误差函数</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="127"/>
         <source>erfc(x)		Complimentary error function of x</source>
-        <translation type="unfinished"></translation>
+        <translation>erfc(x)		x 的互补误差函数</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="128"/>
         <source>exp(x)		e to the power of x</source>
-        <translation type="unfinished"></translation>
+        <translation>exp(x)		e 的 x 次幂</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="129"/>
         <source>expm1(x)	e to the power of x minus 1, where x is very small.</source>
-        <translation type="unfinished"></translation>
+        <translation>expm1(x)	e 的 x 次幂减 1（适用于 x 极小的情况）</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="130"/>
         <source>floor(x)		Largest integer that is less than or equal to x</source>
-        <translation type="unfinished"></translation>
+        <translation>floor(x)		小于或等于 x 的最大整数</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="131"/>
         <source>frac(x)		Fractional portion of x</source>
-        <translation type="unfinished"></translation>
+        <translation>frac(x)		x 的小数部分</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="132"/>
         <source>hypot(x)		Hypotenuse of x and y (i.e. sqrt(x*x + y*y))</source>
-        <translation type="unfinished"></translation>
+        <translation>hypot(x)		x 与 y 的斜边（即 sqrt(x*x + y*y)）</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="133"/>
         <source>iclamp(lb, x, ub)	Inverse-clamp x outside of the range lb and ub, where lb &lt; ub.
 		If x is within the range it will snap to the closest bound</source>
-        <translation type="unfinished"></translation>
+        <translation>iclamp(lb, x, ub)	Inverse-clamp x outside of the range lb and ub, where lb &lt; ub.
+		If x is within the range it will snap to the closest bound</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="134"/>
         <source>inrange(lb, x, ub)	In-range returns true when x is within the range lb and ub, where lb &lt; ub.</source>
-        <translation type="unfinished"></translation>
+        <translation>inrange(lb, x, ub)	In-range returns true when x is within the range lb and ub, where lb &lt; ub.</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="135"/>
         <source>log(x)		Natural logarithm of x</source>
-        <translation type="unfinished"></translation>
+        <translation>log(x)		x 的自然对数</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="136"/>
         <source>log10(x)		Base 10 logarithm of x</source>
-        <translation type="unfinished"></translation>
+        <translation>log10(x)		x 以 10 为底的对数</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="140"/>
         <source>log1p(x)		Natural logarithm of 1 + x, where x is very small</source>
-        <translation type="unfinished"></translation>
+        <translation>log1p(x)		1 + x 的自然对数（适用于 x 极小的情况）</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="141"/>
         <source>log2(x)		Base 2 logarithm of x</source>
-        <translation type="unfinished"></translation>
+        <translation>log2(x)		x 以 2 为底的对数</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="142"/>
         <source>logn(x)		Base N logarithm of x, where n is a positive integer</source>
-        <translation type="unfinished"></translation>
+        <translation>logn(x)		x 以 N 为底的对数（n 为正整数）</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="143"/>
         <source>max(x, y, ...)	Largest value of all the inputs</source>
-        <translation type="unfinished"></translation>
+        <translation>max(x, y, ...)	Largest value of all the inputs</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="144"/>
         <source>min(x, y, ...)	Smallest value of all the inputs</source>
-        <translation type="unfinished"></translation>
+        <translation>min(x, y, ...)	Smallest value of all the inputs</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="145"/>
         <source>mul(x, y, ...)	Product of all the inputs</source>
-        <translation type="unfinished"></translation>
+        <translation>mul(x, y, ...)	Product of all the inputs</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="146"/>
         <source>ncdf(x)		Normal cumulative distribution function</source>
-        <translation type="unfinished"></translation>
+        <translation>ncdf(x)		正态累积分布函数</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="147"/>
         <source>nequal(x, y)	Not-equal test between x and y using normalised epsilon</source>
-        <translation type="unfinished"></translation>
+        <translation>nequal(x, y)	Not-equal test between x and y using normalised epsilon</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="148"/>
         <source>pow(x, y)	x to the power of y</source>
-        <translation type="unfinished"></translation>
+        <translation>pow(x, y)	x to the power of y</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="149"/>
         <source>root(x, n)	Nth-Root of x, where n is a positive integer</source>
-        <translation type="unfinished"></translation>
+        <translation>root(x, n)	Nth-Root of x, where n is a positive integer</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="150"/>
         <source>round(x)		Round x to the nearest integer</source>
-        <translation type="unfinished"></translation>
+        <translation>round(x)		将 x 四舍五入到最近的整数</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="151"/>
         <source>roundn(x, n)	Round x to n decimal places, where n &gt; 0 and is an integer</source>
-        <translation type="unfinished"></translation>
+        <translation>roundn(x, n)	Round x to n decimal places, where n &gt; 0 and is an integer</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="152"/>
         <source>sgn(x)		Sign of x; -1 if x &lt; 0, +1 if x &gt; 0, else zero</source>
-        <translation type="unfinished"></translation>
+        <translation>sgn(x)		x 的符号；x &lt; 0 为 -1，x &gt; 0 为 +1，否则为 0</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="153"/>
         <source>sqrt(x)		Square root of x, where x &gt;= 0</source>
-        <translation type="unfinished"></translation>
+        <translation>sqrt(x)		x 的平方根（x &gt;= 0）</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="154"/>
         <source>sum(x, y, ..,)	Sum of all the inputs</source>
-        <translation type="unfinished"></translation>
+        <translation>sum(x, y, ..,)	Sum of all the inputs</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="155"/>
         <source>swap(x, y)	Swap the values of the variables x and y and return the current value of y</source>
-        <translation type="unfinished"></translation>
+        <translation>swap(x, y)	Swap the values of the variables x and y and return the current value of y</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="156"/>
         <source>trunc(x)		Integer portion of x</source>
-        <translation type="unfinished"></translation>
+        <translation>trunc(x)		Integer portion of x</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="160"/>
         <source>Trigonometry functions:</source>
-        <translation type="unfinished"></translation>
+        <translation>三角函数：</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="161"/>
         <source>acos(x)		Arc cosine of x expressed in radians. Interval [-1,+1]</source>
-        <translation type="unfinished"></translation>
+        <translation>acos(x)		x 的反余弦（弧度）。区间 [-1,+1]</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="162"/>
         <source>acosh(x)		Inverse hyperbolic cosine of x expressed in radians</source>
-        <translation type="unfinished"></translation>
+        <translation>acosh(x)		x 的反双曲余弦（弧度）</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="163"/>
         <source>asin(x)		Arc sine of x expressed in radians. Interval [-1,+1]</source>
-        <translation type="unfinished"></translation>
+        <translation>asin(x)		x 的反正弦（弧度）。区间 [-1,+1]</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="164"/>
         <source>asinh(x)		Inverse hyperbolic sine of x expressed in radians</source>
-        <translation type="unfinished"></translation>
+        <translation>asinh(x)		x 的反双曲正弦（弧度）</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="165"/>
         <source>atan(x)		Arc tangent of x expressed in radians. Interval [-1,+1]</source>
-        <translation type="unfinished"></translation>
+        <translation>atan(x)		x 的反正切（弧度）。区间 [-1,+1]</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="166"/>
         <source>atan2(x, y)	Arc tangent of (x / y) expressed in radians. [-pi,+pi]  </source>
-        <translation type="unfinished"></translation>
+        <translation>atan2(x, y)	Arc tangent of (x / y) expressed in radians. [-pi,+pi]  </translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="167"/>
         <source>atanh(x)		Inverse hyperbolic tangent of x expressed in radians</source>
-        <translation type="unfinished"></translation>
+        <translation>atanh(x)		x 的反双曲正切（弧度）</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="168"/>
         <source>cos(x)		Cosine of x</source>
-        <translation type="unfinished"></translation>
+        <translation>cos(x)		x 的余弦</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="169"/>
         <source>cosh(x)		Hyperbolic cosine of x</source>
-        <translation type="unfinished"></translation>
+        <translation>cosh(x)		x 的双曲余弦</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="170"/>
         <source>cot(x)		Cotangent of x</source>
-        <translation type="unfinished"></translation>
+        <translation>cot(x)		x 的余切</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="171"/>
         <source>csc(x)		Cosectant of x</source>
-        <translation type="unfinished"></translation>
+        <translation>csc(x)		x 的余割</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="172"/>
         <source>sec(x)		Secant of x</source>
-        <translation type="unfinished"></translation>
+        <translation>sec(x)		x 的正割</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="173"/>
         <source>sin(x)		Sine of x</source>
-        <translation type="unfinished"></translation>
+        <translation>sin(x)		x 的正弦</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="174"/>
         <source>sinc(x)		Sine cardinal of x</source>
-        <translation type="unfinished"></translation>
+        <translation>sinc(x)		x 的 sinc 函数</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="175"/>
         <source>sinh(x)		Hyperbolic sine of x</source>
-        <translation type="unfinished"></translation>
+        <translation>sinh(x)		x 的双曲正弦</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="176"/>
         <source>tan(x)		Tangent of x</source>
-        <translation type="unfinished"></translation>
+        <translation>tan(x)		Tangent of x</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="177"/>
         <source>tanh(x)		Hyperbolic tangent of x</source>
-        <translation type="unfinished"></translation>
+        <translation>tanh(x)		Hyperbolic tangent of x</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="178"/>
         <source>deg2rad(x)	Convert x from degrees to radians</source>
-        <translation type="unfinished"></translation>
+        <translation>deg2rad(x)	将 x 从角度转换为弧度</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="179"/>
         <source>deg2grad(x)	Convert x from degrees to gradians</source>
-        <translation type="unfinished"></translation>
+        <translation>deg2grad(x)	将 x 从角度转换为百分度</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="180"/>
         <source>rad2deg(x)	Convert x from radians to degrees</source>
-        <translation type="unfinished"></translation>
+        <translation>rad2deg(x)	将 x 从弧度转换为角度</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="181"/>
         <source>grad2deg(x)	Convert x from gradians to degrees</source>
-        <translation type="unfinished"></translation>
+        <translation>grad2deg(x)	将 x 从百分度转换为角度</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="185"/>
         <source>Logic operators:</source>
-        <translation type="unfinished"></translation>
+        <translation>逻辑运算符：</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="202"/>
         <source>Comparisons:</source>
-        <translation type="unfinished"></translation>
+        <translation>比较运算：</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="203"/>
         <source>x = y or x == y	True only if x is strictly equal to y</source>
-        <translation type="unfinished"></translation>
+        <translation>x = y or x == y	True only if x is strictly equal to y</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="204"/>
         <source>x &lt;&gt; y or x != y	True only if x does not equal y</source>
-        <translation type="unfinished"></translation>
+        <translation>x &lt;&gt; y or x != y	True only if x does not equal y</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="205"/>
         <source>x &lt; y		True only if x is less than y</source>
-        <translation type="unfinished"></translation>
+        <translation>x &lt; y		True only if x is less than y</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="206"/>
         <source>x &lt;= y		True only if x is less than or equal to y</source>
-        <translation type="unfinished"></translation>
+        <translation>x &lt;= y		True only if x is less than or equal to y</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="207"/>
         <source>x &gt; y		True only if x is greater than y</source>
-        <translation type="unfinished"></translation>
+        <translation>x &gt; y		True only if x is greater than y</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="208"/>
         <source>x &gt;= y		True only if x is greater than or equal to y</source>
-        <translation type="unfinished"></translation>
+        <translation>x &gt;= y		True only if x is greater than or equal to y</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="209"/>
         <source>Flow control:</source>
-        <translation type="unfinished"></translation>
+        <translation>Flow control:</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="210"/>
         <source>{ ... }		Beginning and end of instruction block</source>
-        <translation type="unfinished"></translation>
+        <translation>{ ... }		Beginning and end of instruction block</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="211"/>
@@ -3285,12 +2893,16 @@ if (x) y;			variant without implied else
 if (x) { y };		variant with an instruction block
 if (x) y; else z;		variant with explicit else
 if (x) { y } else { z };	variant with instruction blocks</source>
-        <translation type="unfinished"></translation>
+        <translation>if (x, y, z)	If x is true then return y else return z
+if (x) y;			variant without implied else
+if (x) { y };		variant with an instruction block
+if (x) y; else z;		variant with explicit else
+if (x) { y } else { z };	variant with instruction blocks</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="212"/>
         <source>x ? y : z	Ternary operator, equivalent to &apos;if (x, y, z)&apos;</source>
-        <translation type="unfinished"></translation>
+        <translation>x ? y : z	Ternary operator, equivalent to 'if (x, y, z)'</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="213"/>
@@ -3299,14 +2911,20 @@ if (x) { y } else { z };	variant with instruction blocks</source>
  case x &lt; 1: b;	conditions hold true, the default action is used
  default:     c;	to determine the return value
 }</source>
-        <translation type="unfinished"></translation>
+        <translation>switch {		The first true case condition that is encountered will
+ case x &gt; 1: a;	determine the result of the switch. If none of the case
+ case x &lt; 1: b;	conditions hold true, the default action is used
+ default:     c;	to determine the return value
+}</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="217"/>
         <source>while (conditon) {	Evaluates expression repeatedly as long as condition is true,
  expression;	returning the last value of expression
 }</source>
-        <translation type="unfinished"></translation>
+        <translation>while (conditon) {	Evaluates expression repeatedly as long as condition is true,
+ expression;	returning the last value of expression
+}</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="218"/>
@@ -3314,65 +2932,71 @@ if (x) { y } else { z };	variant with instruction blocks</source>
  expression;	returning the last value of expression
 until (condition)
 </source>
-        <translation type="unfinished"></translation>
+        <translation>repeat		Evalues expression repeatedly as long as condition is false,
+ expression;	returning the last value of expression
+until (condition)
+</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="219"/>
         <source>for (var x := 0; condition; x += 1) {	Repeatedly evaluates expression while the condition is true,
  expression			while evaluating the &apos;increment&apos; expression on each loop
 }</source>
-        <translation type="unfinished"></translation>
+        <translation>for (var x := 0; condition; x += 1) {	Repeatedly evaluates expression while the condition is true,
+ expression			while evaluating the 'increment' expression on each loop
+}</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="220"/>
         <source>break		Terminates the execution of the nearest enclosed loop, returning NaN</source>
-        <translation type="unfinished"></translation>
+        <translation>break		终止最近一层循环的执行，返回 NaN</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="221"/>
         <source>break[x]		Terminates the execution of the nearest enclosed loop, returning x</source>
-        <translation type="unfinished"></translation>
+        <translation>break[x]		终止最近一层循环的执行，返回 x</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="222"/>
         <source>continue		Interrupts loop execution and resumes with the next loop iteration</source>
-        <translation type="unfinished"></translation>
+        <translation>continue		中断本次循环，继续下一次迭代</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="223"/>
         <source>return[x]		Returns immediately from within the current expression, returning x</source>
-        <translation type="unfinished"></translation>
+        <translation>return[x]		立即从当前表达式返回，返回值为 x</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="224"/>
         <source>~(expr; expr; ...)	Evaluates each sub-expression and returns the value of the last one
 ~{expr; expr; ...}</source>
-        <translation type="unfinished"></translation>
+        <translation>~(expr; expr; ...)	Evaluates each sub-expression and returns the value of the last one
+~{expr; expr; ...}</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="236"/>
         <source>Copy to expression</source>
-        <translation type="unfinished"></translation>
+        <translation>复制到表达式</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="249"/>
         <source>Basics</source>
-        <translation type="unfinished"></translation>
+        <translation>基础</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="250"/>
         <source>Functions 1</source>
-        <translation type="unfinished"></translation>
+        <translation>函数 1</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="251"/>
         <source>Functions 2</source>
-        <translation type="unfinished"></translation>
+        <translation>函数 2</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="252"/>
         <source>Trigonometry</source>
-        <translation type="unfinished"></translation>
+        <translation>三角函数</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="253"/>
@@ -3382,17 +3006,17 @@ until (condition)
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="254"/>
         <source>Flow Control 1</source>
-        <translation type="unfinished"></translation>
+        <translation>流程控制 1</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="255"/>
         <source>Flow Control 2</source>
-        <translation type="unfinished"></translation>
+        <translation>流程控制 2</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="256"/>
         <source>Examples</source>
-        <translation type="unfinished"></translation>
+        <translation>示例</translation>
     </message>
 </context>
 <context>
@@ -3412,19 +3036,19 @@ until (condition)
         <location filename="../pv/views/trace/mathsignal.cpp" line="320"/>
         <location filename="../pv/views/trace/mathsignal.cpp" line="330"/>
         <source>100</source>
-        <translation></translation>
+        <translation>100</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="321"/>
         <location filename="../pv/views/trace/mathsignal.cpp" line="331"/>
         <source>10000</source>
-        <translation></translation>
+        <translation>10000</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="322"/>
         <location filename="../pv/views/trace/mathsignal.cpp" line="332"/>
         <source>1000000</source>
-        <translation></translation>
+        <translation>1000000</translation>
     </message>
     <message>
         <location filename="../pv/views/trace/mathsignal.cpp" line="325"/>
@@ -3531,7 +3155,7 @@ until (condition)
     <message>
         <location filename="../pv/views/trace/timemarker.cpp" line="223"/>
         <source>Time</source>
-        <translation></translation>
+        <translation>时间</translation>
     </message>
 </context>
 <context>
@@ -3562,17 +3186,9 @@ until (condition)
 </context>
 <context>
     <name>pv::views::trace::View</name>
-    <message>
-        <source>Create marker here</source>
-        <translation type="vanished">在此处创建标记</translation>
-    </message>
 </context>
 <context>
     <name>pv::views::trace::ViewWidget</name>
-    <message>
-        <source>Width: </source>
-        <translation type="obsolete">宽度: </translation>
-    </message>
 </context>
 <context>
     <name>pv::views::trace::Viewport</name>
@@ -3617,7 +3233,7 @@ until (condition)
         <location filename="../pv/widgets/devicetoolbutton.cpp" line="80"/>
         <location filename="../pv/widgets/devicetoolbutton.cpp" line="87"/>
         <source>&lt;No Device&gt;</source>
-        <translation></translation>
+        <translation>&lt;无设备&gt;</translation>
     </message>
 </context>
 <context>
@@ -3636,4 +3252,27 @@ until (condition)
         <translation>导入 %1...</translation>
     </message>
 </context>
+<context>
+    <name>pv::views::tabular_decoder</name>
+<message>
+        <location filename="lu_src/pulseview/pv/views/tabular_decoder/view.cpp" line="58"/>
+        <source>CSV, commas escaped</source>
+        <translation>CSV，逗号转义</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/views/tabular_decoder/view.cpp" line="59"/>
+        <source>CSV, fields quoted</source>
+        <translation>CSV，字段加引号</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/views/tabular_decoder/view.cpp" line="63"/>
+        <source>Show all</source>
+        <translation>显示全部</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/views/tabular_decoder/view.cpp" line="64"/>
+        <source>Show all and focus on newest</source>
+        <translation>显示全部并聚焦最新</translation>
+    </message><message>
+        <location filename="lu_src/pulseview/pv/views/tabular_decoder/view.cpp" line="65"/>
+        <source>Show visible in main view</source>
+        <translation>显示主视图中可见的部分</translation>
+    </message></context>
 </TS>
