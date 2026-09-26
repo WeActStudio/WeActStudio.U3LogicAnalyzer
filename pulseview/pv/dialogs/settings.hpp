@@ -30,6 +30,8 @@
 #include <QStackedWidget>
 #include <QLineEdit>
 
+class QEvent;
+
 namespace pv {
 
 class DeviceManager;
@@ -54,6 +56,10 @@ public:
 	QWidget *get_decoder_settings_form(QWidget *parent);
 	QWidget *get_about_page(QWidget *parent) const;
 	QWidget *get_logging_page(QWidget *parent) const;
+
+protected:
+	/* Called when the application language changed. */
+	void changeEvent(QEvent *event) override;
 
 private Q_SLOTS:
 	void accept();

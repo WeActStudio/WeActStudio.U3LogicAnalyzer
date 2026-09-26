@@ -66,7 +66,12 @@ public:
 	bool ThreadRunning = false;
 
 protected:
+
 	virtual void add_toolbar_widgets();
+
+	/* Called when the application language changed. */
+	void changeEvent(QEvent *event) override;
+	void retranslate_ui();
 
 	virtual void show_multi_segment_ui(const bool state);
 

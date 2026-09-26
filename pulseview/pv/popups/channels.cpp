@@ -188,17 +188,17 @@ void Channels::init_ui()
 		serial_number_label_->setText(QString::fromStdString(device->serial_number()));
 		layout_.addRow(tr("SN:"), serial_number_label_);
 
-		QGroupBox* options_box = new QGroupBox(tr("Options"), this);
-		options_box->setAlignment(Qt::AlignHCenter);
+		options_box_ = new QGroupBox(tr("Options"), this);
+		options_box_->setAlignment(Qt::AlignHCenter);
 		QFormLayout* options_layout = new QFormLayout();
 		QVBoxLayout* vbox_layout = new QVBoxLayout();
 
 		init_threshold_selectors(options_layout);
 		init_channel_radios(vbox_layout);
 
-		options_box->setLayout(options_layout);
+		options_box_->setLayout(options_layout);
 		options_layout->addRow(vbox_layout);
-		layout_.addRow(options_box);
+		layout_.addRow(options_box_);
 	}
 
 	for (auto& entry : device->channel_groups()) {
@@ -1159,6 +1159,80 @@ void Channels::set_usb2_mode(bool is_usb2)
 
 		update_channel_radio_texts();
 	}
+}
+
+void Channels::retranslate_ui()
+{
+	if (options_box_)
+		options_box_->setTitle(tr("Options"));
+	if (logic_props_box_)
+		logic_props_box_->setTitle(tr("Channels"));
+	if (analog_props_box_)
+		analog_props_box_->setTitle(tr("Channels"));
+
+	if (adc_channel_label_)
+		adc_channel_label_->setText(tr("ADC Channel"));
+	if (adc_precision_label_)
+		adc_precision_label_->setText(tr("ADC Precision"));
+
+	set_field_label(device_name_label_, tr("Model:"));
+	set_field_label(serial_number_label_, tr("SN:"));
+	set_field_label(mode_selector_, tr("Device Mode"));
+	set_field_label(pre_trigger_selector_, tr("Pre-trigger"));
+	set_field_label(threshold_selector_1_, tr("Trigger Threshold(0~7 Channel)"));
+	set_field_label(threshold_selector_2_, tr("Trigger Threshold(8~15 Channel)"));
+	set_field_label(voltage_level_spinbox_,
+		is_weact_logic_v2_ ? tr("Input Level") : tr("Threshold Level"));
+
+	if (mode_selector_ && mode_selector_->count() > 0)
+		mode_selector_->setItemText(0, tr("Logic Analyzer"));
+	if (mode_selector_ && mode_selector_->count() > 1)
+		mode_selector_->setItemText(1, tr("ADC"));
+
+	if (adc_channel_selector_ && adc_channel_selector_->count() > 1) {
+		adc_channel_selector_->setItemText(0, tr("ADC Channel 0"));
+		adc_channel_selector_->setItemText(1, tr("ADC Channel 1"));
+	}
+
+	if (adc_precision_selector_ && adc_precision_selector_->count() > 1) {
+		adc_precision_selector_->setItemText(0, tr("8-bit"));
+		adc_precision_selector_->setItemText(1, tr("10-bit"));
+	}
+
+	if (threshold_label_ && voltage_level_spinbox_)
+		threshold_label_->setText(tr("Threshold Level") + ": " +
+			QString::number(voltage_level_spinbox_->value() / 2, 'f', 2) + "V" +
+			", " + QString::number(voltage_level_spinbox_->value() / 2 * 1.394, 'f', 2) +
+			"V" + "(" + tr("Buffer Board") + ")");
+
+	update_channel_radio_texts();
+}
+
+void Channels::set_field_label(QWidget *field, const QString &text)
+{
+	if (!field)
+		return;
+
+	/* The label of a row belongs to the form layout that holds the
+	 * field, and there is more than one form layout here. */
+	for (QFormLayout *form : findChildren<QFormLayout*>()) {
+		QWidget *label = form->labelForField(field);
+		if (!label)
+			continue;
+
+		QLabel *text_label = qobject_cast<QLabel *>(label);
+		if (text_label)
+			text_label->setText(text);
+		return;
+	}
+}
+
+void Channels::changeEvent(QEvent *event)
+{
+	if (event->type() == QEvent::LanguageChange)
+		retranslate_ui();
+
+	pv::widgets::Popup::changeEvent(event);
 }
 
 void Channels::update_channel_radio_texts()

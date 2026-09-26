@@ -26,6 +26,7 @@
 #include <QDir>
 #include <QLibraryInfo>
 #include <QMessageBox>
+#include <QEvent>
 #include <QWidget>
 
 #include <boost/version.hpp>
@@ -99,6 +100,28 @@ void Application::set_hardware_version(uint64_t hardware_version)
 	hd_version_ = hardware_version;
 }
 
+namespace {
+
+/*
+ * A translator is installed for the whole application, but the texts a
+ * widget was given when it was built are long gone by then: Qt only
+ * posts LanguageChange to the application object. Deliver it to every
+ * widget instead, so the ones that care can translate themselves again.
+ */
+void deliver_language_change(QWidget *widget)
+{
+	QEvent event(QEvent::LanguageChange);
+	QApplication::sendEvent(widget, &event);
+
+	for (QObject *child : widget->children()) {
+		QWidget *child_widget = qobject_cast<QWidget *>(child);
+		if (child_widget)
+			deliver_language_change(child_widget);
+	}
+}
+
+}
+
 void Application::switch_language(const QString& language)
 {
 	removeTranslator(&app_translator_);
@@ -136,9 +159,11 @@ void Application::switch_language(const QString& language)
 	}
 
 	if (!topLevelWidgets().empty()) {
-		// Force all windows to update
-		for (QWidget *widget : topLevelWidgets())
+		/* Re-translate every window that is already open, then repaint. */
+		for (QWidget *widget : topLevelWidgets()) {
+			deliver_language_change(widget);
 			widget->update();
+		}
 
 		QWidget* parentWnd = nullptr;
 		const QWidgetList topWindows = qApp->topLevelWidgets();

@@ -160,8 +160,6 @@ namespace pv
 			device_status_icon_->setObjectName(QString::fromUtf8("device_status_icon"));
 			device_status_icon_->setIcon(QIcon(":/icons/Demo.png"));
 			device_status_icon_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-			device_status_icon_->setText(tr("Demo"));
-			device_status_icon_->setToolTip(tr("Device Status: Demo"));
 			device_status_icon_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 			setObjectName(QString::fromUtf8("MainBar"));
 
@@ -213,102 +211,88 @@ namespace pv
 			);
 
 			// Actions
-			action_new_view_->setText(tr("Decoding Result"));
 			action_new_view_->setIcon(QIcon(":/icons/decode_result.png"));
 			connect(action_new_view_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionNewView_triggered()));
 
-			action_open_->setText(tr("&Open..."));
 			action_open_->setIcon(QIcon(":/icons/document-open.png"));
 			action_open_->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_O));
 			connect(action_open_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionOpen_triggered()));
 
-			action_restore_setup_->setText(tr("Restore Session Setu&p..."));
 			connect(action_restore_setup_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionRestoreSetup_triggered()));
 
-			action_save_->setText(tr("Save"));
 			action_save_->setIcon(QIcon(":/icons/document-save-as.png"));
 			action_save_->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_S));
 			connect(action_save_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionSave_triggered()));
 
-			action_save_as_->setText(tr("Save &As..."));
 			action_save_as_->setIcon(QIcon(":/icons/document-save-as.png"));
 			connect(action_save_as_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionSaveAs_triggered()));
 
-			action_save_selection_as_->setText(tr("Save Selected &Range As..."));
 			action_save_selection_as_->setIcon(QIcon(":/icons/document-save-as.png"));
 			action_save_selection_as_->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_R));
 			connect(action_save_selection_as_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionSaveSelectionAs_triggered()));
 
-			action_save_setup_->setText(tr("Save Session Setu&p..."));
 			connect(action_save_setup_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionSaveSetup_triggered()));
 
-			widgets::ExportMenu *menu_file_export = new widgets::ExportMenu(this,
+			menu_file_export_ = new widgets::ExportMenu(this,
 																			session.device_manager().context());
-			menu_file_export->setTitle(tr("&Export"));
-			connect(menu_file_export, SIGNAL(format_selected(shared_ptr<sigrok::OutputFormat>)),
+			connect(menu_file_export_, SIGNAL(format_selected(shared_ptr<sigrok::OutputFormat>)),
 					this, SLOT(export_file(shared_ptr<sigrok::OutputFormat>)));
 
-			widgets::ImportMenu *menu_file_import = new widgets::ImportMenu(this,
+			menu_file_import_ = new widgets::ImportMenu(this,
 																			session.device_manager().context());
-			menu_file_import->setTitle(tr("&Import"));
-			connect(menu_file_import, SIGNAL(format_selected(shared_ptr<sigrok::InputFormat>)),
+			connect(menu_file_import_, SIGNAL(format_selected(shared_ptr<sigrok::InputFormat>)),
 					this, SLOT(import_file(shared_ptr<sigrok::InputFormat>)));
-			action_connect_->setText(tr("&Connect to Device..."));
 			action_connect_->setToolTip(""); // Remove the tooltip
 			// connect(action_connect_, SIGNAL(triggered(bool)),
 			// 	this, SLOT(on_actionConnect_triggered()));
 
 			// New view button
-			QMenu *menu_new_view = new QMenu();
-			connect(menu_new_view, SIGNAL(triggered(QAction *)),
+			menu_new_view_ = new QMenu();
+			connect(menu_new_view_, SIGNAL(triggered(QAction *)),
 					this, SLOT(on_actionNewView_triggered(QAction *)));
 
 			for (int i = 1; i < views::ViewTypeCount; i++)
 			{
-				QAction *const action = menu_new_view->addAction(tr(views::ViewTypeNames[i]));
-				if (strcmp(views::ViewTypeNames[i], "Binary Decoder Output View") == 0)
-					action->setText(tr("Binary Decoder Output View"));
-				if (strcmp(views::ViewTypeNames[i], "Tabular Decoder Output View") == 0)
-					action->setText(tr("Tabular Decoder Output View"));
+				QAction *const action = menu_new_view_->addAction(QString());
 				action->setData(QVariant::fromValue(i));
 			}
 
-			new_view_button_->setMenu(menu_new_view);
+			new_view_button_->setMenu(menu_new_view_);
 			new_view_button_->setDefaultAction(action_new_view_);
 			new_view_button_->setPopupMode(QToolButton::MenuButtonPopup);
 			new_view_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 
 			// model_ button
-			QMenu *menu_model_view = new QMenu();
-			QAction *actionSingle = menu_model_view->addAction(tr("Single"));
-			QAction *actionRepeat = menu_model_view->addAction(tr("Repeat"));
-			actionSingle->setIcon(QIcon(":/icons/Single.png"));
-			actionRepeat->setIcon(QIcon(":/icons/Repeat.png"));
+			menu_model_view_ = new QMenu();
+			action_single_ = menu_model_view_->addAction(QString());
+			action_repeat_ = menu_model_view_->addAction(QString());
+			action_single_->setIcon(QIcon(":/icons/Single.png"));
+			action_repeat_->setIcon(QIcon(":/icons/Repeat.png"));
 
-			connect(actionSingle, SIGNAL(triggered(bool)), this, SLOT(on_actionSingle_triggered()));
-			connect(actionRepeat, SIGNAL(triggered(bool)), this, SLOT(on_actionRepeat_triggered()));
+			connect(action_single_, SIGNAL(triggered(bool)), this, SLOT(on_actionSingle_triggered()));
+			connect(action_repeat_, SIGNAL(triggered(bool)), this, SLOT(on_actionRepeat_triggered()));
 
 			// help button menu
-			QMenu *menu_help_view = new QMenu();
-			QAction *action_settings = menu_help_view->addAction(tr("Settings"));
-			QAction *action_version_info = menu_help_view->addAction(tr("Version Info"));
-			// QAction *action_feedback = menu_help_view->addAction(tr("feedback"));
-			QAction *action_update = menu_help_view->addAction(tr("FW Update"));
-			// QAction *action_use_guide = menu_help_view->addAction(tr("User Guide"));
-			QAction *action_about = menu_help_view->addAction(tr("About"));
-			connect(action_settings, SIGNAL(triggered(bool)), this, SIGNAL(settings_triggered()));
-			connect(action_version_info, SIGNAL(triggered(bool)), this, SLOT(on_action_version_info_triggered()));
+			menu_help_view_ = new QMenu();
+			action_settings_ = menu_help_view_->addAction(QString());
+			action_version_info_ = menu_help_view_->addAction(QString());
+			// QAction *action_feedback = menu_help_view_->addAction(tr("feedback"));
+			action_update_ = menu_help_view_->addAction(QString());
+			// QAction *action_use_guide = menu_help_view_->addAction(tr("User Guide"));
+			action_about_ = menu_help_view_->addAction(QString());
+			connect(action_settings_, SIGNAL(triggered(bool)), this, SIGNAL(settings_triggered()));
+			connect(action_version_info_, SIGNAL(triggered(bool)), this, SLOT(on_action_version_info_triggered()));
 			// connect(action_feedback, SIGNAL(triggered(bool)), this, SLOT(on_action_feedback_triggered()));
-			connect(action_update, SIGNAL(triggered(bool)), this, SLOT(on_action_update_triggered()));
+			connect(action_update_, SIGNAL(triggered(bool)), this, SLOT(on_action_update_triggered()));
 			// connect(action_use_guide, SIGNAL(triggered(bool)), this, SLOT(on_action_use_guide_triggered()));
-			connect(action_about, SIGNAL(triggered(bool)), this, SLOT(on_action_about_triggered()));
+			connect(action_about_, SIGNAL(triggered(bool)), this, SLOT(on_action_about_triggered()));
 			// Open button
 			vector<QAction *> open_actions;
 			open_actions.push_back(action_open_);
@@ -318,11 +302,10 @@ namespace pv
 			open_actions.push_back(action_restore_setup_);
 
 			// help button
-			help_button_->setMenu(menu_help_view);
+			help_button_->setMenu(menu_help_view_);
 			help_button_->setIcon(QIcon(":/icons/Help.png"));
 			help_button_->setPopupMode(QToolButton::MenuButtonPopup);
 			help_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-			help_button_->setText(tr("Help"));
 			// connect(help_button_, &QToolButton::clicked, help_button_, &QToolButton::showMenu);
 
 			widgets::ImportMenu *import_menu = new widgets::ImportMenu(this,
@@ -334,22 +317,19 @@ namespace pv
 			run_stop_button_->setIcon(QIcon(":/icons/Start.png"));
 			run_stop_button_->setShortcut(QKeySequence(Qt::Key_S));
 			run_stop_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-			run_stop_button_->setText(tr("Start"));
 			connect(run_stop_button_, SIGNAL(clicked()), this, SIGNAL(run_stop_button_clicked()));
 			// model change button
-			model_change_button_->setMenu(menu_model_view);
+			model_change_button_->setMenu(menu_model_view_);
 			model_change_button_->setIcon(QIcon(":/icons/Single.png")); // default single model
-			// model_change_button_->setDefaultAction(actionSingle);
+			// model_change_button_->setDefaultAction(action_single_);
 			model_change_button_->setPopupMode(QToolButton::MenuButtonPopup);
 			model_change_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-			model_change_button_->setText(tr("Model"));
 			// connect(model_change_button_, &QToolButton::clicked, model_change_button_, &QToolButton::showMenu);
 			// open button
 			open_button_->setMenu(import_menu);
 			open_button_->setDefaultAction(action_open_);
 			open_button_->setPopupMode(QToolButton::MenuButtonPopup);
 			open_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-			open_button_->setText(tr("Open"));
 			// Save button
 			vector<QAction *> save_actions;
 			save_actions.push_back(action_save_);
@@ -369,7 +349,6 @@ namespace pv
 			save_button_->setDefaultAction(action_save_);
 			save_button_->setPopupMode(QToolButton::MenuButtonPopup);
 			save_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-			save_button_->setText(tr("Save"));
 			// Device selector menu
 			connect(&device_selector_, SIGNAL(device_selected()),
 					this, SLOT(on_device_selected()));
@@ -384,10 +363,8 @@ namespace pv
 #ifdef ENABLE_DECODE
 			add_decoder_button_->setIcon(QIcon(":/icons/add-decoder.png"));
 			add_decoder_button_->setPopupMode(QToolButton::InstantPopup);
-			add_decoder_button_->setToolTip(tr("Add protocol decoder"));
 			add_decoder_button_->setShortcut(QKeySequence(Qt::Key_D));
 			add_decoder_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-			add_decoder_button_->setText(tr("Decoder"));
 
 			connect(add_decoder_button_, SIGNAL(clicked()),
 					this, SLOT(on_add_decoder_clicked()));
@@ -415,22 +392,18 @@ namespace pv
 			// configure_button_.setIcon(QIcon::fromTheme("preferences-system",
 			// 	QIcon(":/icons/preferences-system.png")));
 
-			channels_button_.setToolTip(tr("Configure Channels"));
 			channels_button_.setIcon(QIcon(":/icons/channels.svg"));
 			// channels_button_.set_text_style(tr("Option"), Qt::ToolButtonTextUnderIcon);
 			channels_button_.setToolButtonStyle((Qt::ToolButtonStyle)Qt::ToolButtonTextUnderIcon);
-			channels_button_.setText(tr("Option"));
 
 			// run_stop_button_->setIcon(QIcon(":/icons/add-decoder.svg"));
 			// 	run_stop_button_->setShortcut(QKeySequence(Qt::Key_S));
 			// 	run_stop_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 			// 	run_stop_button_->setText(tr("Start"));
 			// connect(run_stop_button_, SIGNAL(clicked()), this, SIGNAL(run_stop_button_clicked()));
-			channels_button_ex_->setToolTip(tr("Configure Channels"));
 			channels_button_ex_->setIcon(QIcon(":/icons/channels.png"));
 			channels_button_ex_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 			channels_button_ex_->setToolButtonStyle((Qt::ToolButtonStyle)Qt::ToolButtonTextUnderIcon);
-			channels_button_ex_->setText(tr("Option"));
 			connect(channels_button_ex_, SIGNAL(clicked()), this, SLOT(channels_button_ex_clicked()));
 			add_toolbar_widgets();
 
@@ -450,10 +423,74 @@ namespace pv
 			update_device_list();
 			is_rate_setting_default_ = false;
 			is_count_setting_default_ = false;
+			retranslate_ui();
 			update_device_status_icon();
 		}
 
-		MainBar::~MainBar()
+		void MainBar::retranslate_ui()
+	{
+		/* The base class owns the zoom and cursor entries. */
+		StandardBar::retranslate_ui();
+
+		action_new_view_->setText(tr("Decoding Result"));
+		action_open_->setText(tr("&Open..."));
+		action_restore_setup_->setText(tr("Restore Session Setu&p..."));
+		action_save_->setText(tr("Save"));
+		action_save_as_->setText(tr("Save &As..."));
+		action_save_selection_as_->setText(tr("Save Selected &Range As..."));
+		action_save_setup_->setText(tr("Save Session Setu&p..."));
+		action_connect_->setText(tr("&Connect to Device..."));
+
+		if (menu_file_export_)
+			menu_file_export_->setTitle(tr("&Export"));
+		if (menu_file_import_)
+			menu_file_import_->setTitle(tr("&Import"));
+
+		/* New view entries are created empty and named here, so that
+		 * they follow the language as well. */
+		for (QAction *action : menu_new_view_->actions()) {
+			const int type = action->data().toInt();
+			if (type > 0 && type < views::ViewTypeCount)
+				action->setText(tr(views::ViewTypeNames[type]));
+		}
+
+		action_single_->setText(tr("Single"));
+		action_repeat_->setText(tr("Repeat"));
+		action_settings_->setText(tr("Settings"));
+		action_version_info_->setText(tr("Version Info"));
+		action_update_->setText(tr("FW Update"));
+		action_about_->setText(tr("About"));
+
+		help_button_->setText(tr("Help"));
+		model_change_button_->setText(tr("Model"));
+		open_button_->setText(tr("Open"));
+		save_button_->setText(tr("Save"));
+#ifdef ENABLE_DECODE
+		add_decoder_button_->setToolTip(tr("Add protocol decoder"));
+		add_decoder_button_->setText(tr("Decoder"));
+#endif
+		channels_button_.setToolTip(tr("Configure Channels"));
+		channels_button_.setText(tr("Option"));
+		channels_button_ex_->setToolTip(tr("Configure Channels"));
+		channels_button_ex_->setText(tr("Option"));
+
+		/* Both of these carry the state of the device and of the
+		 * acquisition, so ask the code that set them for the text. */
+		update_device_status_icon();
+		update_runstop_status(session_.get_capture_state());
+	}
+
+	void MainBar::changeEvent(QEvent *event)
+	{
+		/* Not passed on to the base class: it would only translate its own
+		 * entries, which retranslate_ui() has already done. */
+		if (event->type() == QEvent::LanguageChange)
+
+		QToolBar::changeEvent(event);
+	}
+
+
+	MainBar::~MainBar()
 		{
 			s_mainbar_instance = nullptr;
 

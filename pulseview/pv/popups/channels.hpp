@@ -109,6 +109,10 @@ Q_SIGNALS:
 public Q_SLOTS:
 	void channelSelect(uint16_t index);
 
+protected:
+	/* Called when the application language changed. */
+	void changeEvent(QEvent *event) override;
+
 private Q_SLOTS:
 	void on_channel_checked(QWidget *widget);
 	void on_mode_changed(int index);
@@ -135,6 +139,8 @@ private:
 	void showEvent(QShowEvent *event);
 	void clear_all_logic_triggers();
 	void update_channel_radio_texts();
+	void retranslate_ui();
+	void set_field_label(QWidget *field, const QString &text);
 
 	Session &session_;
 	QFormLayout layout_;
@@ -146,19 +152,20 @@ private:
 	bool is_usb2_;
 	int current_mode_;
 
-	QComboBox* threshold_selector_1_;
-	QComboBox* threshold_selector_2_;
-	QDoubleSpinBox* voltage_level_spinbox_;
-	QComboBox* mode_selector_;
-	QComboBox* adc_channel_selector_;
-	QComboBox* adc_precision_selector_;
-	QLabel* adc_channel_label_;
-	QLabel* adc_precision_label_;
-	QLabel* threshold_label_;
-	QLabel* device_name_label_;
-	QLabel* serial_number_label_;
-	QGroupBox* logic_props_box_;
-	QGroupBox* analog_props_box_;
+	QComboBox* threshold_selector_1_ = nullptr;
+	QComboBox* threshold_selector_2_ = nullptr;
+	QDoubleSpinBox* voltage_level_spinbox_ = nullptr;
+	QComboBox* mode_selector_ = nullptr;
+	QComboBox* adc_channel_selector_ = nullptr;
+	QComboBox* adc_precision_selector_ = nullptr;
+	QLabel* adc_channel_label_ = nullptr;
+	QLabel* adc_precision_label_ = nullptr;
+	QLabel* threshold_label_ = nullptr;
+	QLabel* device_name_label_ = nullptr;
+	QLabel* serial_number_label_ = nullptr;
+	QGroupBox* options_box_ = nullptr;
+	QGroupBox* logic_props_box_ = nullptr;
+	QGroupBox* analog_props_box_ = nullptr;
 
 	QDoubleSpinBox* pre_trigger_selector_;
 

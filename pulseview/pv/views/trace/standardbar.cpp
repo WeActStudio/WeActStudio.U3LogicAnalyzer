@@ -59,51 +59,42 @@ StandardBar::StandardBar(Session &session, QWidget *parent,
 	setObjectName(QString::fromUtf8("StandardBar"));
 	setIconSize(QSize(32, 32));
 	// Actions
-	action_view_zoom_in_->setText(tr("Zoom &In"));
 	action_view_zoom_in_->setIcon(QIcon(":/icons/zoom-in.png"));
 	// simply using Qt::Key_Plus shows no + in the menu
 	action_view_zoom_in_->setShortcut(QKeySequence::ZoomIn);
 	connect(action_view_zoom_in_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionViewZoomIn_triggered()));
 
-	action_view_zoom_out_->setText(tr("Zoom &Out"));
 	action_view_zoom_out_->setIcon(QIcon(":/icons/zoom-out.png"));
 	action_view_zoom_out_->setShortcut(QKeySequence::ZoomOut);
 	connect(action_view_zoom_out_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionViewZoomOut_triggered()));
 
 	action_view_zoom_fit_->setCheckable(true);
-	action_view_zoom_fit_->setText(tr("Zoom to &Fit"));
 	action_view_zoom_fit_->setIcon(QIcon(":/icons/zoom-fit-best.png"));
 	action_view_zoom_fit_->setShortcut(QKeySequence(Qt::Key_F));
 	connect(action_view_zoom_fit_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionViewZoomFit_triggered(bool)));
 	zoom_fit_button_->setDefaultAction(action_view_zoom_fit_);
 	zoom_fit_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-	zoom_fit_button_->setText(tr("Zoom to &Fit"));
 
 	action_view_show_cursors_->setCheckable(true);
 	action_view_show_cursors_->setIcon(QIcon(":/icons/show-cursors.png"));
 	action_view_show_cursors_->setShortcut(QKeySequence(Qt::Key_C));
 	connect(action_view_show_cursors_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionViewShowCursors_triggered()));
-	action_view_show_cursors_->setText(tr("Show &Cursors"));
 	show_cursors_->setDefaultAction(action_view_show_cursors_);
 	show_cursors_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-	show_cursors_->setText(tr("Show Cursors"));
 
 	action_sdm_last_->setIcon(QIcon(":/icons/view-displaymode-last_segment.svg"));
-	action_sdm_last_->setText(tr("Display last segment only"));
 	connect(action_sdm_last_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionSDMLast_triggered()));
 
 	action_sdm_last_complete_->setIcon(QIcon(":/icons/view-displaymode-last_complete_segment.svg"));
-	action_sdm_last_complete_->setText(tr("Display last complete segment only"));
 	connect(action_sdm_last_complete_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionSDMLastComplete_triggered()));
 
 	action_sdm_single_->setIcon(QIcon(":/icons/view-displaymode-single_segment.svg"));
-	action_sdm_single_->setText(tr("Display a single segment"));
 	connect(action_view_show_cursors_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionSDMSingle_triggered()));
 
@@ -143,7 +134,30 @@ StandardBar::StandardBar(Session &session, QWidget *parent,
 	if (add_default_widgets)
 		add_toolbar_widgets();
 	ThreadRunning = false;
+
+	retranslate_ui();
 }
+
+void StandardBar::retranslate_ui()
+{
+	action_view_zoom_in_->setText(tr("Zoom &In"));
+	action_view_zoom_out_->setText(tr("Zoom &Out"));
+	action_view_zoom_fit_->setText(tr("Zoom to &Fit"));
+	zoom_fit_button_->setText(tr("Zoom to &Fit"));
+	action_view_show_cursors_->setText(tr("Show &Cursors"));
+	show_cursors_->setText(tr("Show Cursors"));
+	action_sdm_last_->setText(tr("Display last segment only"));
+	action_sdm_last_complete_->setText(tr("Display last complete segment only"));
+	action_sdm_single_->setText(tr("Display a single segment"));
+}
+
+void StandardBar::changeEvent(QEvent *event)
+{
+	if (event->type() == QEvent::LanguageChange)
+
+	QToolBar::changeEvent(event);
+}
+
 StandardBar::~StandardBar()
 {
 	ThreadRunning = false;

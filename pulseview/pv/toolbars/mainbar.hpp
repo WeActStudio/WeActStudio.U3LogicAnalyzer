@@ -64,6 +64,7 @@ class OutputFormat;
 Q_DECLARE_METATYPE(shared_ptr<sigrok::Device>)
 
 class QAction;
+class QEvent;
 
 namespace pv {
 
@@ -217,6 +218,10 @@ protected:
 
 	bool eventFilter(QObject *watched, QEvent *event);
 
+	/* Called when the application language changed. */
+	void changeEvent(QEvent *event) override;
+	void retranslate_ui();
+
 Q_SIGNALS:
 	void new_view(Session *session, int type);
 	void show_decoder_selector(Session *session);
@@ -238,6 +243,20 @@ private:
 	QAction *const action_restore_setup_;
 	QAction *const action_save_setup_;
 	QAction *const action_connect_;
+
+	/* Menus and entries whose text is a translation and which the
+	 * constructor used to own as local variables. */
+	QMenu *menu_file_export_ = nullptr;
+	QMenu *menu_file_import_ = nullptr;
+	QMenu *menu_new_view_ = nullptr;
+	QMenu *menu_model_view_ = nullptr;
+	QMenu *menu_help_view_ = nullptr;
+	QAction *action_single_ = nullptr;
+	QAction *action_repeat_ = nullptr;
+	QAction *action_settings_ = nullptr;
+	QAction *action_version_info_ = nullptr;
+	QAction *action_update_ = nullptr;
+	QAction *action_about_ = nullptr;
 
 	QToolButton *run_stop_button_;
 	pv::widgets::HoverToolButton *model_change_button_;

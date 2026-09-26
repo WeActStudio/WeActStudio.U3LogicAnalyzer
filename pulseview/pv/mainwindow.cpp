@@ -416,6 +416,10 @@ shared_ptr<views::ViewBase> MainWindow::add_view(views::ViewType type,
 		dock->setTitleBarWidget(new QWidget());
 	
 	view_docks_[dock] = v;
+	/* Only a dock that was named after its view type follows the
+	 * language; the first trace view carries the session name. */
+	if (main_bar)
+		view_dock_types_[dock] = (int)type;
 	session.register_view(v);
 
 	dock_main->setCentralWidget(v.get());
@@ -500,6 +504,7 @@ void MainWindow::remove_view(shared_ptr<views::ViewBase> view)
 
 				// Remove the dock widget from the list and stop iterating
 				view_docks_.erase(entry.first);
+				view_dock_types_.erase(entry.first);
 				break;
 			}
 	}
@@ -558,6 +563,7 @@ shared_ptr<subwindows::SubWindowBase> MainWindow::add_subwindow(
 		return nullptr;
 
 	sub_windows_[dock] = w;
+	sub_window_types_[dock] = (int)type;
 	dock_main->setCentralWidget(w.get());
 	dock->setWidget(dock_main);
 
@@ -1192,6 +1198,48 @@ void MainWindow::restore_sessions()
 		last_focused_session_->main_bar()->renew_setting_default();
 }
 
+void MainWindow::changeEvent(QEvent *event)
+{
+	if (event->type() == QEvent::LanguageChange)
+		retranslate_ui();
+
+	QMainWindow::changeEvent(event);
+}
+
+void MainWindow::retranslate_ui()
+{
+	run_stop_button_->setToolTip(tr("Start/Stop Acquisition"));
+	repeat_acquisition_button_->setToolTip(tr("Repeat Acquisition"));
+	repeat_acquisition_button_->setText(tr("Repeat Acquisition"));
+	settings_button_->setToolTip(tr("Settings"));
+
+	/* Dock titles are chosen when the dock is created and are never
+	 * looked at again, so give them the text of the new language. */
+	for (auto &entry : view_dock_types_)
+		entry.first->setWindowTitle(tr(views::ViewTypeNames[entry.second]));
+
+	for (auto &entry : sub_window_types_) {
+		QString title;
+
+		switch (entry.second) {
+#ifdef ENABLE_DECODE
+		case subwindows::SubWindowTypeDecoderSelector:
+			title = tr("Decoder Selector");
+			break;
+#endif
+		default:
+			break;
+		}
+
+		if (!title.isEmpty())
+			entry.first->setWindowTitle(title);
+	}
+
+	/* The run/stop button text carries the capture state. */
+	if (last_focused_session_)
+		update_acq_button(last_focused_session_.get());
+}
+
 void MainWindow::setup_ui()
 {
 	setObjectName(QString::fromUtf8("MainWindow"));
@@ -1781,6 +1829,7 @@ void MainWindow::on_show_decoder_selector(Session *session)
 
 		if (decoder_selector && (&decoder_selector->session() == session)) {
 			sub_windows_.erase(dock);
+			sub_window_types_.erase(dock);
 			dock->close();
 			return;
 		}
@@ -1873,24 +1922,11 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
     {
         if (QWidget *w = qobject_cast<QWidget*>(obj))
         {
-			#ifdef _WIN32
-            // Skip child widgets and only handle standalone top-level windows
-			GlobalSettings settings;
-            if(w->isTopLevel() && settings.current_theme_is_dark())
-            {
-                HWND hwnd = reinterpret_cast<HWND>(w->winId());
-                if(hwnd)
-                {
-                    BOOL useDark = TRUE;
-                    HRESULT hr = DwmSetWindowAttribute(hwnd, 20, &useDark, sizeof(useDark));
-					if(SUCCEEDED(hr))
-					{
-						MARGINS margins = {0,0,0,0};
-						DwmExtendFrameIntoClientArea(hwnd, &margins);
-					}
-                }
-            }
-			#endif
+			/* Only standalone top-level windows have decorations of their own. */
+			if (w->isTopLevel()) {
+				GlobalSettings settings;
+				util::apply_window_theme(w, settings.current_theme_is_dark());
+			}
         }
     }
     return QObject::eventFilter(obj, event);

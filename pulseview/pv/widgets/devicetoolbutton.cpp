@@ -21,6 +21,7 @@
 
 #include <cassert>
 
+#include <QEvent>
 #include <QTimer>
 #include <QToolTip>
 #include <QDebug>
@@ -71,6 +72,23 @@ DeviceToolButton::DeviceToolButton(QWidget *parent,
 		this, SIGNAL(refresh_requested()));
 
 	update_minimum_width();
+}
+
+void DeviceToolButton::changeEvent(QEvent *event)
+{
+	if (event->type() == QEvent::LanguageChange) {
+		/* The menu is rebuilt from the device list whenever it changes,
+		 * but the label on the button keeps whatever text it was given. */
+		refresh_action_->setText(tr("Refresh Device List"));
+
+		if (selected_device_ && device_manager_)
+			set_label(QString::fromStdString(
+				selected_device_->display_name(*device_manager_)));
+		else
+			set_label(tr("<No Device>"));
+	}
+
+	QToolButton::changeEvent(event);
 }
 
 shared_ptr<Device> DeviceToolButton::selected_device()

@@ -44,6 +44,7 @@ using std::string;
 
 struct srd_decoder;
 
+class QEvent;
 class QVBoxLayout;
 
 namespace pv {
@@ -122,7 +123,12 @@ public:
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
 
+	/* Called when the application language changed. */
+	void changeEvent(QEvent *event) override;
+
+
 private:
+	void retranslate_ui();
 	void setup_ui();
 	void update_acq_button(Session *session);
 
@@ -207,6 +213,10 @@ private:
 
 	map< QDockWidget*, shared_ptr<views::ViewBase> > view_docks_;
 	map< QDockWidget*, shared_ptr<subwindows::SubWindowBase> > sub_windows_;
+	/* Views and sub windows whose title came from a translated string,
+	 * remembered as the type it was derived from. */
+	map< QDockWidget*, int > view_dock_types_;
+	map< QDockWidget*, int > sub_window_types_;
 	map< shared_ptr<Session>, QMainWindow*> session_windows_;
 
 	QWidget *static_tab_widget_;

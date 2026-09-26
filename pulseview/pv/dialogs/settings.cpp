@@ -26,6 +26,7 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QEvent>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -127,6 +128,39 @@ Settings::Settings(DeviceManager &device_manager, QWidget *parent) :
 	// Start to record changes
 	GlobalSettings settings;
 	settings.start_tracking();
+}
+
+void Settings::changeEvent(QEvent *event)
+{
+	if (event->type() != QEvent::LanguageChange) {
+		QDialog::changeEvent(event);
+		return;
+	}
+
+	/* Every page is built once and keeps the texts of the language
+	 * that was active when it was built, so build them again. The
+	 * settings themselves are applied as they are changed, so
+	 * nothing is lost by throwing the widgets away. */
+	const int page = page_list->currentRow();
+
+	GlobalSettings settings;
+	settings.stop_tracking();
+
+	while (pages->count()) {
+		QWidget *old_page = pages->widget(0);
+		pages->removeWidget(old_page);
+		old_page->deleteLater();
+	}
+	page_list->clear();
+
+	create_pages();
+
+	if (page >= 0 && page < page_list->count())
+		page_list->setCurrentRow(page);
+
+	settings.start_tracking();
+
+	QDialog::changeEvent(event);
 }
 
 void Settings::create_pages()
