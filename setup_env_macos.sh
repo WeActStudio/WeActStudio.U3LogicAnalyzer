@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# setup_env_macos.sh - CH32H417 LogicAnalyzer macOS build environment
+# setup_env_macos.sh - CH32H417 U3LogicAnalyzer macOS build environment
 # Requires Homebrew: https://brew.sh
 # ============================================================================
 set -e
@@ -55,5 +55,5 @@ cat <<EOF
 Then build (./build.sh sets Homebrew pkg-config paths automatically):
 
   ./build.sh --package
-  open dist/LogicAnalyzer/LogicAnalyzer.app
+  open dist/U3LogicAnalyzer/U3LogicAnalyzer.app
 EOF

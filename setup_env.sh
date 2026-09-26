@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# setup_env.sh - one-shot setup of the CH32H417 LogicAnalyzer build and runtime environment
+# setup_env.sh - one-shot setup of the CH32H417 U3LogicAnalyzer build and runtime environment
 # Run this inside an MSYS2 MINGW64 shell
 # ============================================================================
 set -e
@@ -38,5 +38,5 @@ cat <<EOF
 现在可以运行:
 
   ./build.sh         # build
-  cd build_cmake/logicanalyzer_build && ./LogicAnalyzer.exe   # run
+  cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer.exe   # run
 EOF

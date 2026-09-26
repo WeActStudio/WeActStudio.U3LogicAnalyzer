@@ -768,8 +768,8 @@ endif()
 
 target_link_libraries(${PROJECT_NAME} ${PULSEVIEW_LINK_LIBS})
 
-# Rename output to LogicAnalyzer.exe
-set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME LogicAnalyzer)
+# Rename output to U3LogicAnalyzer.exe
+set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME U3LogicAnalyzer)
 
 # The packaged application carries libsigrok/libsigrokcxx/libsigrokdecode
 # right next to the executable. Adding $ORIGIN to the RPATH lets the loader

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# setup_env_linux.sh - one-shot setup of the CH32H417 LogicAnalyzer build and
+# setup_env_linux.sh - one-shot setup of the CH32H417 U3LogicAnalyzer build and
 # runtime environment on Debian/Ubuntu Linux
 # Run this in a normal shell: ./setup_env_linux.sh
 # ============================================================================
@@ -47,5 +47,5 @@ cat <<EOF
 现在可以运行:
 
   ./build.sh         # build
-  ./start_pv.sh      # run (uses build_cmake/logicanalyzer_build/LogicAnalyzer)
+  ./start_pv.sh      # run (uses build_cmake/logicanalyzer_build/U3LogicAnalyzer)
 EOF

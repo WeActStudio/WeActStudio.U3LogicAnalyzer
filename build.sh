@@ -1,9 +1,9 @@
 #!/bin/bash
 # ============================================================================
-# build.sh - CH32H417 LogicAnalyzer Build + Package
+# build.sh - CH32H417 U3LogicAnalyzer Build + Package
 # Usage:
 #   ./build.sh              # Build only
-#   ./build.sh --package    # Build + create dist/LogicAnalyzer/ package
+#   ./build.sh --package    # Build + create dist/U3LogicAnalyzer/ package
 #   ./build.sh --clean      # Clean build
 # ============================================================================
 
@@ -12,7 +12,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/build_cmake"
 PREFIX="${SCRIPT_DIR}/install"
-DIST_DIR="${SCRIPT_DIR}/dist/LogicAnalyzer"
+DIST_DIR="${SCRIPT_DIR}/dist/U3LogicAnalyzer"
 CLEAN=0
 PACKAGE=0
 IS_WINDOWS=0
@@ -90,7 +90,7 @@ PYDLL="libpython${PYVER}.dll"
 PYTHON_SRC="/mingw64/lib/python${PYVER}"
 
 echo "============================================"
-echo " CH32H417 LogicAnalyzer Build"
+echo " CH32H417 U3LogicAnalyzer Build"
 echo "============================================"
 echo "Source:  $SCRIPT_DIR"
 echo "Build:   $BUILD_DIR"
@@ -166,10 +166,10 @@ cmake --install .
 echo "[OK] libsigrokdecode"
 
 # ============================================================================
-# Step 4: LogicAnalyzer
+# Step 4: U3LogicAnalyzer
 # ============================================================================
 echo ""
-echo "===== Step 4/4: LogicAnalyzer ====="
+echo "===== Step 4/4: U3LogicAnalyzer ====="
 
 # Generate .qm translation files from .ts sources
 if ls "${SCRIPT_DIR}/pulseview/l10n/"*.ts >/dev/null 2>&1; then
@@ -197,8 +197,8 @@ cmake "${SCRIPT_DIR}/pulseview" \
 cmake --build . -j"$JOBS"
 
 PVDIR="$BUILD_DIR/logicanalyzer_build"
-PV_BIN="$PVDIR/LogicAnalyzer"
-[ $IS_WINDOWS -eq 1 ] && PV_BIN="$PVDIR/LogicAnalyzer.exe"
+PV_BIN="$PVDIR/U3LogicAnalyzer"
+[ $IS_WINDOWS -eq 1 ] && PV_BIN="$PVDIR/U3LogicAnalyzer.exe"
 
 if [ $IS_WINDOWS -eq 1 ]; then
     # Deploy DLLs and create run.bat in build dir
@@ -227,18 +227,18 @@ if [ $IS_WINDOWS -eq 1 ]; then
 #     set "SIGROKDECODE_DIR=..\..\install\share\libsigrokdecode\decoders"
 #     set "PYTHONHOME="
 # )
-# start "" "LogicAnalyzer.exe"
+# start "" "U3LogicAnalyzer.exe"
 # RBEOF
 
     echo "  $(ls "$PVDIR"/*.dll 2>/dev/null | wc -l) DLLs, run.bat created"
     echo "  Stripping debug symbols..."
-    strip "$PVDIR/LogicAnalyzer.exe" 2>/dev/null || echo "  (strip not available, skipping)"
-    echo "  $(du -sh "$PVDIR/LogicAnalyzer.exe" | cut -f1) after strip"
+    strip "$PVDIR/U3LogicAnalyzer.exe" 2>/dev/null || echo "  (strip not available, skipping)"
+    echo "  $(du -sh "$PVDIR/U3LogicAnalyzer.exe" | cut -f1) after strip"
 fi
 
 echo ""
 echo "===== BUILD COMPLETE ====="
-echo "  LogicAnalyzer: $PV_BIN"
+echo "  U3LogicAnalyzer: $PV_BIN"
 echo ""
 
 # ============================================================================
@@ -251,8 +251,8 @@ if [ $PACKAGE -eq 1 ]; then
 
     if [ $IS_WINDOWS -eq 1 ]; then
     	# 1. Copy exe
-        cp "$BUILD_DIR/logicanalyzer_build/LogicAnalyzer.exe" "$DIST_DIR/"
-        echo "  LogicAnalyzer.exe"
+        cp "$BUILD_DIR/logicanalyzer_build/U3LogicAnalyzer.exe" "$DIST_DIR/"
+        echo "  U3LogicAnalyzer.exe"
 
 	# 2. Copy our DLLs
         for dll in libsigrok.dll libsigrokcxx.dll libsigrokdecode.dll; do
@@ -324,18 +324,18 @@ if [ $PACKAGE -eq 1 ]; then
 # set "PATH=%~dp0;%PATH%"
 # set "PYTHONHOME=%~dp0python-portable"
 # set "SIGROKDECODE_DIR=%~dp0decoders"
-# echo Starting LogicAnalyzer...
-# LogicAnalyzer.exe
+# echo Starting U3LogicAnalyzer...
+# U3LogicAnalyzer.exe
 # if %ERRORLEVEL% neq 0 (
 #     echo.
-#     echo LogicAnalyzer exited with error code %ERRORLEVEL%
+#     echo U3LogicAnalyzer exited with error code %ERRORLEVEL%
 #     pause
 # )
 # EOF
 #         echo "  run.bat"
 #         echo ""
-#         echo "To distribute: copy the entire dist/LogicAnalyzer/ folder."
-#         echo "To run: double-click run.bat or LogicAnalyzer.exe"
+#         echo "To distribute: copy the entire dist/U3LogicAnalyzer/ folder."
+#         echo "To run: double-click run.bat or U3LogicAnalyzer.exe"
     # 7. Copy driver directory
     echo "  Driver directory..."
     cp -r "$SCRIPT_DIR/driver" "$DIST_DIR/driver/"
@@ -363,11 +363,11 @@ if [ $PACKAGE -eq 1 ]; then
     fi
 
     elif [ $IS_MACOS -eq 1 ]; then
-        APP="$DIST_DIR/LogicAnalyzer.app"
+        APP="$DIST_DIR/U3LogicAnalyzer.app"
         MACOS_DIR="$APP/Contents/MacOS"
         RES_DIR="$APP/Contents/Resources"
         FRAMEWORKS_DIR="$APP/Contents/Frameworks"
-        MAIN_BIN="$MACOS_DIR/LogicAnalyzer"
+        MAIN_BIN="$MACOS_DIR/U3LogicAnalyzer"
         mkdir -p "$MACOS_DIR" "$RES_DIR" "$FRAMEWORKS_DIR"
 
         # install_name_tool invalidates code signatures; always re-sign Mach-O files after.
@@ -614,11 +614,11 @@ if [ $PACKAGE -eq 1 ]; then
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>LogicAnalyzer</string>
+    <string>U3LogicAnalyzer</string>
     <key>CFBundleIdentifier</key>
     <string>com.q2h2.logicanalyzer</string>
     <key>CFBundleName</key>
-    <string>LogicAnalyzer</string>
+    <string>U3LogicAnalyzer</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>
@@ -633,9 +633,9 @@ if [ $PACKAGE -eq 1 ]; then
 </plist>
 PLIST
 
-        cp "$BUILD_DIR/logicanalyzer_build/LogicAnalyzer" "$MAIN_BIN"
+        cp "$BUILD_DIR/logicanalyzer_build/U3LogicAnalyzer" "$MAIN_BIN"
         chmod +x "$MAIN_BIN"
-        echo "  LogicAnalyzer.app/Contents/MacOS/LogicAnalyzer"
+        echo "  U3LogicAnalyzer.app/Contents/MacOS/U3LogicAnalyzer"
 
         # macdeployqt needs libsharpyuv (Qt imageformats) on the search path
         for sharpyuv in /opt/homebrew/lib/libsharpyuv.0.dylib \
@@ -684,20 +684,20 @@ PLIST
         cat > "$DIST_DIR/run.sh" << 'EOF'
 #!/bin/bash
 DIR="$(cd "$(dirname "$0")" && pwd)"
-open "$DIR/LogicAnalyzer.app"
+open "$DIR/U3LogicAnalyzer.app"
 EOF
         chmod +x "$DIST_DIR/run.sh"
         echo "  run.sh"
 
         echo ""
-        echo "To distribute: copy dist/LogicAnalyzer/ (LogicAnalyzer.app + run.sh)."
-        echo "To run: open LogicAnalyzer.app or ./run.sh"
+        echo "To distribute: copy dist/U3LogicAnalyzer/ (U3LogicAnalyzer.app + run.sh)."
+        echo "To run: open U3LogicAnalyzer.app or ./run.sh"
     else
         # Linux: bundle our sigrok libraries + decoders; Qt and other system
         # libraries are expected to be provided by the distribution.
-        echo "  LogicAnalyzer"
-        cp "$BUILD_DIR/logicanalyzer_build/LogicAnalyzer" "$DIST_DIR/"
-        chmod +x "$DIST_DIR/LogicAnalyzer"
+        echo "  U3LogicAnalyzer"
+        cp "$BUILD_DIR/logicanalyzer_build/U3LogicAnalyzer" "$DIST_DIR/"
+        chmod +x "$DIST_DIR/U3LogicAnalyzer"
 
         echo "  sigrok libraries..."
         for lib in "$PREFIX/lib"/libsigrok.so* "$PREFIX/lib"/libsigrokcxx.so* \
@@ -730,21 +730,21 @@ EOF
         ICON_SVG_SRC="$SCRIPT_DIR/pulseview/icons/pulseview.svg"
         if [ -f "$ICON_SRC" ]; then
             mkdir -p "$DIST_DIR/share/icons"
-            cp "$ICON_SRC" "$DIST_DIR/share/icons/LogicAnalyzer.png"
-            [ -f "$ICON_SVG_SRC" ] && cp "$ICON_SVG_SRC" "$DIST_DIR/share/icons/LogicAnalyzer.svg"
+            cp "$ICON_SRC" "$DIST_DIR/share/icons/U3LogicAnalyzer.png"
+            [ -f "$ICON_SVG_SRC" ] && cp "$ICON_SVG_SRC" "$DIST_DIR/share/icons/U3LogicAnalyzer.svg"
 
             # Portable desktop file (not usable from the menu until installed
             # by install_desktop.sh, which rewrites the paths to absolute).
-            cat > "$DIST_DIR/LogicAnalyzer.desktop" << EOF
+            cat > "$DIST_DIR/U3LogicAnalyzer.desktop" << EOF
 [Desktop Entry]
 Type=Application
-Name=LogicAnalyzer
+Name=U3LogicAnalyzer
 Comment=CH32H417 Logic Analyzer (WeAct Studio)
-Exec=LogicAnalyzer
-Icon=LogicAnalyzer
+Exec=U3LogicAnalyzer
+Icon=U3LogicAnalyzer
 Terminal=false
 Categories=Development;Electronics;
-StartupWMClass=LogicAnalyzer
+StartupWMClass=U3LogicAnalyzer
 EOF
 
             # Helper that registers the icon + menu entry for the current user.
@@ -760,34 +760,34 @@ PIXMAP_DIR="$HOME/.local/share/pixmaps"
 DESKTOP_DIR="$HOME/.local/share/applications"
 
 if [ "$1" = "--remove" ] || [ "$1" = "--uninstall" ]; then
-    rm -f "$DESKTOP_DIR/LogicAnalyzer.desktop"
-    rm -f "$ICON_DIR/LogicAnalyzer.png"
-    rm -f "$ICON_DIR_48/LogicAnalyzer.png"
-    rm -f "$PIXMAP_DIR/LogicAnalyzer.png"
-    rm -f "$HICOLOR_DIR/scalable/apps/LogicAnalyzer.svg"
+    rm -f "$DESKTOP_DIR/U3LogicAnalyzer.desktop"
+    rm -f "$ICON_DIR/U3LogicAnalyzer.png"
+    rm -f "$ICON_DIR_48/U3LogicAnalyzer.png"
+    rm -f "$PIXMAP_DIR/U3LogicAnalyzer.png"
+    rm -f "$HICOLOR_DIR/scalable/apps/U3LogicAnalyzer.svg"
     gtk-update-icon-cache -f -t "$HICOLOR_DIR" 2>/dev/null || true
     update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
-    echo "Removed LogicAnalyzer menu entry and icons"
+    echo "Removed U3LogicAnalyzer menu entry and icons"
     exit 0
 fi
 
 mkdir -p "$ICON_DIR" "$ICON_DIR_48" "$PIXMAP_DIR" "$DESKTOP_DIR"
-if [ -f "$DIR/share/icons/LogicAnalyzer.svg" ]; then
+if [ -f "$DIR/share/icons/U3LogicAnalyzer.svg" ]; then
     SVG_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
     mkdir -p "$SVG_DIR"
-    cp "$DIR/share/icons/LogicAnalyzer.svg" "$SVG_DIR/"
+    cp "$DIR/share/icons/U3LogicAnalyzer.svg" "$SVG_DIR/"
 fi
-cp "$DIR/share/icons/LogicAnalyzer.png" "$ICON_DIR/"
-cp "$DIR/share/icons/LogicAnalyzer.png" "$ICON_DIR_48/"
-cp "$DIR/share/icons/LogicAnalyzer.png" "$PIXMAP_DIR/"
-sed "s|^Exec=.*|Exec=$DIR/LogicAnalyzer|; s|^Icon=.*|Icon=LogicAnalyzer|" \
-    "$DIR/LogicAnalyzer.desktop" > "$DESKTOP_DIR/LogicAnalyzer.desktop"
+cp "$DIR/share/icons/U3LogicAnalyzer.png" "$ICON_DIR/"
+cp "$DIR/share/icons/U3LogicAnalyzer.png" "$ICON_DIR_48/"
+cp "$DIR/share/icons/U3LogicAnalyzer.png" "$PIXMAP_DIR/"
+sed "s|^Exec=.*|Exec=$DIR/U3LogicAnalyzer|; s|^Icon=.*|Icon=U3LogicAnalyzer|" \
+    "$DIR/U3LogicAnalyzer.desktop" > "$DESKTOP_DIR/U3LogicAnalyzer.desktop"
 gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
 update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
-echo "Installed menu entry: $DESKTOP_DIR/LogicAnalyzer.desktop"
+echo "Installed menu entry: $DESKTOP_DIR/U3LogicAnalyzer.desktop"
 EOF
             chmod +x "$DIST_DIR/install_desktop.sh"
-            echo "    LogicAnalyzer.png, LogicAnalyzer.desktop, install_desktop.sh"
+            echo "    U3LogicAnalyzer.png, U3LogicAnalyzer.desktop, install_desktop.sh"
         else
             echo "  (icon source not found, skipping)"
         fi
@@ -800,8 +800,8 @@ EOF
         fi
 
         echo ""
-        echo "To distribute: copy dist/LogicAnalyzer/."
-        echo "To run: ./LogicAnalyzer (Qt5 and other system libraries must be installed)."
+        echo "To distribute: copy dist/U3LogicAnalyzer/."
+        echo "To run: ./U3LogicAnalyzer (Qt5 and other system libraries must be installed)."
     fi
 
     echo ""
