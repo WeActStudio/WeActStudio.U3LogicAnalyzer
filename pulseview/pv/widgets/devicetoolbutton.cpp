@@ -64,7 +64,7 @@ DeviceToolButton::DeviceToolButton(QWidget *parent,
 	connect(&menu_, SIGNAL(hovered(QAction*)),
 		this, SLOT(on_menu_hovered(QAction*)));
 
-	setMinimumWidth(QFontMetrics(font()).averageCharWidth() * 16);
+	update_minimum_width();
 }
 
 shared_ptr<Device> DeviceToolButton::selected_device()
@@ -76,7 +76,7 @@ void DeviceToolButton::set_device_list(
 	const list< shared_ptr<Device> > &devices, shared_ptr<Device> selected)
 {
 	selected_device_ = selected;
-	setText(selected ? QString::fromStdString(
+	set_label(selected ? QString::fromStdString(
 		selected->display_name(*device_manager_)) : tr("<No Device>"));
 	devices_ = vector< weak_ptr<Device> >(devices.begin(), devices.end());
 	update_device_list();
@@ -84,12 +84,41 @@ void DeviceToolButton::set_device_list(
 
 void DeviceToolButton::reset()
 {
-	setText(tr("<No Device>"));
+	set_label(tr("<No Device>"));
 }
 
 void DeviceToolButton::set_device_list_name(QString &device_list_name)
 {
-	setText(device_list_name);
+	set_label(device_list_name);
+}
+
+void DeviceToolButton::update_minimum_width()
+{
+	/* Label width plus the menu indicator. The label itself is already
+	 * capped by set_label(), so the button can never grow arbitrarily
+	 * wide. Fixed policy keeps the layout from squeezing it either. */
+	const QFontMetrics fm(font());
+	const int width = fm.boundingRect(text()).width() +
+		fm.averageCharWidth() * 2 + 24;   /* 24: menu indicator */
+
+	setMinimumWidth(width);
+	setMaximumWidth(width);
+	setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+}
+
+void DeviceToolButton::set_label(const QString &label)
+{
+	full_label_ = label;
+
+	const QFontMetrics fm(font());
+	const int max_text_width = fm.averageCharWidth() * 16;
+	const QString shown = fm.elidedText(label, Qt::ElideMiddle, max_text_width);
+
+	QToolButton::setText(shown);
+	if (shown != label)
+		setToolTip(label);   /* keep the full name reachable */
+
+	update_minimum_width();
 }
 
 void DeviceToolButton::update_device_list()
@@ -113,6 +142,9 @@ void DeviceToolButton::update_device_list()
 
 		menu_.addAction(a);
 	}
+
+	if(selected_device_ != nullptr)
+		setToolTip(QString::fromStdString(selected_device_->full_name()));
 }
 
 void DeviceToolButton::update_device_mamager(DeviceManager * dev_manager)

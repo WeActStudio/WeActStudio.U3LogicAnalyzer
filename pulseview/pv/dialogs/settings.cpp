@@ -588,14 +588,14 @@ QWidget *Settings::get_logging_page(QWidget *parent) const
 
 	// Save to file
 	QPushButton *save_log_pb = new QPushButton(
-		QIcon::fromTheme("document-save-as", QIcon(":/icons/document-save-as.png")),
+		QIcon(":/icons/document-save-as.png"),
 		tr("&Save to File"));
 	connect(save_log_pb, SIGNAL(clicked(bool)),
 		this, SLOT(on_log_saveToFile_clicked(bool)));
 
 	// Pop out
 	QPushButton *pop_out_pb = new QPushButton(
-		QIcon::fromTheme("window-new", QIcon(":/icons/window-new.png")),
+		QIcon(":/icons/window-new.png"),
 		tr("&Pop out"));
 	connect(pop_out_pb, SIGNAL(clicked(bool)),
 		this, SLOT(on_log_popOut_clicked(bool)));

@@ -204,8 +204,7 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 
 	// Configure actions
 	save_action_->setText(tr("&Save..."));
-	save_action_->setIcon(QIcon::fromTheme("document-save-as",
-		QIcon(":/icons/document-save-as.png")));
+	save_action_->setIcon(QIcon(":/icons/document-save-as.png"));
 	save_action_->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_S));
 	connect(save_action_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionSave_triggered()));

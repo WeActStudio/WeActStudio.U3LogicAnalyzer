@@ -304,7 +304,7 @@ void MathSignal::populate_popup_form(QWidget *parent, QFormLayout *form)
 	expression_edit_ = new QLineEdit();
 	expression_edit_->setText(math_signal_->get_expression());
 
-	const QIcon edit_icon(QIcon::fromTheme("edit", QIcon(":/icons/math.svg")));
+	const QIcon edit_icon(QIcon(":/icons/math.svg"));
 	QAction *edit_action =
 		expression_edit_->addAction(edit_icon, QLineEdit::TrailingPosition);
 

@@ -214,14 +214,12 @@ namespace pv
 
 			// Actions
 			action_new_view_->setText(tr("Decoding Result"));
-			action_new_view_->setIcon(QIcon::fromTheme("window-new",
-													   QIcon(":/icons/decode_result.png")));
+			action_new_view_->setIcon(QIcon(":/icons/decode_result.png"));
 			connect(action_new_view_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionNewView_triggered()));
 
 			action_open_->setText(tr("&Open..."));
-			action_open_->setIcon(QIcon::fromTheme("document-open",
-												   QIcon(":/icons/document-open.png")));
+			action_open_->setIcon(QIcon(":/icons/document-open.png"));
 			action_open_->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_O));
 			connect(action_open_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionOpen_triggered()));
@@ -231,21 +229,18 @@ namespace pv
 					this, SLOT(on_actionRestoreSetup_triggered()));
 
 			action_save_->setText(tr("Save"));
-			action_save_->setIcon(QIcon::fromTheme("document-save-as",
-												   QIcon(":/icons/document-save-as.png")));
+			action_save_->setIcon(QIcon(":/icons/document-save-as.png"));
 			action_save_->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_S));
 			connect(action_save_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionSave_triggered()));
 
 			action_save_as_->setText(tr("Save &As..."));
-			action_save_as_->setIcon(QIcon::fromTheme("document-save-as",
-													  QIcon(":/icons/document-save-as.png")));
+			action_save_as_->setIcon(QIcon(":/icons/document-save-as.png"));
 			connect(action_save_as_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionSaveAs_triggered()));
 
 			action_save_selection_as_->setText(tr("Save Selected &Range As..."));
-			action_save_selection_as_->setIcon(QIcon::fromTheme("document-save-as",
-																QIcon(":/icons/document-save-as.png")));
+			action_save_selection_as_->setIcon(QIcon(":/icons/document-save-as.png"));
 			action_save_selection_as_->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_R));
 			connect(action_save_selection_as_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionSaveSelectionAs_triggered()));
@@ -2019,7 +2014,7 @@ namespace pv
 			}
 			hot_plug_listen_ = true;
 			usleep(10000);
-			t_hot_plug = std::thread(hot_plug_listen, this);
+			t_hot_plug = std::thread(&MainBar::hot_plug_listen, this);
 		}
 
 		void MainBar::hot_plug_stop()

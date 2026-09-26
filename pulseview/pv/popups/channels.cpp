@@ -115,12 +115,21 @@ Channels::Channels(Session &session, QString device_name, QWidget *parent) :
 
 	init_ui();
 
-	setMinimumSize(500, 450);
+	/*
+	 * Grow with the content instead of squeezing it. The previous fixed
+	 * 500x450 minimum compressed the "Use N channels" radio buttons and
+	 * the channel grid on systems with a larger font or a different style.
+	 */
+	layout_.activate();
+	const QSize content = layout_.minimumSize();
+	setMinimumSize(qMax(500, content.width()), qMax(450, content.height()));
 }
 
 QSize Channels::sizeHint() const
 {
-	return QSize(500, 450);
+	/* Match the minimum size the constructor computed, so the popup opens
+	 * large enough to show every option without squeezing them. */
+	return minimumSize();
 }
 
 

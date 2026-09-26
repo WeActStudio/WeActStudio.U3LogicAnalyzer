@@ -60,24 +60,21 @@ StandardBar::StandardBar(Session &session, QWidget *parent,
 	setIconSize(QSize(32, 32));
 	// Actions
 	action_view_zoom_in_->setText(tr("Zoom &In"));
-	action_view_zoom_in_->setIcon(QIcon::fromTheme("zoom-in",
-		QIcon(":/icons/zoom-in.png")));
+	action_view_zoom_in_->setIcon(QIcon(":/icons/zoom-in.png"));
 	// simply using Qt::Key_Plus shows no + in the menu
 	action_view_zoom_in_->setShortcut(QKeySequence::ZoomIn);
 	connect(action_view_zoom_in_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionViewZoomIn_triggered()));
 
 	action_view_zoom_out_->setText(tr("Zoom &Out"));
-	action_view_zoom_out_->setIcon(QIcon::fromTheme("zoom-out",
-		QIcon(":/icons/zoom-out.png")));
+	action_view_zoom_out_->setIcon(QIcon(":/icons/zoom-out.png"));
 	action_view_zoom_out_->setShortcut(QKeySequence::ZoomOut);
 	connect(action_view_zoom_out_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionViewZoomOut_triggered()));
 
 	action_view_zoom_fit_->setCheckable(true);
 	action_view_zoom_fit_->setText(tr("Zoom to &Fit"));
-	action_view_zoom_fit_->setIcon(QIcon::fromTheme("zoom-fit-best",
-		QIcon(":/icons/zoom-fit-best.png")));
+	action_view_zoom_fit_->setIcon(QIcon(":/icons/zoom-fit-best.png"));
 	action_view_zoom_fit_->setShortcut(QKeySequence(Qt::Key_F));
 	connect(action_view_zoom_fit_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionViewZoomFit_triggered(bool)));

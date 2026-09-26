@@ -91,6 +91,17 @@ private:
 	 */
 	void update_device_list();
 
+	/**
+	 * Sizes the button to its current label plus the drop-down arrow.
+	 */
+	void update_minimum_width();
+
+	/**
+	 * Sets the label, eliding it when it is too long, and resizes the
+	 * button accordingly.
+	 */
+	void set_label(const QString &label);
+
 private Q_SLOTS:
 	void on_action(QObject *action);
 	void on_menu_hovered(QAction *action);
@@ -108,6 +119,8 @@ private:
 	QSignalMapper mapper_;
 
 	shared_ptr<devices::Device> selected_device_;
+
+	QString full_label_;
 	vector< weak_ptr<devices::Device> > devices_;
 
 	QString device_tooltip_;

@@ -107,8 +107,7 @@ SubWindow::SubWindow(Session& session, QWidget* parent) :
 	splitter_->addWidget(upper_container);
 	splitter_->addWidget(info_box_);
 
-	const QIcon filter_icon(QIcon::fromTheme("search",
-		QIcon(":/icons/search.svg")));
+	const QIcon filter_icon(QIcon(":/icons/search.svg"));
 	filter->setClearButtonEnabled(true);
 	filter->addAction(filter_icon, QLineEdit::LeadingPosition);
 

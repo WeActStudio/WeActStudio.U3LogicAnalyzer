@@ -620,23 +620,20 @@ QMenu* DecodeTrace::create_view_context_menu(QWidget *parent, QPoint &click_pos)
 	if (decode_signal_->is_paused()) {
 		QAction *const resume =
 			new QAction(tr("Resume decoding"), this);
-		resume->setIcon(QIcon::fromTheme("media-playback-start",
-			QIcon(":/icons/media-playback-start.png")));
+		resume->setIcon(QIcon(":/icons/media-playback-start.png"));
 		connect(resume, SIGNAL(triggered()), this, SLOT(on_pause_decode()));
 		menu->addAction(resume);
 	} else {
 		QAction *const pause =
 			new QAction(tr("Pause decoding"), this);
-		pause->setIcon(QIcon::fromTheme("media-playback-pause",
-			QIcon(":/icons/media-playback-pause.png")));
+		pause->setIcon(QIcon(":/icons/media-playback-pause.png"));
 		connect(pause, SIGNAL(triggered()), this, SLOT(on_pause_decode()));
 		menu->addAction(pause);
 	}
 
 	QAction *const copy_annotation_to_clipboard =
 		new QAction(tr("Copy annotation text to clipboard"), this);
-	copy_annotation_to_clipboard->setIcon(QIcon::fromTheme("edit-paste",
-		QIcon(":/icons/edit-paste.svg")));
+	copy_annotation_to_clipboard->setIcon(QIcon(":/icons/edit-paste.svg"));
 	connect(copy_annotation_to_clipboard, SIGNAL(triggered()), this, SLOT(on_copy_annotation_to_clipboard()));
 	menu->addAction(copy_annotation_to_clipboard);
 
@@ -644,15 +641,13 @@ QMenu* DecodeTrace::create_view_context_menu(QWidget *parent, QPoint &click_pos)
 
 	QAction *const export_all_rows =
 		new QAction(tr("Export all annotations"), this);
-	export_all_rows->setIcon(QIcon::fromTheme("document-save-as",
-		QIcon(":/icons/document-save-as.png")));
+	export_all_rows->setIcon(QIcon(":/icons/document-save-as.png"));
 	connect(export_all_rows, SIGNAL(triggered()), this, SLOT(on_export_all_rows()));
 	menu->addAction(export_all_rows);
 
 	QAction *const export_row =
 		new QAction(tr("Export all annotations for this row"), this);
-	export_row->setIcon(QIcon::fromTheme("document-save-as",
-		QIcon(":/icons/document-save-as.png")));
+	export_row->setIcon(QIcon(":/icons/document-save-as.png"));
 	connect(export_row, SIGNAL(triggered()), this, SLOT(on_export_row()));
 	menu->addAction(export_row);
 
@@ -660,15 +655,13 @@ QMenu* DecodeTrace::create_view_context_menu(QWidget *parent, QPoint &click_pos)
 
 	QAction *const export_all_rows_from_here =
 		new QAction(tr("Export all annotations, starting here"), this);
-	export_all_rows_from_here->setIcon(QIcon::fromTheme("document-save-as",
-		QIcon(":/icons/document-save-as.png")));
+	export_all_rows_from_here->setIcon(QIcon(":/icons/document-save-as.png"));
 	connect(export_all_rows_from_here, SIGNAL(triggered()), this, SLOT(on_export_all_rows_from_here()));
 	menu->addAction(export_all_rows_from_here);
 
 	QAction *const export_row_from_here =
 		new QAction(tr("Export annotations for this row, starting here"), this);
-	export_row_from_here->setIcon(QIcon::fromTheme("document-save-as",
-		QIcon(":/icons/document-save-as.png")));
+	export_row_from_here->setIcon(QIcon(":/icons/document-save-as.png"));
 	connect(export_row_from_here, SIGNAL(triggered()), this, SLOT(on_export_row_from_here()));
 	menu->addAction(export_row_from_here);
 
@@ -676,15 +669,13 @@ QMenu* DecodeTrace::create_view_context_menu(QWidget *parent, QPoint &click_pos)
 
 	QAction *const export_all_rows_with_cursor =
 		new QAction(tr("Export all annotations within cursor range"), this);
-	export_all_rows_with_cursor->setIcon(QIcon::fromTheme("document-save-as",
-		QIcon(":/icons/document-save-as.png")));
+	export_all_rows_with_cursor->setIcon(QIcon(":/icons/document-save-as.png"));
 	connect(export_all_rows_with_cursor, SIGNAL(triggered()), this, SLOT(on_export_all_rows_with_cursor()));
 	menu->addAction(export_all_rows_with_cursor);
 
 	QAction *const export_row_with_cursor =
 		new QAction(tr("Export annotations for this row within cursor range"), this);
-	export_row_with_cursor->setIcon(QIcon::fromTheme("document-save-as",
-		QIcon(":/icons/document-save-as.png")));
+	export_row_with_cursor->setIcon(QIcon(":/icons/document-save-as.png"));
 	connect(export_row_with_cursor, SIGNAL(triggered()), this, SLOT(on_export_row_with_cursor()));
 	menu->addAction(export_row_with_cursor);
 
