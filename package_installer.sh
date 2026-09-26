@@ -16,8 +16,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/build_cmake"
 DIST_DIR="${SCRIPT_DIR}/dist/LogicAnalyzer"
 SETUP_NAME="LogicAnalyzer_Setup"
-VERSION=0.2
 SKIP_BUILD=0
+
+# Version comes from CMake so the packages cannot drift from the binary.
+CMAKE_LISTS="${SCRIPT_DIR}/pulseview/CMakeLists.txt"
+VERSION=$(sed -n 's/^[[:space:]]*set(PV_VERSION_STRING[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "${CMAKE_LISTS}" 2>/dev/null | head -1)
+if [ -z "${VERSION}" ]; then
+    echo "[警告] 无法从 ${CMAKE_LISTS} 读取 PV_VERSION_STRING，回退到 0.1.0"
+    VERSION=0.1.0
+fi
+echo ">>> 版本: ${VERSION} (来自 pulseview/CMakeLists.txt)"
 
 for arg in "$@"; do
     case $arg in
