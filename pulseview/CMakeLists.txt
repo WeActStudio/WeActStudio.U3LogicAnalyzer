@@ -702,21 +702,22 @@ if(LIBUSB_LINK_FOUND)
 endif()
 
 # Same for hidapi: the IAP dialog talks to the HID IAP device directly.
-pkg_check_modules(HIDAPI_LINK QUIET hidapi-hidraw hidapi-libusb)
-if(NOT HIDAPI_LINK_FOUND)
-	pkg_check_modules(HIDAPI_LINK QUIET hidapi)
-endif()
-if(HIDAPI_LINK_FOUND)
-	list(APPEND PULSEVIEW_LINK_LIBS ${HIDAPI_LINK_LIBRARIES})
-endif()
-
-# Same for hidapi: the IAP dialog talks to the HID IAP device directly.
-pkg_check_modules(HIDAPI_LINK QUIET hidapi-hidraw hidapi-libusb)
-if(NOT HIDAPI_LINK_FOUND)
-	pkg_check_modules(HIDAPI_LINK QUIET hidapi)
-endif()
-if(HIDAPI_LINK_FOUND)
-	list(APPEND PULSEVIEW_LINK_LIBS ${HIDAPI_LINK_LIBRARIES})
+# Prefer the libusb backend: it reaches the device over USB and does not need
+# a /dev/hidraw node, which only exists while usbhid has bound the interface
+# (it does not always, for example behind USB passthrough).
+pkg_check_modules(HIDAPI_LIBUSB QUIET hidapi-libusb)
+if(HIDAPI_LIBUSB_FOUND)
+	list(APPEND PULSEVIEW_LINK_LIBS ${HIDAPI_LIBUSB_LIBRARIES})
+else()
+	pkg_check_modules(HIDAPI_HIDRAW QUIET hidapi-hidraw)
+	if(HIDAPI_HIDRAW_FOUND)
+		list(APPEND PULSEVIEW_LINK_LIBS ${HIDAPI_HIDRAW_LIBRARIES})
+	else()
+		pkg_check_modules(HIDAPI_ANY QUIET hidapi)
+		if(HIDAPI_ANY_FOUND)
+			list(APPEND PULSEVIEW_LINK_LIBS ${HIDAPI_ANY_LIBRARIES})
+		endif()
+	endif()
 endif()
 
 if(STATIC_PKGDEPS_LIBS)
