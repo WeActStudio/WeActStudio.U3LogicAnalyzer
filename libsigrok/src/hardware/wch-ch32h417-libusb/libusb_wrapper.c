@@ -61,10 +61,17 @@ G_STATIC_ASSERT(LIBUSB_STREAM_RING_CHUNK % LIBUSB_STREAM_BURST == 0);
  * Internal state
  * ============================================================================ */
 
-/* One slot of the transfer ring, holding USB target and staged payload. */
+/*
+ * One slot of the transfer ring.
+ *
+ * A slot owns two buffers that swap roles: the controller writes into `target`
+ * while `stage` holds the payload waiting to be drained. Handing a payload over
+ * is then a pointer exchange rather than a 256 kB copy, which is what lets the
+ * callback run on the event thread while the read loop drains another slot.
+ */
 struct stream_slot {
 	struct libusb_transfer *transfer;
-	unsigned char *target;     /* Buffer libusb writes into */
+	unsigned char *target;     /* Buffer libusb is writing into */
 	unsigned char *stage;      /* Payload waiting to be drained */
 	size_t capacity;
 	size_t stage_len;
@@ -74,10 +81,38 @@ struct stream_slot {
 
 /* A sample stream: one IN endpoint with its transfer ring. */
 struct usb_stream {
+	/*
+	 * Guards everything below. Completion callbacks arrive on the event
+	 * thread, the read loop drains from another, and both touch this.
+	 */
+	GMutex lock;
+
 	struct stream_slot slots[LIBUSB_STREAM_RING_COUNT];
+
+	/*
+	 * Payloads must reach the read thread in the order they arrived. The
+	 * slot array cannot be walked by index for that: transfers rotate
+	 * through it, so the oldest payload sits in the lowest slot only as
+	 * long as the staged window does not wrap around the end of the ring,
+	 * and any drain that stops half way lets it wrap on the next call.
+	 * Keep an explicit FIFO of the slots that hold a payload instead.
+	 */
+	unsigned int staged[LIBUSB_STREAM_RING_COUNT];
+	unsigned int staged_head;
+	unsigned int staged_count;
+
 	unsigned long pipe_num;
 	unsigned int depth;
 	gboolean enabled;
+
+	/*
+	 * Set once libusb reports that the device is gone. The transfers that are
+	 * still in flight are allowed to land, but none of them is resubmitted:
+	 * a NO_DEVICE transfer fails again immediately, so retrying would spin in
+	 * the callback and flood the log until the driver tears the ring down.
+	 */
+	gboolean dead;
+
 	unsigned long pending_bytes;
 	unsigned long pending_buffers;
 	unsigned long overflow;
@@ -163,14 +198,17 @@ static void build_device_name(struct usb_device *du, const char *serial)
  * Asynchronous stream ring
  * ============================================================================ */
 
-static void LIBUSB_CALL stream_transfer_cb(struct libusb_transfer *transfer)
+static void stream_push_staged(struct usb_stream *stream, unsigned int slot_index);
+static void LIBUSB_CALL stream_transfer_cb(struct libusb_transfer *transfer);
+
+/*
+ * Everything the callback does, written so it can be run with the ring locked.
+ */
+static void stream_transfer_done(struct usb_stream *stream,
+								 struct libusb_transfer *transfer)
 {
-	struct usb_stream *stream = transfer->user_data;
 	struct stream_slot *slot = NULL;
 	unsigned int i;
-
-	if (!stream)
-		return;
 
 	for (i = 0; i < stream->depth; i++) {
 		if (stream->slots[i].transfer == transfer) {
@@ -182,16 +220,47 @@ static void LIBUSB_CALL stream_transfer_cb(struct libusb_transfer *transfer)
 	if (!slot)
 		return;
 
+	if (transfer->status == LIBUSB_TRANSFER_NO_DEVICE) {
+		/*
+		 * The device was unplugged or the handle died. Let every transfer of
+		 * the ring land here instead of looping: each one clears its own slot
+		 * and the driver frees them once the acquisition stops.
+		 */
+		if (!stream->dead) {
+			stream->dead = TRUE;
+			sr_dbg("Stream ring on pipe %lu stopped: device no longer present",
+				   stream->pipe_num);
+		}
+		slot->inflight = 0;
+		return;
+	}
+
 	if (transfer->status == LIBUSB_TRANSFER_COMPLETED && transfer->actual_length > 0) {
 		if (slot->stage_len == 0) {
 			size_t len = (size_t)transfer->actual_length;
+			unsigned char *spare;
+
 			if (len > slot->capacity)
 				len = slot->capacity;
-			memcpy(slot->stage, slot->target, len);
+
+			/*
+			 * The two buffers of a slot swap roles here: the one the
+			 * controller just filled becomes the payload waiting to be
+			 * drained, the one the read thread already emptied becomes the
+			 * next target. Exchanging pointers rather than copying 256 kB
+			 * keeps the ring held for microseconds, which matters because
+			 * this runs on the event thread and the read loop needs the same
+			 * lock to make progress.
+			 */
+			spare = slot->stage;
+			slot->stage = slot->target;
+			slot->target = spare;
+
 			slot->stage_len = len;
 			slot->stage_off = 0;
 			stream->pending_bytes += len;
 			stream->pending_buffers++;
+			stream_push_staged(stream, i);
 		} else {
 			/*
 			 * The read thread has not drained the previous payload yet. The
@@ -215,7 +284,15 @@ static void LIBUSB_CALL stream_transfer_cb(struct libusb_transfer *transfer)
 			   stream->pipe_num, libusb_error_name(transfer->status));
 	}
 
-	if (stream->enabled) {
+	if (stream->enabled && !stream->dead) {
+		/*
+		 * The buffers swapped above, so aim the transfer at the one the slot
+		 * owns now before putting it back in flight.
+		 */
+		libusb_fill_bulk_transfer(transfer, transfer->dev_handle,
+								  transfer->endpoint, slot->target,
+								  (int)slot->capacity, stream_transfer_cb,
+								  stream, transfer->timeout);
 		if (libusb_submit_transfer(transfer) == LIBUSB_SUCCESS)
 			return;
 		sr_warn("Failed to resubmit stream transfer on pipe %lu", stream->pipe_num);
@@ -224,17 +301,42 @@ static void LIBUSB_CALL stream_transfer_cb(struct libusb_transfer *transfer)
 	slot->inflight = 0;
 }
 
+/*
+ * libusb hands this over on whichever thread ran the event loop, so the ring it
+ * belongs to lives on another thread and has its own lock.
+ */
+static void LIBUSB_CALL stream_transfer_cb(struct libusb_transfer *transfer)
+{
+	struct usb_stream *stream = transfer->user_data;
+
+	if (!stream)
+		return;
+
+	g_mutex_lock(&stream->lock);
+	stream_transfer_done(stream, transfer);
+	g_mutex_unlock(&stream->lock);
+}
 static void pump_events(void);
 
-static int stream_has_inflight(const struct usb_stream *stream)
+static int stream_has_inflight(struct usb_stream *stream)
 {
 	unsigned int i;
+	int busy = FALSE;
 
+	/*
+	 * Called from the quiesce loop, which pumps events around it. The lock is
+	 * therefore always released before that loop calls into libusb, never held
+	 * across it, or the callbacks it waits for could not take it.
+	 */
+	g_mutex_lock(&stream->lock);
 	for (i = 0; i < LIBUSB_STREAM_RING_COUNT; i++)
-		if (stream->slots[i].inflight)
-			return TRUE;
+		if (stream->slots[i].inflight) {
+			busy = TRUE;
+			break;
+		}
+	g_mutex_unlock(&stream->lock);
 
-	return FALSE;
+	return busy;
 }
 
 /*
@@ -311,9 +413,12 @@ static int stream_start(struct usb_device *du, struct usb_stream *stream, unsign
 	stream->pipe_num = pipe_num;
 	stream->depth = LIBUSB_STREAM_RING_COUNT;
 	stream->enabled = TRUE;
+	stream->dead = FALSE;
 	stream->pending_bytes = 0;
 	stream->pending_buffers = 0;
 	stream->overflow = 0;
+	stream->staged_head = 0;
+	stream->staged_count = 0;
 
 	for (i = 0; i < LIBUSB_STREAM_RING_COUNT; i++) {
 		int ret = libusb_submit_transfer(stream->slots[i].transfer);
@@ -339,7 +444,9 @@ static void stream_stop(struct usb_device *du, struct usb_stream *stream)
 	if (!stream->enabled)
 		return;
 
+	g_mutex_lock(&stream->lock);
 	stream->enabled = FALSE;
+	g_mutex_unlock(&stream->lock);
 
 	/*
 	 * Only ask libusb to complete these early; the callback must not resubmit
@@ -402,48 +509,92 @@ static void stream_free(struct usb_stream *stream)
 
 	stream->depth = 0;
 	stream->enabled = FALSE;
+	stream->dead = FALSE;
 	stream->pending_bytes = 0;
 	stream->pending_buffers = 0;
+	stream->staged_head = 0;
+	stream->staged_count = 0;
 }
 
 /*
- * Move staged payloads into the caller's buffer. Everything that has already
- * landed is copied in one pass: the read thread asks for BUFFER_UPLOAD_SIZE
- * at a time, so handing back a single ring chunk per call would cap it at
- * one chunk per iteration - fine at high speed, far too slow for SuperSpeed.
+ * Queue a slot that just received a payload. Runs with the ring locked, on the
+ * event thread.
  */
-static int stream_drain(struct usb_stream *stream, void *buffer, unsigned long *length)
+static void stream_push_staged(struct usb_stream *stream, unsigned int slot_index)
 {
-	unsigned int i;
+	if (stream->staged_count >= LIBUSB_STREAM_RING_COUNT) {
+		/*
+		 * Every slot already holds a payload, so nothing can be in flight
+		 * any more. Count it rather than overwriting an entry, which would
+		 * lose the payload the FIFO still points at.
+		 */
+		stream->overflow++;
+		if (stream->overflow == 1 || stream->overflow % 100 == 0)
+			sr_warn("Stream staging queue full on pipe %lu, %lu payload(s) dropped",
+					stream->pipe_num, stream->overflow);
+		return;
+	}
+
+	stream->staged[(stream->staged_head + stream->staged_count) %
+				   LIBUSB_STREAM_RING_COUNT] = slot_index;
+	stream->staged_count++;
+}
+
+/*
+ * Move staged payloads into the caller's buffer, oldest payload first. The
+ * read thread asks for BUFFER_UPLOAD_SIZE at a time and everything that has
+ * already landed is copied in one pass, so the whole staging area is handed
+ * back rather than a single ring chunk per call.
+ *
+ * A payload is never split across two calls: if it does not fit into what is
+ * left of the caller's buffer the drain stops there and the next call resumes
+ * with it. Splitting used to be allowed together with a walk that always
+ * started at slot 0, which handed out newer payloads before the older tail of
+ * the payload that was split whenever the staged window wrapped the ring end.
+ */
+static int stream_drain_locked(struct usb_stream *stream, void *buffer, unsigned long *length)
+{
 	unsigned long want = *length;
 	unsigned long done = 0;
 	uint8_t *out = buffer;
 
-	for (i = 0; i < LIBUSB_STREAM_RING_COUNT && done < want; i++) {
-		struct stream_slot *slot = &stream->slots[i];
-		size_t space, copied, remain;
+	while (stream->staged_count > 0 && done < want) {
+		const unsigned int index = stream->staged[stream->staged_head];
+		struct stream_slot *slot = &stream->slots[index];
+		const size_t remain = slot->stage_len - slot->stage_off;
 
-		if (slot->stage_len == 0)
-			continue;
+		if (remain > (size_t)(want - done))
+			break;
 
-		space = (size_t)(want - done);
-		remain = slot->stage_len - slot->stage_off;
-		copied = remain < space ? remain : space;
+		memcpy(out + done, slot->stage + slot->stage_off, remain);
+		done += (unsigned long)remain;
 
-		memcpy(out + done, slot->stage + slot->stage_off, copied);
-		slot->stage_off += copied;
-		done += (unsigned long)copied;
+		slot->stage_len = 0;
+		slot->stage_off = 0;
+		stream->pending_buffers--;
+		stream->pending_bytes -= remain;
 
-		if (slot->stage_off >= slot->stage_len) {
-			stream->pending_buffers--;
-			stream->pending_bytes -= slot->stage_len;
-			slot->stage_len = 0;
-			slot->stage_off = 0;
-		}
+		stream->staged_head = (stream->staged_head + 1) % LIBUSB_STREAM_RING_COUNT;
+		stream->staged_count--;
 	}
 
 	*length = done;
 	return done > 0 ? LIBUSB_TRUE : LIBUSB_FALSE;
+}
+
+/*
+ * The read side of the handover, locked against the callbacks arriving on the
+ * event thread.
+ */
+static int stream_drain(struct usb_stream *stream, void *buffer, unsigned long *length)
+{
+	int drained;
+
+	g_mutex_lock(&stream->lock);
+	drained = stream_drain_locked(stream, buffer, length);
+	g_mutex_unlock(&stream->lock);
+
+	return drained;
 }
 
 /*
@@ -458,6 +609,75 @@ static void pump_events(void)
 	tv.tv_sec = 0;
 	tv.tv_usec = 1000;
 	libusb_handle_events_timeout(NULL, &tv);
+}
+
+/*
+ * Completion callbacks need somewhere to run, and the read loop is not it.
+ * Whenever another thread takes the CPU -- one display frame is worth about
+ * 17 ms on every host tried so far -- nothing calls into libusb at all and the
+ * staging area stops being filled. The read loop cannot tell that apart from a
+ * link that went quiet, and every guard built on top of it inherits the mistake.
+ *
+ * So this thread pumps instead. It runs as long as libusb is initialised; idle
+ * cost is one call every 20 ms, most of which is spent waiting inside libusb.
+ */
+static GThread *pump_thread = NULL;
+static gboolean pump_keep_running = FALSE;
+static GMutex pump_run_lock;
+
+static gpointer pump_thread_proc(gpointer user_data)
+{
+	(void)user_data;
+
+	while (TRUE) {
+		struct timeval tv;
+		gboolean running;
+
+		tv.tv_sec = 0;
+		tv.tv_usec = 20000;
+		libusb_handle_events_timeout(NULL, &tv);
+
+		g_mutex_lock(&pump_run_lock);
+		running = pump_keep_running;
+		g_mutex_unlock(&pump_run_lock);
+
+		if (!running)
+			break;
+	}
+
+	return NULL;
+}
+
+static void pump_thread_start(void)
+{
+	g_mutex_lock(&pump_run_lock);
+	pump_keep_running = TRUE;
+	g_mutex_unlock(&pump_run_lock);
+
+	pump_thread = g_thread_new("libusb-pump", pump_thread_proc, NULL);
+	if (pump_thread)
+		return;
+
+	g_mutex_lock(&pump_run_lock);
+	pump_keep_running = FALSE;
+	g_mutex_unlock(&pump_run_lock);
+
+	sr_warn("Could not start the libusb event thread; the read loop falls back "
+			"to pumping on its own");
+}
+
+/* Joins the thread, which must happen before libusb_exit() frees the context. */
+static void pump_thread_stop(void)
+{
+	if (!pump_thread)
+		return;
+
+	g_mutex_lock(&pump_run_lock);
+	pump_keep_running = FALSE;
+	g_mutex_unlock(&pump_run_lock);
+
+	g_thread_join(pump_thread);
+	pump_thread = NULL;
 }
 
 /* ============================================================================
@@ -476,6 +696,7 @@ int ch32h417_libusb_init(void)
 			return SR_ERR;
 		}
 		sr_info("libusb initialised");
+		pump_thread_start();
 	}
 
 	libusb_refcount++;
@@ -496,6 +717,7 @@ void ch32h417_libusb_cleanup(void)
 	libusb_refcount--;
 
 	if (libusb_refcount == 0) {
+		pump_thread_stop();
 		libusb_exit(NULL);
 		sr_info("libusb released");
 	}
@@ -544,6 +766,8 @@ int ch32h417_libusb_scan_devices(void)
 			libusb_close(du->handle);
 		if (du->device)
 			libusb_unref_device(du->device);
+		g_mutex_clear(&du->stream[0].lock);
+		g_mutex_clear(&du->stream[1].lock);
 		g_free(du);
 		device_table[i] = NULL;
 	}
@@ -592,6 +816,8 @@ int ch32h417_libusb_scan_devices(void)
 		du->bcd_usb = des.bcdUSB;
 		du->timeout_write = 500;
 		du->timeout_read = 500;
+		g_mutex_init(&du->stream[0].lock);
+		g_mutex_init(&du->stream[1].lock);
 		build_device_name(du, serial);
 
 		sr_dbg("Found CH32H417 at bus %u address %u, serial %s",
@@ -807,10 +1033,8 @@ int ch32h417_libusb_read_endpoint(unsigned long index, unsigned long pipe_num,
 	stream = stream_for_pipe(du, pipe_num);
 
 	/* Sample streams run through the ring once the ring is enabled. */
-	if (stream && stream->enabled) {
-		pump_events();
+	if (stream && stream->enabled)
 		return stream_drain(stream, buffer, length);
-	}
 
 	ret = libusb_bulk_transfer(du->handle, pipe_to_in_ep(pipe_num),
 							   buffer, (int)*length, &transferred,
@@ -917,11 +1141,15 @@ int ch32h417_libusb_query_buf_upload_ex(unsigned long index, unsigned long pipe_
 		return LIBUSB_TRUE;
 	}
 
-	/* Let the callbacks run so freshly arrived payloads are visible. */
-	pump_events();
+	/*
+	 * Nothing to pump here: callbacks keep running on the event thread whether
+	 * or not the read loop gets scheduled, which is the point of having one.
+	 */
 
+	g_mutex_lock(&stream->lock);
 	*transfer_count = stream->pending_buffers;
 	*total_len = stream->pending_bytes;
+	g_mutex_unlock(&stream->lock);
 
 	return LIBUSB_TRUE;
 }
@@ -940,12 +1168,16 @@ int ch32h417_libusb_clear_buf_upload(unsigned long index, unsigned long pipe_num
 		return LIBUSB_TRUE;
 
 	/* Drop whatever completed; transfers already in flight keep running. */
+	g_mutex_lock(&stream->lock);
 	for (i = 0; i < LIBUSB_STREAM_RING_COUNT; i++) {
 		stream->slots[i].stage_len = 0;
 		stream->slots[i].stage_off = 0;
 	}
 	stream->pending_bytes = 0;
 	stream->pending_buffers = 0;
+	stream->staged_head = 0;
+	stream->staged_count = 0;
+	g_mutex_unlock(&stream->lock);
 
 	sr_dbg("Cleared upload buffer for pipe %lu", pipe_num);
 

@@ -92,14 +92,6 @@ extern "C" {
 #define LIBUSB_STREAM_RING_CHUNK    (16 * LIBUSB_STREAM_BURST)  /* 256 kB */
 #define LIBUSB_STREAM_RING_COUNT    32                          /* 8 MB */
 
-/*
- * Watchdog for the asynchronous ring. If no new transfer has been accepted for
- * this long the stream is considered stalled and the ring is restarted, which
- * recovers from a device-side hiccup that would otherwise leave the ring
- * permanently below full depth.
- */
-#define LIBUSB_STREAM_WATCHDOG_MS   1000
-
 /* ============================================================================
  * Wrapper API declarations
  * ============================================================================ */
