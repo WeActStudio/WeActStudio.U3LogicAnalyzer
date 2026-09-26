@@ -302,7 +302,7 @@ if command -v dpkg-deb >/dev/null 2>&1; then
     [ -z "${INSTALLED_KB}" ] && INSTALLED_KB=0
 
     cat > "${DEB_ROOT}/DEBIAN/control" << CTRLEOF
-Package: logicanalyzer
+Package: u3logicanalyzer
 Version: ${VERSION}
 Section: electronics
 Priority: optional
@@ -319,8 +319,8 @@ CTRLEOF
 
     # Debian policy wants a copyright file, and software centres read the
     # licence from there as well.
-    mkdir -p "${DEB_ROOT}/usr/share/doc/logicanalyzer"
-    cp "${SCRIPT_DIR}/LICENSE" "${DEB_ROOT}/usr/share/doc/logicanalyzer/copyright" 2>/dev/null || true
+    mkdir -p "${DEB_ROOT}/usr/share/doc/u3logicanalyzer"
+    cp "${SCRIPT_DIR}/LICENSE" "${DEB_ROOT}/usr/share/doc/u3logicanalyzer/copyright" 2>/dev/null || true
 
     cat > "${DEB_ROOT}/DEBIAN/postinst" << 'PIEOF'
 #!/bin/sh
