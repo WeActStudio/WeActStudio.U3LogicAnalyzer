@@ -808,13 +808,17 @@ else()
 	endif()
 endif()
 
+# The style is linked in on every platform: it is what draws the widgets
+# when the "FluentUI3" style is picked, and its headers are on the include
+# path of the sources that ask it for its name and its palette.
+list(APPEND PULSEVIEW_LINK_LIBS fluentui3style)
+
 if(WIN32)
 	# On Windows we need to statically link the libqsvg imageformat
 	# plugin (and the QtSvg component) for SVG graphics/icons to work.
 	# We also need QWindowsIntegrationPlugin, Qt5PlatformSupport (only for
 	# Qt < 5.8.0), and all Qt libs and their dependencies.
 	add_definitions(-DQT_STATICPLUGIN)
-	list(APPEND PULSEVIEW_LINK_LIBS fluentui3style)
 	list(APPEND PULSEVIEW_LINK_LIBS Qt${QT_VERSION_MAJOR}::QSvgPlugin)
 	list(APPEND PULSEVIEW_LINK_LIBS Qt${QT_VERSION_MAJOR}::QWindowsIntegrationPlugin)
 	if(QT_VERSION_MAJOR STREQUAL "5" AND Qt5Gui_VERSION VERSION_LESS 5.8.0)
