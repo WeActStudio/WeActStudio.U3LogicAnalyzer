@@ -262,10 +262,13 @@ int main(int argc, char *argv[])
 	a.setWindowIcon(QIcon(":/icons/pulseview.png"));
 
 	/*
-	 * Let the Wayland compositor resolve the app id, so the shell uses the
-	 * icon of the installed LogicAnalyzer.desktop instead of a placeholder.
+	 * The id this window is known by on Wayland, and the name of the
+	 * desktop entry that carries the icon and the display name. All of
+	 * them have to agree: this value, the installed U3LogicAnalyzer.desktop
+	 * and the id in the AppStream metadata. When they do not, the shell
+	 * shows the window title and a placeholder icon in the task bar.
 	 */
-	QGuiApplication::setDesktopFileName(QStringLiteral("LogicAnalyzer"));
+	QGuiApplication::setDesktopFileName(QStringLiteral("U3LogicAnalyzer"));
 	
 	// Directory that holds the executable: everything shipped with the
 	// application sits next to it.
