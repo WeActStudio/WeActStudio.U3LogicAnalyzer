@@ -72,12 +72,13 @@ Application::Application(int &argc, char* argv[]) :
 	setOrganizationName("WeActStudio");
 	setOrganizationDomain("WeActStudio.com");
 
-#ifdef _WIN32
 	/*
-	 * Qt 5 has no signal for the color scheme of the desktop, and the
-	 * palette of the static Qt 5 build this is built against does not
-	 * follow it either, so the change has to be caught where the desktop
-	 * announces it. Only a theme that follows the system cares.
+	 * The change of the color scheme is announced in a way of its own on
+	 * every platform: a broadcast message on Windows, the freedesktop
+	 * portal on Linux. Qt 5 has no signal for it, and the palette of the
+	 * static Qt 5 build this is built against does not follow it either,
+	 * so it has to be caught where the desktop announces it. Only a
+	 * theme that follows the system cares.
 	 */
 	pv::util::watch_color_scheme([]() {
 		pv::GlobalSettings settings;
@@ -85,7 +86,6 @@ Application::Application(int &argc, char* argv[]) :
 			pv::Theme_System)
 			settings.apply_theme();
 	});
-#endif
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0) && !defined(_WIN32)
 	/*

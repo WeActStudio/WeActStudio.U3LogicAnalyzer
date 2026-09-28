@@ -106,12 +106,14 @@ bool palette_is_dark(const QPalette &palette)
 /*
  * Whether the desktop asks for a dark color scheme.
  *
- * On Windows the answer has to be read from the desktop itself: the
- * palette Qt hands out is not a reliable stand-in for it, because some
- * builds of Qt (the static Qt 5 this is built against, for one) return a
- * light palette however the desktop is set up. That made "follow the
- * system" come out light on a dark desktop. Only if the setting is not
- * there, as on an old Windows, the palette is used as a fallback.
+ * The answer has to be read from the desktop itself: the palette Qt
+ * hands out is not a reliable stand-in for it, because some builds of
+ * Qt (the static Qt 5 this is built against, for one) return a light
+ * palette however the desktop is set up, and Qt 6 only follows the
+ * desktop where its platform theme has such a thing, which is not the
+ * case on Linux. That made "follow the system" come out light on a dark
+ * desktop. Only if the desktop cannot be asked, as on an old Windows,
+ * the palette is used as a fallback.
  */
 bool system_prefers_dark(const QPalette &startup_palette)
 {
@@ -123,8 +125,29 @@ bool system_prefers_dark(const QPalette &startup_palette)
 	const QVariant apps_use_light = personalize.value("AppsUseLightTheme");
 	if (apps_use_light.isValid())
 		return apps_use_light.toInt() == 0;
-#elif QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
-	return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+#else
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+	/*
+	 * Qt 6 answers "unknown" where its platform theme does not follow
+	 * the desktop, and that is not the same as a light desktop, so only
+	 * an answer either way is taken.
+	 */
+	const Qt::ColorScheme scheme =
+		QGuiApplication::styleHints()->colorScheme();
+	if (scheme == Qt::ColorScheme::Dark)
+		return true;
+	if (scheme == Qt::ColorScheme::Light)
+		return false;
+#endif
+	/* Every current Linux desktop says through the freedesktop portal. */
+	switch (util::desktop_color_scheme()) {
+	case util::DesktopColorScheme::Dark:
+		return true;
+	case util::DesktopColorScheme::Light:
+		return false;
+	case util::DesktopColorScheme::Unknown:
+		break;
+	}
 #endif
 
 	return palette_is_dark(startup_palette);

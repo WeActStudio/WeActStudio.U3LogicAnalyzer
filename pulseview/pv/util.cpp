@@ -47,10 +47,18 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
+#include <QTimer>
 #include <QWidget>
 #include <QPixmap>
 #include <QPushButton>
 #include <QVBoxLayout>
+
+#ifdef PV_HAVE_QTDBUS
+#include <QtDBus/QDBusConnection>
+#include <QtDBus/QDBusInterface>
+#include <QtDBus/QDBusMessage>
+#include <QtDBus/QDBusVariant>
+#endif
 
 using std::fixed;
 using std::max;
@@ -546,6 +554,69 @@ void apply_window_theme(QWidget *window, bool dark)
 #endif
 }
 
+namespace {
+
+#ifdef PV_HAVE_QTDBUS
+const char *const PortalService = "org.freedesktop.portal.Desktop";
+const char *const PortalPath = "/org/freedesktop/portal/desktop";
+const char *const PortalSettings = "org.freedesktop.portal.Settings";
+const char *const PortalAppearance = "org.freedesktop.appearance";
+#endif
+
+/*
+ * Asks the freedesktop portal which color scheme the desktop is set to.
+ *
+ * 0 is "the desktop has no preference", 1 is dark, 2 is light, and -1 is
+ * "the desktop did not answer", which is what a build without Qt DBus
+ * gets as well.
+ */
+int portal_color_scheme()
+{
+#ifdef PV_HAVE_QTDBUS
+	QDBusInterface portal(QLatin1String(PortalService),
+		QLatin1String(PortalPath), QLatin1String(PortalSettings),
+		QDBusConnection::sessionBus());
+	if (!portal.isValid())
+		return -1;
+
+	const QDBusMessage reply = portal.call(QLatin1String("Read"),
+		QLatin1String(PortalAppearance), QLatin1String("color-scheme"));
+	if (reply.type() == QDBusMessage::ErrorMessage ||
+		reply.arguments().isEmpty())
+		return -1;
+
+	/*
+	 * The answer is a variant, and so is the value the portal wraps the
+	 * setting in, so two layers have to be taken off before the number
+	 * is in reach.
+	 */
+	QVariant value = reply.arguments().at(0);
+	for (int i = 0; i < 2 && value.canConvert<QDBusVariant>(); ++i)
+		value = value.value<QDBusVariant>().variant();
+
+	bool ok = false;
+	const uint scheme = value.toUInt(&ok);
+
+	return ok ? static_cast<int>(scheme) : -1;
+#else
+	return -1;
+#endif
+}
+
+} // namespace
+
+DesktopColorScheme desktop_color_scheme()
+{
+	switch (portal_color_scheme()) {
+	case 1:
+		return DesktopColorScheme::Dark;
+	case 2:
+		return DesktopColorScheme::Light;
+	default:
+		return DesktopColorScheme::Unknown;
+	}
+}
+
 #ifdef _WIN32
 namespace {
 
@@ -617,7 +688,31 @@ void watch_color_scheme(const std::function<void()> &callback)
 
 void watch_color_scheme(const std::function<void()> &callback)
 {
+#ifndef Q_OS_LINUX
 	(void)callback;
+#else
+	/*
+	 * Qt has no signal to offer here: Qt 5 has none at all, and the one
+	 * Qt 6 has only fires where its platform theme follows the desktop,
+	 * which is not everywhere. So the portal is asked again every couple
+	 * of seconds and the callback runs when the answer changes. Asking a
+	 * desktop for a single number is small enough to do that often.
+	 */
+	QTimer *timer = new QTimer(QCoreApplication::instance());
+	timer->setInterval(2000);
+
+	DesktopColorScheme last = desktop_color_scheme();
+	QObject::connect(timer, &QTimer::timeout, [callback, last]() mutable {
+		const DesktopColorScheme now = desktop_color_scheme();
+		if (now == DesktopColorScheme::Unknown || now == last)
+			return;
+
+		last = now;
+		callback();
+	});
+
+	timer->start();
+#endif
 }
 
 #endif

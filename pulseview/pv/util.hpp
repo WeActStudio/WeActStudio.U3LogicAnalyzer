@@ -241,11 +241,28 @@ void show_message(QWidget *parent, const QString &title, const QString &text,
 void apply_window_theme(QWidget *window, bool dark);
 
 /**
+ * The color scheme the desktop asks for.
+ *
+ * Every current Linux desktop announces it through the freedesktop
+ * portal, which is where this reads it. Qt 6 has an answer of its own,
+ * but only where its platform theme follows the desktop, and it answers
+ * "unknown" everywhere else, so the portal is asked too.
+ */
+enum class DesktopColorScheme {
+	Unknown,  ///< The desktop does not say, or it was not asked.
+	Light,
+	Dark
+};
+
+DesktopColorScheme desktop_color_scheme();
+
+/**
  * Calls @c callback whenever the color scheme of the desktop changes.
  *
- * Only Windows needs this: it announces the change with a broadcast
- * message of its own, while Qt reports it by itself wherever the
- * platform theme has such a thing to report. Does nothing elsewhere.
+ * The change is announced in a way of its own on every platform: a
+ * broadcast message on Windows, and the freedesktop portal on Linux,
+ * which Qt does not follow on its own. Does nothing where neither is
+ * there.
  */
 void watch_color_scheme(const std::function<void()> &callback);
 

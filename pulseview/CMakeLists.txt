@@ -130,6 +130,14 @@ find_package(Qt${QT_VERSION_MAJOR} ${QT_MIN_VERSION} COMPONENTS Core Gui Linguis
 
 message(STATUS "Qt version: ${Qt${QT_VERSION_MAJOR}_VERSION}")
 
+# Qt DBus is how the color scheme of a Linux desktop is read: the
+# desktops announce it through the freedesktop portal, and Qt 6 only
+# reports one of its own where its platform theme follows the desktop.
+# Nowhere else is it needed, so it is only looked for where it is used.
+if(UNIX AND NOT APPLE)
+	find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS DBus)
+endif()
+
 #= The FluentUI3 style of the widget style setting. It is built as a
 #= static library rather than loaded as a style plugin because the Qt
 #= in use is static. It is added here and not further down because the
@@ -812,6 +820,11 @@ endif()
 # when the "FluentUI3" style is picked, and its headers are on the include
 # path of the sources that ask it for its name and its palette.
 list(APPEND PULSEVIEW_LINK_LIBS fluentui3style)
+
+if(Qt${QT_VERSION_MAJOR}DBus_FOUND)
+	list(APPEND PULSEVIEW_LINK_LIBS Qt${QT_VERSION_MAJOR}::DBus)
+	add_definitions(-DPV_HAVE_QTDBUS)
+endif()
 
 if(WIN32)
 	# On Windows we need to statically link the libqsvg imageformat
