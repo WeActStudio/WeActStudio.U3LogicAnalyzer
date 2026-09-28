@@ -37,6 +37,7 @@
 #include <libsigrokcxx/libsigrokcxx.hpp>
 
 #include <QCheckBox>
+#include <QDateTime>
 #include <QDebug>
 #include <QDir>
 #include <QGuiApplication>
