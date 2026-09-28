@@ -220,6 +220,64 @@ DEB="${STAGE}.deb"
 # libqt6widgets6, ...).
 QT_DEPS="libqt${QT_MAJOR}widgets${QT_MAJOR}, libqt${QT_MAJOR}svg${QT_MAJOR}, libqt${QT_MAJOR}dbus${QT_MAJOR}"
 
+# --- Icon theme tree -------------------------------------------------------
+# The shipped PNG is 200x200, which matches no hicolor directory: app
+# centres (AppStream) reject an icon whose real size differs from the
+# directory it sits in, so build a proper hicolor tree instead. Python +
+# Pillow are used when present; otherwise the original file is copied,
+# which is only a cosmetic deviation.
+scale_icon() {   # $1 source, $2 target, $3 size
+    python3 - "$1" "$2" "$3" <<'PYEOF' 2>/dev/null || cp -f "$1" "$2"
+import sys
+from PIL import Image
+src, dst, size = sys.argv[1], sys.argv[2], int(sys.argv[3])
+Image.open(src).convert("RGBA").resize((size, size), Image.LANCZOS).save(dst)
+PYEOF
+}
+
+ICON_TREE="${DIST_DIR}/share/icons/hicolor"
+if [ -f "${DIST_DIR}/share/icons/${APP_NAME}.png" ]; then
+    mkdir -p "${ICON_TREE}/256x256/apps" "${ICON_TREE}/48x48/apps" "${ICON_TREE}/scalable/apps"
+    scale_icon "${DIST_DIR}/share/icons/${APP_NAME}.png" \
+               "${ICON_TREE}/256x256/apps/${APP_NAME}.png" 256
+    scale_icon "${DIST_DIR}/share/icons/${APP_NAME}.png" \
+               "${ICON_TREE}/48x48/apps/${APP_NAME}.png" 48
+    [ -f "${DIST_DIR}/share/icons/${APP_NAME}.svg" ] && \
+        cp "${DIST_DIR}/share/icons/${APP_NAME}.svg" "${ICON_TREE}/scalable/apps/"
+fi
+
+# --- AppStream metadata ----------------------------------------------------
+# Without it an app centre (GNOME Software, Ubuntu App Center) has nothing
+# to read the name, the icon and the description from and shows a
+# placeholder tile, even though the menu entry itself is fine.
+METAINFO="${SCRIPT_DIR}/dist/${APP_NAME}.metainfo.xml"
+cat > "${METAINFO}" << METEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>${APP_NAME}</id>
+  <name>${APP_NAME}</name>
+  <summary>CH32H417 Logic Analyzer</summary>
+  <developer_name>WeAct Studio</developer_name>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>PulseView based acquisition software for the WeAct Studio CH32H417
+    logic analyzer: captures with up to 16 channels and decodes them with
+    the bundled sigrok protocol decoders.</p>
+  </description>
+  <launchable type="desktop-id">${APP_NAME}.desktop</launchable>
+  <icon type="stock">${APP_NAME}</icon>
+  <categories>
+    <category>Development</category>
+    <category>Science</category>
+  </categories>
+  <provides>
+    <binary>${APP_NAME}</binary>
+  </provides>
+  <url type="homepage">https://github.com/WeActStudio</url>
+</component>
+METEOF
+
 # --- install.sh / uninstall.sh shipped inside the archive ---
 cat > "${SCRIPT_DIR}/dist/install.sh" << 'INSEOF'
 #!/bin/bash
@@ -233,11 +291,13 @@ if [ "$(id -u)" -eq 0 ] && [ "$1" != "--user" ]; then
     PREFIX=/opt/U3LogicAnalyzer
     APP_DIR=/usr/share/applications
     ICON_ROOT=/usr/share/icons/hicolor
+    META_DIR=/usr/share/metainfo
     UDEV_DIR=/etc/udev/rules.d
 else
     PREFIX="$HOME/.local/opt/U3LogicAnalyzer"
     APP_DIR="$HOME/.local/share/applications"
     ICON_ROOT="$HOME/.local/share/icons/hicolor"
+    META_DIR="$HOME/.local/share/metainfo"
     UDEV_DIR=""
 fi
 
@@ -249,8 +309,23 @@ chmod +x "$PREFIX/U3LogicAnalyzer"
 
 sed "s|^Exec=.*|Exec=$PREFIX/U3LogicAnalyzer|; s|^Icon=.*|Icon=U3LogicAnalyzer|" \
     "$DIR/U3LogicAnalyzer.desktop" > "$APP_DIR/U3LogicAnalyzer.desktop"
-cp "$DIR/share/icons/U3LogicAnalyzer.png" "$ICON_ROOT/48x48/apps/" 2>/dev/null || true
-cp "$DIR/share/icons/U3LogicAnalyzer.svg" "$ICON_ROOT/scalable/apps/" 2>/dev/null || true
+
+# A hicolor tree from the packager is preferred: there the sizes match the
+# directories, which is what app centres check. Fall back to the plain
+# icon files when the tree is not part of this archive.
+if [ -d "$DIR/share/icons/hicolor" ]; then
+    cp -r "$DIR/share/icons/hicolor/." "$ICON_ROOT/" 2>/dev/null || true
+else
+    cp "$DIR/share/icons/U3LogicAnalyzer.png" "$ICON_ROOT/48x48/apps/" 2>/dev/null || true
+    cp "$DIR/share/icons/U3LogicAnalyzer.svg" "$ICON_ROOT/scalable/apps/" 2>/dev/null || true
+fi
+
+# AppStream metadata: without it an app centre shows a placeholder tile.
+if [ -f "$DIR/U3LogicAnalyzer.metainfo.xml" ]; then
+    mkdir -p "$META_DIR"
+    cp "$DIR/U3LogicAnalyzer.metainfo.xml" "$META_DIR/"
+    echo ">>> Installed the AppStream metadata"
+fi
 
 if [ -n "$UDEV_DIR" ] && [ -f "$DIR/99-weact-ch32h417.rules" ]; then
     cp "$DIR/99-weact-ch32h417.rules" "$UDEV_DIR/"
@@ -275,17 +350,20 @@ if [ "$(id -u)" -eq 0 ] && [ "$1" != "--user" ]; then
     PREFIX=/opt/U3LogicAnalyzer
     APP_DIR=/usr/share/applications
     ICON_ROOT=/usr/share/icons/hicolor
+    META_DIR=/usr/share/metainfo
     UDEV_DIR=/etc/udev/rules.d
 else
     PREFIX="$HOME/.local/opt/U3LogicAnalyzer"
     APP_DIR="$HOME/.local/share/applications"
     ICON_ROOT="$HOME/.local/share/icons/hicolor"
+    META_DIR="$HOME/.local/share/metainfo"
     UDEV_DIR="$HOME/.local/share/udev"
 fi
 
 rm -rf "$PREFIX" "$UDEV_DIR/99-weact-ch32h417.rules"
 rm -f "$APP_DIR/U3LogicAnalyzer.desktop"
 rm -f "$ICON_ROOT/48x48/apps/U3LogicAnalyzer.png" "$ICON_ROOT/scalable/apps/U3LogicAnalyzer.svg"
+rm -f "$ICON_ROOT/256x256/apps/U3LogicAnalyzer.png" "$META_DIR/U3LogicAnalyzer.metainfo.xml"
 update-desktop-database "$APP_DIR" 2>/dev/null || true
 gtk-update-icon-cache -f -t "$ICON_ROOT" 2>/dev/null || true
 echo ">>> Removed U3LogicAnalyzer"
@@ -297,7 +375,8 @@ echo ">>> Step 2/4: creating the tar.gz archive..."
 rm -rf "${STAGE}"
 mkdir -p "${STAGE}"
 cp -r "${DIST_DIR}/." "${STAGE}/"
-cp "${SCRIPT_DIR}/dist/install.sh" "${SCRIPT_DIR}/dist/uninstall.sh" "${STAGE}/"
+cp "${SCRIPT_DIR}/dist/install.sh" "${SCRIPT_DIR}/dist/uninstall.sh" \
+   "${METAINFO}" "${STAGE}/"
 cp "${SCRIPT_DIR}/99-weact-ch32h417.rules" "${STAGE}/" 2>/dev/null || true
 chmod +x "${STAGE}/install.sh" "${STAGE}/uninstall.sh"
 tar czf "${TARBALL}" -C "${SCRIPT_DIR}/dist" "${BASENAME}"
@@ -327,22 +406,20 @@ if command -v dpkg-deb >/dev/null 2>&1; then
         sed -i 's/^\[Desktop Entry\]/[Desktop Entry]\nVersion=1.0/' \
             "${DEB_ROOT}/usr/share/applications/U3LogicAnalyzer.desktop"
 
-    # The shipped PNG is 200x200, so it belongs in 256x256 (and as an
-    # unthemed pixmap) rather than in 48x48 where the size would not match.
-    mkdir -p "${DEB_ROOT}/usr/share/icons/hicolor/256x256/apps" \
-             "${DEB_ROOT}/usr/share/icons/hicolor/48x48/apps" \
-             "${DEB_ROOT}/usr/share/pixmaps"
-    cp "${DIST_DIR}/share/icons/U3LogicAnalyzer.png" \
-       "${DEB_ROOT}/usr/share/icons/hicolor/256x256/apps/" 2>/dev/null || true
-    cp "${DIST_DIR}/share/icons/U3LogicAnalyzer.png" \
-       "${DEB_ROOT}/usr/share/icons/hicolor/48x48/apps/" 2>/dev/null || true
-    cp "${DIST_DIR}/share/icons/U3LogicAnalyzer.png" \
+    # Icons come from the hicolor tree built above, so the sizes match
+    # their directories. The unthemed pixmap is what older or non themed
+    # launchers fall back to.
+    mkdir -p "${DEB_ROOT}/usr/share/icons/hicolor" "${DEB_ROOT}/usr/share/pixmaps"
+    cp -r "${ICON_TREE}/." "${DEB_ROOT}/usr/share/icons/hicolor/" 2>/dev/null || true
+    cp "${DIST_DIR}/share/icons/${APP_NAME}.png" \
        "${DEB_ROOT}/usr/share/pixmaps/" 2>/dev/null || true
-    cp "${DIST_DIR}/share/icons/U3LogicAnalyzer.svg" \
-       "${DEB_ROOT}/usr/share/icons/hicolor/scalable/apps/" 2>/dev/null || true
     cp "${SCRIPT_DIR}/99-weact-ch32h417.rules" \
        "${DEB_ROOT}/etc/udev/rules.d/" 2>/dev/null || true
 
+    # AppStream metadata is what an app centre reads the name, the icon
+    # and the description from; without it the entry stays a placeholder.
+    mkdir -p "${DEB_ROOT}/usr/share/metainfo"
+    cp "${METAINFO}" "${DEB_ROOT}/usr/share/metainfo/${APP_NAME}.metainfo.xml"
 
     # Installed-Size is what software centres show as the download size;
     # without it they display "0 B".
@@ -475,11 +552,12 @@ if [ -n "${TOOL}" ] && [ -f "${DIST_DIR}/U3LogicAnalyzer" ]; then
     cp "${APPDIR}/U3LogicAnalyzer.desktop" "${APPDIR}/usr/share/applications/"
 
     # Copy (not link) the icon: the root icon is what file managers show.
+    # The themed copies come from the hicolor tree, so the task bar gets an
+    # icon whose size matches the directory it is looked up in.
     cp "${DIST_DIR}/share/icons/U3LogicAnalyzer.png" "${APPDIR}/U3LogicAnalyzer.png"
     cp "${APPDIR}/U3LogicAnalyzer.png" "${APPDIR}/.DirIcon"
-    cp "${APPDIR}/U3LogicAnalyzer.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/"
-    cp "${APPDIR}/U3LogicAnalyzer.png" "${APPDIR}/usr/share/icons/hicolor/48x48/apps/"
-    cp "${APPDIR}/U3LogicAnalyzer.png" "${APPDIR}/usr/share/pixmaps/"
+    cp -r "${ICON_TREE}/." "${APPDIR}/usr/share/icons/hicolor/" 2>/dev/null || true
+    cp "${DIST_DIR}/share/icons/U3LogicAnalyzer.png" "${APPDIR}/usr/share/pixmaps/"
     [ -f "${DIST_DIR}/share/icons/U3LogicAnalyzer.svg" ] && \
         cp "${DIST_DIR}/share/icons/U3LogicAnalyzer.svg" \
            "${APPDIR}/usr/share/icons/hicolor/scalable/apps/" 2>/dev/null || true
@@ -538,7 +616,15 @@ echo ""
 echo "============================================"
 echo " Installer done! (Qt ${QT_MAJOR})"
 echo " ${TARBALL}"
-[ -f "${DEB}" ] && echo " ${DEB}"
+if [ -f "${DEB}" ]; then
+    echo " ${DEB}"
+    echo ""
+    echo " Install:  sudo apt install ./${DEB##*/}"
+    echo " Remove:   sudo apt remove ${DEB_PKG}"
+    echo " A software centre only manages apps that come from a software source,"
+    echo " so this locally installed deb is not listed there and cannot be"
+    echo " removed from it - apt/dpkg is the way (or Synaptic, for a GUI)."
+fi
 if [ -f "${APPIMAGE}" ]; then
     echo " ${APPIMAGE}"
     echo ""
