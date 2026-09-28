@@ -161,7 +161,19 @@ endif()
 # was removed in Boost 1.89, so retry without it when the first
 # find_package() call fails on newer Boost releases.
 macro(find_boost_required _minver)
-	find_package(Boost ${_minver} QUIET COMPONENTS ${BOOSTCOMPS})
+	# Boost has carried a CMake package of its own since 1.70, and the
+	# FindBoost module that was used before it was taken out of CMake in
+	# 3.30 (CMP0167), where it first warns and is then gone. So Boost is
+	# asked for its own package first, and the module is only used where
+	# there is none, which is how an old distribution looks.
+	find_package(Boost ${_minver} QUIET CONFIG COMPONENTS ${BOOSTCOMPS})
+	if(NOT Boost_FOUND)
+		list(REMOVE_ITEM BOOSTCOMPS system)
+		find_package(Boost ${_minver} QUIET CONFIG COMPONENTS ${BOOSTCOMPS})
+	endif()
+	if(NOT Boost_FOUND)
+		find_package(Boost ${_minver} QUIET COMPONENTS ${BOOSTCOMPS})
+	endif()
 	if(NOT Boost_FOUND)
 		list(REMOVE_ITEM BOOSTCOMPS system)
 		find_package(Boost ${_minver} COMPONENTS ${BOOSTCOMPS} REQUIRED)
