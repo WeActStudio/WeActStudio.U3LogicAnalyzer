@@ -17,6 +17,7 @@
 #
 # Usage:
 #   ./package_installer.sh               # Build + package + create installer
+#   ./package_installer.sh --qt6         # Same, built against Qt 6
 #   ./package_installer.sh --skip-build  # Skip the build, package existing dist/
 # ============================================================================
 set -e
@@ -26,6 +27,17 @@ BUILD_DIR="${SCRIPT_DIR}/build_cmake"
 DIST_DIR="${SCRIPT_DIR}/dist/U3LogicAnalyzer"
 SETUP_NAME="U3LogicAnalyzer_Setup"
 SKIP_BUILD=0
+CLEAN=1
+
+# Qt version: 5 (default) or 6. It decides which build.sh runs and, on
+# Linux, which Qt libraries the deb has to depend on.
+QT_MAJOR=5
+for arg in "$@"; do
+    case "$arg" in
+        --qt5) QT_MAJOR=5 ;;
+        --qt6) QT_MAJOR=6 ;;
+    esac
+done
 
 # Version comes from CMake so the packages cannot drift from the binary.
 CMAKE_LISTS="${SCRIPT_DIR}/pulseview/CMakeLists.txt"
@@ -40,6 +52,10 @@ echo ">>> Version: ${VERSION} (from pulseview/CMakeLists.txt)"
 for arg in "$@"; do
     case $arg in
         --skip-build) SKIP_BUILD=1 ;;
+        --clean) CLEAN=1 ;;
+        --no-clean) CLEAN=0 ;;
+        --qt5|--qt6) ;;   # already picked up above
+        *) echo "[error] unknown option: $arg" >&2; exit 1 ;;
     esac
 done
 
@@ -51,9 +67,24 @@ fi
 
 # --- Build + package ---
 if [ $SKIP_BUILD -eq 0 ]; then
-    echo ">>> Step 1/3: build and package..."
-    bash "${SCRIPT_DIR}/build.sh" --clean --package
+    echo ">>> Step 1/3: build and package... (Qt ${QT_MAJOR})"
+    BUILD_ARGS=(--package "--qt${QT_MAJOR}")
+    [ $CLEAN -eq 1 ] && BUILD_ARGS+=(--clean)
+    bash "${SCRIPT_DIR}/build.sh" "${BUILD_ARGS[@]}"
 else
+    # The existing dist/ was built against some Qt: read it back from the
+    # cache so the packages below do not claim the wrong dependencies.
+    CACHE="${BUILD_DIR}/logicanalyzer_build/CMakeCache.txt"
+    if [ -f "${CACHE}" ]; then
+        CACHED_QT=$(sed -n 's/^QT_VERSION_MAJOR:[^=]*=\([0-9]\).*/\1/p' "${CACHE}" | head -1)
+        if [ -n "${CACHED_QT}" ] && [ "${CACHED_QT}" != "${QT_MAJOR}" ]; then
+            echo "[warning] dist/ was built against Qt ${CACHED_QT}, but Qt ${QT_MAJOR} was asked for"
+            echo "          (drop --skip-build or pass --qt${CACHED_QT} to package what is there)"
+            QT_MAJOR="${CACHED_QT}"
+        fi
+    fi
+    echo ">>> Qt: ${QT_MAJOR} (from the existing build)"
+
     if [ $IS_WINDOWS -eq 1 ]; then
         [ -f "${DIST_DIR}/U3LogicAnalyzer.exe" ] || {
             echo "[error] ${DIST_DIR}/U3LogicAnalyzer.exe not found, run ./build.sh --package first"
@@ -154,6 +185,7 @@ echo ""
 echo "============================================"
 echo " Installer done!"
 echo " ${OUTPUT}"
+echo " Qt: ${QT_MAJOR}"
 echo "============================================"
 
 # ============================================================================
@@ -168,10 +200,25 @@ case "${ARCH}" in
     aarch64|arm64) ARCH=arm64 ;;
 esac
 
-BASENAME="U3LogicAnalyzer-${VERSION}-linux-${ARCH}"
+# Also the app id: the desktop file name, the icon name and (through
+# QGuiApplication::setDesktopFileName) the Wayland app id all use it.
+APP_NAME="U3LogicAnalyzer"
+# Name of the Debian package: lower case, as Debian policy wants it.
+DEB_PKG="u3logicanalyzer"
+
+# A Qt 6 build gets a -qt6 tag: the same version of the Qt 5 and Qt 6
+# packages would otherwise overwrite each other in dist/.
+if [ "${QT_MAJOR}" = "6" ]; then QT_TAG="-qt6"; else QT_TAG=""; fi
+
+BASENAME="U3LogicAnalyzer-${VERSION}-linux-${ARCH}${QT_TAG}"
 STAGE="${SCRIPT_DIR}/dist/${BASENAME}"
 TARBALL="${STAGE}.tar.gz"
 DEB="${STAGE}.deb"
+
+# The binary links QtWidgets/QtSvg/QtDBus; the runtime packages carry the
+# same major version number as the Qt they belong to (libqt5widgets5,
+# libqt6widgets6, ...).
+QT_DEPS="libqt${QT_MAJOR}widgets${QT_MAJOR}, libqt${QT_MAJOR}svg${QT_MAJOR}, libqt${QT_MAJOR}dbus${QT_MAJOR}"
 
 # --- install.sh / uninstall.sh shipped inside the archive ---
 cat > "${SCRIPT_DIR}/dist/install.sh" << 'INSEOF'
@@ -296,13 +343,14 @@ if command -v dpkg-deb >/dev/null 2>&1; then
     cp "${SCRIPT_DIR}/99-weact-ch32h417.rules" \
        "${DEB_ROOT}/etc/udev/rules.d/" 2>/dev/null || true
 
+
     # Installed-Size is what software centres show as the download size;
     # without it they display "0 B".
     INSTALLED_KB=$(du -sk "${DEB_ROOT}" 2>/dev/null | awk '{print $1}')
     [ -z "${INSTALLED_KB}" ] && INSTALLED_KB=0
 
     cat > "${DEB_ROOT}/DEBIAN/control" << CTRLEOF
-Package: u3logicanalyzer
+Package: ${DEB_PKG}
 Version: ${VERSION}
 Section: electronics
 Priority: optional
@@ -311,7 +359,7 @@ Installed-Size: ${INSTALLED_KB}
 Maintainer: WeAct Studio
 Homepage: https://github.com/WeActStudio
 License: GPL-3+
-Depends: libqt5widgets5, libqt5svg5, python3
+Depends: ${QT_DEPS}, python3
 Description: CH32H417 Logic Analyzer (WeAct Studio)
  PulseView based acquisition software for the WeAct Studio
  CH32H417 logic analyzer. Installed to /opt/U3LogicAnalyzer.
@@ -319,8 +367,8 @@ CTRLEOF
 
     # Debian policy wants a copyright file, and software centres read the
     # licence from there as well.
-    mkdir -p "${DEB_ROOT}/usr/share/doc/u3logicanalyzer"
-    cp "${SCRIPT_DIR}/LICENSE" "${DEB_ROOT}/usr/share/doc/u3logicanalyzer/copyright" 2>/dev/null || true
+    mkdir -p "${DEB_ROOT}/usr/share/doc/${DEB_PKG}"
+    cp "${SCRIPT_DIR}/LICENSE" "${DEB_ROOT}/usr/share/doc/${DEB_PKG}/copyright" 2>/dev/null || true
 
     cat > "${DEB_ROOT}/DEBIAN/postinst" << 'PIEOF'
 #!/bin/sh
@@ -369,7 +417,7 @@ case "${ARCH}" in
     *)      AI_ARCH="${ARCH}" ;;
 esac
 
-APPIMAGE="${SCRIPT_DIR}/dist/U3LogicAnalyzer-${VERSION}-${AI_ARCH}.AppImage"
+APPIMAGE="${SCRIPT_DIR}/dist/U3LogicAnalyzer-${VERSION}-${AI_ARCH}${QT_TAG}.AppImage"
 TOOL=""
 for c in appimagetool "appimagetool-${AI_ARCH}.AppImage" "appimagetool-x86_64.AppImage"; do
     if command -v "$c" >/dev/null 2>&1; then TOOL="$c"; break; fi
@@ -466,7 +514,7 @@ AREOF
 # Start the AppImage without FUSE: extract once into a cache directory.
 set -e
 HERE="\$(cd "\$(dirname "\$(readlink -f "\$0")")" && pwd)"
-AI="\${HERE}/U3LogicAnalyzer-${VERSION}-${AI_ARCH}.AppImage"
+AI="\${HERE}/U3LogicAnalyzer-${VERSION}-${AI_ARCH}${QT_TAG}.AppImage"
 CACHE="\${XDG_CACHE_HOME:-\$HOME/.cache}/U3LogicAnalyzer-appimage"
 if [ ! -x "\${CACHE}/squashfs-root/AppRun" ]; then
     mkdir -p "\${CACHE}"
@@ -488,7 +536,7 @@ fi
 
 echo ""
 echo "============================================"
-echo " Installer done!"
+echo " Installer done! (Qt ${QT_MAJOR})"
 echo " ${TARBALL}"
 [ -f "${DEB}" ] && echo " ${DEB}"
 if [ -f "${APPIMAGE}" ]; then
