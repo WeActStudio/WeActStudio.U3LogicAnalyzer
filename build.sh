@@ -380,7 +380,7 @@ if [ $PACKAGE -eq 1 ]; then
     if [ -d "$QT_TRANSLATIONS_SRC" ]; then
         mkdir -p "$DIST_DIR/share/qt${QT_MAJOR}/translations"
         for lang in $LANGUAGES; do
-            cp "$QT_TRANSLATIONS_SRC"/*_${lang}.qm "$DIST_DIR/share/qt5/translations/" 2>/dev/null
+            cp "$QT_TRANSLATIONS_SRC"/*_${lang}.qm "$DIST_DIR/share/qt${QT_MAJOR}/translations/" 2>/dev/null
         done
     fi
 
@@ -743,7 +743,7 @@ EOF
         if [ -d "$QT_TRANSLATIONS_SRC" ]; then
             mkdir -p "$DIST_DIR/share/qt${QT_MAJOR}/translations"
             for lang in $LANGUAGES; do
-                cp "$QT_TRANSLATIONS_SRC"/*_${lang}.qm "$DIST_DIR/share/qt5/translations/" 2>/dev/null || true
+                cp "$QT_TRANSLATIONS_SRC"/*_${lang}.qm "$DIST_DIR/share/qt${QT_MAJOR}/translations/" 2>/dev/null || true
             done
         fi
 
