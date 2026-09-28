@@ -38,7 +38,9 @@
 #include <QFontMetrics>
 #include <QMenu>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QScrollBar>
+#include <QSplitterHandle>
 #include <QVBoxLayout>
 
 #include <libsigrokcxx/libsigrokcxx.hpp>
@@ -105,6 +107,47 @@ const int View::ViewScrollMargin = 0;
 
 const int View::ScaleUnits[3] = {1, 2, 5};
 
+namespace {
+
+/*
+ * The handle between the header and the traces. It is one pixel wide,
+ * and the styles paint it as a line of their own, which shows as a seam
+ * between two surfaces that are meant to read as one. Fill it with the
+ * color of those surfaces instead. It is still there to be dragged.
+ */
+class SplitterHandle : public QSplitterHandle
+{
+public:
+	SplitterHandle(Qt::Orientation orientation, QSplitter *parent) :
+		QSplitterHandle(orientation, parent)
+	{
+	}
+
+protected:
+	void paintEvent(QPaintEvent *) override
+	{
+		QPainter painter(this);
+		painter.fillRect(rect(), palette().brush(QPalette::Base));
+	}
+};
+
+class Splitter : public QSplitter
+{
+public:
+	explicit Splitter(QWidget *parent = nullptr) :
+		QSplitter(parent)
+	{
+	}
+
+protected:
+	QSplitterHandle *createHandle() override
+	{
+		return new SplitterHandle(orientation(), this);
+	}
+};
+
+} // namespace
+
 CustomScrollArea::CustomScrollArea(QWidget *parent) :
 	QAbstractScrollArea(parent)
 {
@@ -139,7 +182,7 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 	ViewBase(session, is_main_view, parent),
 
 	// Note: Place defaults in View::reset_view_state(), not here
-	splitter_(new QSplitter()),
+	splitter_(new Splitter()),
 	header_was_shrunk_(false),  // The splitter remains unchanged after a reset, so this goes here
 	sticky_scrolling_(false),  // Default setting is set in MainWindow::setup_ui()
 	scroll_needs_defaults_(true)
@@ -161,6 +204,15 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 	// allowing us to make it line up with the bottom of the ruler
 	QWidget *header_container = new QWidget();
 	header_container->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+	/*
+	 * The margin the layout adds above the header is part of the
+	 * container and no widget draws it, so it would show whatever the
+	 * backing store holds in its place -- a block that belongs to no
+	 * widget on screen. Fill it with the color of the surface the ruler
+	 * and the traces are drawn on, which is what lines up with it.
+	 */
+	header_container->setAutoFillBackground(true);
+	header_container->setBackgroundRole(QPalette::Base);
 	QVBoxLayout *header_layout = new QVBoxLayout(header_container);
 	header_layout->setContentsMargins(0, ruler_->sizeHint().height(), 0, 0);
 	header_layout->addWidget(header_);

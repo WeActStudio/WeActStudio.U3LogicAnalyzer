@@ -1018,6 +1018,26 @@ Please check the device connection and firmware file.</source>
         <translation>主题</translation>
     </message>
     <message>
+        <location filename="../pv/dialogs/settings.cpp" line="291"/>
+        <source>User interface style</source>
+        <translation>界面风格</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/settings.cpp" line="284"/>
+        <source>Follow system</source>
+        <translation>跟随系统</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/settings.cpp" line="285"/>
+        <source>Light</source>
+        <translation>浅色</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/settings.cpp" line="286"/>
+        <source>Dark</source>
+        <translation>深色</translation>
+    </message>
+    <message>
         <location filename="../pv/dialogs/settings.cpp" line="258"/>
         <source>System Default</source>
         <translation>默认风格</translation>
@@ -1026,11 +1046,6 @@ Please check the device connection and firmware file.</source>
         <location filename="../pv/dialogs/settings.cpp" line="271"/>
         <source>Qt widget style</source>
         <translation>QT 软件界面风格</translation>
-    </message>
-    <message>
-        <location filename="../pv/dialogs/settings.cpp" line="273"/>
-        <source>(Dark themes look best with the Fusion style)</source>
-        <translation>（深色主题与Fusion风格搭配效果最佳）</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="280"/>

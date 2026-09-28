@@ -27,6 +27,9 @@
 #include <QLibraryInfo>
 #include <QEvent>
 #include <QWidget>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+#include <QStyleHints>
+#endif
 
 #include <boost/version.hpp>
 
@@ -43,6 +46,7 @@
 #include "application.hpp"
 #include "config.h"
 #include "globalsettings.hpp"
+#include "util.hpp"
 
 using std::cout;
 using std::endl;
@@ -67,6 +71,35 @@ Application::Application(int &argc, char* argv[]) :
 	setApplicationName("U3LogicAnalyzer");
 	setOrganizationName("WeActStudio");
 	setOrganizationDomain("WeActStudio.com");
+
+#ifdef _WIN32
+	/*
+	 * Qt 5 has no signal for the color scheme of the desktop, and the
+	 * palette of the static Qt 5 build this is built against does not
+	 * follow it either, so the change has to be caught where the desktop
+	 * announces it. Only a theme that follows the system cares.
+	 */
+	pv::util::watch_color_scheme([]() {
+		pv::GlobalSettings settings;
+		if (settings.value(pv::GlobalSettings::Key_General_Theme).toInt() ==
+			pv::Theme_System)
+			settings.apply_theme();
+	});
+#endif
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0) && !defined(_WIN32)
+	/*
+	 * Qt 6 reports the color scheme of the desktop and announces changes
+	 * to it, so a theme that follows the system can follow it while the
+	 * program is running.
+	 */
+	connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged,
+		this, [](Qt::ColorScheme) {
+			pv::GlobalSettings settings;
+			if (settings.value(pv::GlobalSettings::Key_General_Theme).toInt() == pv::Theme_System)
+				settings.apply_theme();
+		});
+#endif
 }
 
 const QStringList Application::get_languages() const

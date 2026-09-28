@@ -812,6 +812,16 @@ void LogicSignal::on_setting_changed(const QString &key, const QVariant &value)
 	{
 		refresh_theme_colors();
 		refresh_trigger_icons();
+
+		/*
+		 * The colors of the traces and of the trigger icons have just
+		 * changed, and both are picked while painting, so the area has
+		 * to be painted again. Telling the view is not enough: what
+		 * follows a theme change through it are the colors of the grid
+		 * and of the cursors, which it knows about itself.
+		 */
+		if (owner_)
+			owner_->row_item_appearance_changed(false, true);
 	}
 }
 

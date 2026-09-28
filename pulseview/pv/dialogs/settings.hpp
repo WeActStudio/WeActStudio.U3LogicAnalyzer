@@ -27,6 +27,7 @@
 #include <QDialog>
 #include <QListWidget>
 #include <QPlainTextEdit>
+#include <QScrollArea>
 #include <QStackedWidget>
 #include <QLineEdit>
 
@@ -61,6 +62,9 @@ protected:
 	/* Called when the application language changed. */
 	void changeEvent(QEvent *event) override;
 
+	/* Called the first time the dialog is shown. */
+	void showEvent(QShowEvent *event) override;
+
 private Q_SLOTS:
 	void accept();
 	void reject();
@@ -68,7 +72,7 @@ private Q_SLOTS:
 	void on_page_changed(QListWidgetItem *current, QListWidgetItem *previous);
 	void on_general_language_changed(const QString &text);
 	void on_general_theme_changed(int value);
-	void on_general_style_changed(int value);
+	void on_general_style_changed(int index);
 	void on_general_save_with_setup_changed(int state);
 	void on_general_start_all_sessions_changed(int state);
 	void on_view_zoomToFitDuringAcq_changed(int state);
@@ -99,9 +103,19 @@ private Q_SLOTS:
 	void on_log_popOut_clicked(bool checked);
 
 private:
+	/*
+	 * Brings the dialog back to the height the pages ask for, without
+	 * ever taking it above the height it has.
+	 */
+	void fit_height_to_pages();
+
 	DeviceManager &device_manager_;
 	PageListWidget *page_list;
 	QStackedWidget *pages;
+	QScrollArea *page_area;
+
+	/* How many more times the height is to be measured. */
+	int fit_passes_;
 
 #ifdef ENABLE_DECODE
 	QLineEdit *ann_export_format_;

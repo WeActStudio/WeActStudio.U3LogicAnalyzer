@@ -403,23 +403,16 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 		voltage_level_spinbox_->setSingleStep(0.1);
 		voltage_level_spinbox_->setDecimals(1);
 		voltage_level_spinbox_->setSuffix("V");
-		voltage_level_spinbox_->setStyleSheet(
-			"QDoubleSpinBox {"
-				"padding-right: 24px;"
-			"}"
-			"QDoubleSpinBox::up-button {"
-				"subcontrol-origin: margin;"
-				"subcontrol-position: right top;"
-				"width: 18px; height: 14px;"
-				"margin-top: 1px;"
-			"}"
-			"QDoubleSpinBox::down-button {"
-				"subcontrol-origin: margin;"
-				"subcontrol-position: right bottom;"
-				"width: 18px; height: 14px;"
-				"margin-bottom: 1px;"
-			"}"
-		);
+		/*
+		 * No style sheet here. A style sheet of its own hands a widget over
+		 * to the style sheet style, which then measures and draws it instead
+		 * of asking the style in use: a spin box that carried one stayed the
+		 * height and kept the arrows of the desktop style no matter which
+		 * style the application was set to. The style in use draws the spin
+		 * box and its buttons on its own, so there is nothing to patch here.
+		 * Its height comes from the style sheet of the tool bar, which is
+		 * the ancestor that put it in the scope of a style sheet.
+		 */
 		connect(voltage_level_spinbox_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
 			this, is_weact_logic_v2_? &Channels::on_input_level_changed : &Channels::on_voltage_level_changed);
 		
@@ -434,7 +427,8 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 		pre_trigger_selector_->setSingleStep(1);
 		pre_trigger_selector_->setDecimals(0);
 		pre_trigger_selector_->setSuffix("%");
-		pre_trigger_selector_->setStyleSheet(voltage_level_spinbox_->styleSheet());
+		/* See the note at the threshold spin box: no style sheet, so that the
+		 * style that is in use draws this one as well. */
 		connect(pre_trigger_selector_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
 			this, &Channels::pre_trigger_changed);
 		pre_trigger_selector_->setValue(0);

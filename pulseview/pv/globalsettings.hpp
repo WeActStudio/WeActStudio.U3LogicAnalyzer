@@ -40,7 +40,24 @@ using std::vector;
 
 namespace pv {
 
-extern const vector< pair<QString, QString> > Themes;
+/* The value of Key_General_Theme is an index into this list. */
+extern const vector<QString> Themes;
+
+/*
+ * The widget style the themes are made for: it is the one that paints with
+ * the palette on every platform, and the one the application starts out
+ * with. The other styles the build carries are offered as well; see
+ * Settings.
+ */
+extern const QString Style_Fusion;
+extern const QString Style_Fluent;
+
+enum UiTheme {
+	/* Follow the color scheme the desktop reports. */
+	Theme_System = 0,
+	Theme_Light = 1,
+	Theme_Dark = 2
+};
 
 
 class GlobalSettingsInterface
@@ -57,6 +74,7 @@ class GlobalSettings : public QSettings
 public:
 	static const QString Key_General_Language;
 	static const QString Key_General_Theme;
+	static const QString Key_General_ThemeScheme;
 	static const QString Key_General_Style;
 	static const QString Key_General_SaveWithSetup;
 	static const QString Key_General_StartAllSessions;
@@ -144,7 +162,7 @@ private:
 	static bool tracking_;
 	static map<QString, QVariant> tracked_changes_;
 
-	static QString default_style_;
+	/* The palette Qt reported at startup, i.e. the one the platform asked for. */
 	static QPalette default_palette_;
 
 	static bool is_dark_theme_;

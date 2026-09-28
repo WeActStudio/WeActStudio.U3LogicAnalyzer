@@ -29,19 +29,23 @@
 #include <QEvent>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QFrame>
 #include <QGroupBox>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMainWindow>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScreen>
+#include <QScrollArea>
 #include <QScrollBar>
 #include <QSpinBox>
 #include <QString>
-#include <QStyleFactory>
 #include <QTextBrowser>
 #include <QTextDocument>
 #include <QTextStream>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include "settings.hpp"
@@ -89,7 +93,8 @@ public:
 
 Settings::Settings(DeviceManager &device_manager, QWidget *parent) :
 	QDialog(parent),
-	device_manager_(device_manager)
+	device_manager_(device_manager),
+	fit_passes_(0)
 {
 	resize(600, 400);
 
@@ -108,10 +113,27 @@ Settings::Settings(DeviceManager &device_manager, QWidget *parent) :
 	create_pages();
 	page_list->setCurrentIndex(page_list->model()->index(0, 0));
 
+	/*
+	 * The pages are shown through a scroll area, so that the height
+	 * they ask for does not decide the height of the dialog. The two
+	 * styles the application is made for lay a row out at very
+	 * different heights -- a check box asks for 15 pixels under Fusion
+	 * and for 34 under FluentUI3, which over the rows of the views page
+	 * is 230 pixels -- so a dialog that is sized to whichever style is
+	 * in use would grow when the style is changed from inside it, by
+	 * the height of a page that is not even on screen, and would keep
+	 * the height it grew to. The pages scroll instead.
+	 */
+	page_area = new QScrollArea();
+	page_area->setWidget(pages);
+	page_area->setWidgetResizable(true);
+	page_area->setFrameShape(QFrame::NoFrame);
+	page_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
 	// Create the rest of the dialog
 	QHBoxLayout *tab_layout = new QHBoxLayout;
 	tab_layout->addWidget(page_list);
-	tab_layout->addWidget(pages, Qt::AlignLeft);
+	tab_layout->addWidget(page_area, Qt::AlignLeft);
 
 	QDialogButtonBox *button_box = new QDialogButtonBox(
 		QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
@@ -119,6 +141,21 @@ Settings::Settings(DeviceManager &device_manager, QWidget *parent) :
 	QVBoxLayout* root_layout = new QVBoxLayout(this);
 	root_layout->addLayout(tab_layout);
 	root_layout->addWidget(button_box);
+
+	/*
+	 * Open with the width and the height of the pages. A scroll area
+	 * reports a height of its own rather than the height of what it
+	 * shows, so the pages are asked for their size to give the dialog
+	 * the size it would come out with on its own.
+	 *
+	 * The height is let go of again as soon as the dialog has been
+	 * sized (see showEvent), so that a style that asks for more room
+	 * than the dialog has leaves the pages scrolling instead of pushing
+	 * the dialog taller. The width is kept: it comes from the page
+	 * list, the frames and the log view rather than from the height of
+	 * a row, and a page narrower than its own width would clip.
+	 */
+	page_area->setMinimumSize(pages->sizeHint());
 
 	connect(button_box, SIGNAL(accepted()), this, SLOT(accept()));
 	connect(button_box, SIGNAL(rejected()), this, SLOT(reject()));
@@ -281,8 +318,9 @@ QWidget *Settings::get_general_settings_form(QWidget *parent) const
 
 	// Theme combobox
 	QComboBox *theme_cb = new QComboBox();
-	for (const pair<QString, QString>& entry : Themes)
-		theme_cb->addItem(entry.first, entry.second);
+	theme_cb->addItem(tr("Follow system"), Theme_System);
+	theme_cb->addItem(tr("Light"), Theme_Light);
+	theme_cb->addItem(tr("Dark"), Theme_Dark);
 
 	theme_cb->setCurrentIndex(
 		settings.value(GlobalSettings::Key_General_Theme).toInt());
@@ -291,25 +329,37 @@ QWidget *Settings::get_general_settings_form(QWidget *parent) const
 	general_layout->addRow(tr("User interface theme"), theme_cb);
 
 	// Style combobox
+	/*
+	 * The two styles the application is made for, and nothing else: the
+	 * list does not depend on what the Qt build happens to carry. The
+	 * names are not translated, and neither is the name of the first one:
+	 * it is a third-party style under the MIT license rather than a look
+	 * that belongs to any one version of Windows, so it is listed under
+	 * the name it comes with.
+	 *
+	 * The styles the factory offers besides these are left out on purpose.
+	 * windowsvista is drawn by the system instead of by Qt and keeps the
+	 * colors of the system, so on the dark theme its controls come out
+	 * white inside an otherwise dark window. windows11 is the look of the
+	 * first entry but only the newer Qt versions carry it, so offering it
+	 * would make the choice depend on the build. Windows is drawn by Qt
+	 * and does follow the palette, but it is the look of a desktop two
+	 * versions old: its sunken frames and square arrow buttons sit next
+	 * to the rest of the UI as if they belonged to another application.
+	 */
 	QComboBox *style_cb = new QComboBox();
-	style_cb->addItem(tr("System Default"), "");
-	for (QString& s : QStyleFactory::keys())
-		style_cb->addItem(s, s);
+	style_cb->addItem(QStringLiteral("FluentUI3"), Style_Fluent);
+	style_cb->addItem(QStringLiteral("Fusion"), Style_Fusion);
 
-	const QString current_style =
-		settings.value(GlobalSettings::Key_General_Style).toString();
-	if (current_style.isEmpty())
-		style_cb->setCurrentIndex(0);
-	else
-		style_cb->setCurrentIndex(style_cb->findText(current_style));
+	int style_index = style_cb->findData(
+		settings.value(GlobalSettings::Key_General_Style).toString().toLower());
+	if (style_index < 0)
+		style_index = style_cb->findData(Style_Fusion);
+	style_cb->setCurrentIndex(style_index < 0 ? 0 : style_index);
 
 	connect(style_cb, SIGNAL(currentIndexChanged(int)),
 		this, SLOT(on_general_style_changed(int)));
-	general_layout->addRow(tr("Qt widget style"), style_cb);
-
-	QLabel *description_2 = new QLabel(tr("(Dark themes look best with the Fusion style)"));
-	description_2->setAlignment(Qt::AlignRight);
-	general_layout->addRow(description_2);
+	general_layout->addRow(tr("User interface style"), style_cb);
 
 	// Misc
 	cb = create_checkbox(GlobalSettings::Key_General_SaveWithSetup,
@@ -646,6 +696,59 @@ QWidget *Settings::get_logging_page(QWidget *parent) const
 	return page;
 }
 
+void Settings::showEvent(QShowEvent *event)
+{
+	QDialog::showEvent(event);
+
+	if (!page_area->minimumHeight())
+		return;
+
+	/*
+	 * The dialog has the height of its pages by now, so let go of the
+	 * height that was asked for: from here on the pages scroll rather
+	 * than ask for the dialog to be taller, which is what keeps a
+	 * change of style from changing the size of the dialog. Letting go
+	 * in the next turn of the event loop keeps the size the layout has
+	 * just given the dialog.
+	 */
+	QTimer::singleShot(0, this, [this]() { page_area->setMinimumHeight(0); });
+}
+
+void Settings::fit_height_to_pages()
+{
+	if (fit_passes_ <= 0)
+		return;
+	fit_passes_--;
+
+	/*
+	 * The height the pages ask for is the height of the tallest of
+	 * them, since any of them can be shown, and the parts around them
+	 * take the rest of the height of the dialog.
+	 */
+	const int around = height() - page_area->height();
+	int wanted = pages->sizeHint().height() + around;
+
+	/* A page taller than the screen would put the buttons out of
+	 * reach; the rest of the page is reached by scrolling it. */
+	const QScreen *on_screen = screen();
+	if (!on_screen)
+		on_screen = QGuiApplication::primaryScreen();
+	if (on_screen)
+		wanted = qMin(wanted, on_screen->availableGeometry().height() - 80);
+
+	if (wanted < height())
+		resize(width(), wanted);
+
+	/*
+	 * The rows of the pages report the height of the new style only
+	 * after a pass of the layout has run over them, so the height is
+	 * measured again for a moment. Coming down in more than one step
+	 * costs nothing: the pages are laid out again anyway.
+	 */
+	if (fit_passes_)
+		QTimer::singleShot(50, this, [this]() { fit_height_to_pages(); });
+}
+
 void Settings::accept()
 {
 	GlobalSettings settings;
@@ -691,17 +794,25 @@ void Settings::on_general_theme_changed(int value)
 	settings.apply_theme();
 }
 
-void Settings::on_general_style_changed(int value)
+void Settings::on_general_style_changed(int index)
 {
+	QComboBox *box = qobject_cast<QComboBox *>(sender());
+	if (!box)
+		return;
+
 	GlobalSettings settings;
-
-	if (value == 0)
-		settings.setValue(GlobalSettings::Key_General_Style, "");
-	else
-		settings.setValue(GlobalSettings::Key_General_Style,
-			QStyleFactory::keys().at(value - 1));
-
+	settings.setValue(GlobalSettings::Key_General_Style, box->itemData(index));
 	settings.apply_theme();
+
+	/*
+	 * A row of the pages comes out at a height the style decides, so
+	 * the height the pages ask for has just moved with it. Come back
+	 * to it, but never up: the page the style is switched from has
+	 * nothing to gain from a dialog that is taller than its own page,
+	 * and the pages of a taller style scroll.
+	 */
+	fit_passes_ = 6;
+	fit_height_to_pages();
 }
 
 void Settings::on_general_save_with_setup_changed(int state)

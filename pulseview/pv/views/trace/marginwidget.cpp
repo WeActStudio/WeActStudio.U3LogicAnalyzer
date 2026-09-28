@@ -37,7 +37,18 @@ namespace trace {
 MarginWidget::MarginWidget(View &parent) :
 	ViewWidget(parent)
 {
-	setAttribute(Qt::WA_NoSystemBackground, true);
+	/*
+	 * A margin that is not filled at all shows whatever the backing
+	 * store happens to hold in its place, because the paint events of
+	 * the subclasses only draw the ticks, the labels and the like. With
+	 * the light theme that leftover was close enough to white not to be
+	 * noticed, but with the dark theme the ruler and the channel labels
+	 * came out as a band of a grey that belongs to no widget on screen.
+	 * Fill with the color of the trace area, which is the surface these
+	 * margins sit next to.
+	 */
+	setAutoFillBackground(true);
+	setBackgroundRole(QPalette::Base);
 }
 
 void MarginWidget::item_clicked(const shared_ptr<ViewItem> &item)

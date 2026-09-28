@@ -27,16 +27,20 @@
 #include <QColor>
 #include <QDebug>
 #include <QEvent>
-#include <QFile>
 #include <QFontMetrics>
 #include <QPixmapCache>
 #include <QString>
 #include <QStyle>
+#include <QStyleFactory>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+#include <QStyleHints>
+#endif
 #include <QWidget>
 #include <QtGlobal>
 
 #include "globalsettings.hpp"
 #include "application.hpp"
+#include "fluentui3style.h"
 
 using std::map;
 using std::pair;
@@ -44,16 +48,169 @@ using std::string;
 using std::stringstream;
 using std::vector;
 
+/*
+ * The FluentUI3 style keeps the icon font it draws a ticked check box
+ * with, and two images, in a Qt resource. A resource that sits in a
+ * static library does not register itself: the object file that would do
+ * it is only linked in when something asks for it, and nothing does as
+ * long as the library is only linked against. Asking for it here pulls
+ * that object in and registers the resource (see Q_INIT_RESOURCE).
+ *
+ * It has to be done outside the namespace: Q_INIT_RESOURCE declares the
+ * function it calls, and a declaration inside the namespace would ask
+ * for one that no object file carries.
+ */
+static void register_fluentui_resources()
+{
+	static bool registered = false;
+
+	if (!registered) {
+		Q_INIT_RESOURCE(resource);
+		registered = true;
+	}
+}
+
 namespace pv {
 
-const vector< pair<QString, QString> > Themes {
-	{"BrightStyleSheet" , ""},
-	{"QDarkStyleSheet", ":/themes/qdarkstyle/style.qss"}
-	// {"DarkStyle", ":/themes/darkstyle/darkstyle.qss"}
+const vector<QString> Themes {
+	"Follow system", "Light", "Dark"
 };
+
+const QString Style_Fusion = "fusion";
+
+/*
+ * Not a name the style factory knows either: it stands for the
+ * FluentUI3 style that is built into the application (see
+ * 3rdparty/fluentui3style). It is what the "FluentUI3" entry of the
+ * setting asks for, so that the entry is there -- and looks the same
+ * -- on every Qt version and not only on those that carry the style
+ * of that platform themselves. The entry is named after the style
+ * rather than after the desktop it resembles, which MIT does not ask
+ * anyone to give up but which a third-party style may not claim.
+ */
+const QString Style_Fluent = "fluentui3";
+
+namespace {
+
+/*
+ * Tells from the palette Qt ended up with whether the UI reads as dark.
+ * Only the "follow system" theme needs this: there the platform decides,
+ * and Qt reports its choice through the application palette (Qt 6 on
+ * Windows follows the system color scheme, Qt 5 does not).
+ */
+bool palette_is_dark(const QPalette &palette)
+{
+	return palette.color(QPalette::Window).lightness() < 128;
+}
+
+/*
+ * Whether the desktop asks for a dark color scheme.
+ *
+ * On Windows the answer has to be read from the desktop itself: the
+ * palette Qt hands out is not a reliable stand-in for it, because some
+ * builds of Qt (the static Qt 5 this is built against, for one) return a
+ * light palette however the desktop is set up. That made "follow the
+ * system" come out light on a dark desktop. Only if the setting is not
+ * there, as on an old Windows, the palette is used as a fallback.
+ */
+bool system_prefers_dark(const QPalette &startup_palette)
+{
+#ifdef _WIN32
+	QSettings personalize(
+		QStringLiteral("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows"
+			"\\CurrentVersion\\Themes\\Personalize"),
+		QSettings::NativeFormat);
+	const QVariant apps_use_light = personalize.value("AppsUseLightTheme");
+	if (apps_use_light.isValid())
+		return apps_use_light.toInt() == 0;
+#elif QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+	return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+#endif
+
+	return palette_is_dark(startup_palette);
+}
+
+/*
+ * The palette of the light theme. It is built here instead of being taken
+ * from the style because the standard palette of a style follows the
+ * system color scheme on Windows: on a machine that is set to the dark
+ * scheme it comes out dark, which is what used to make the light theme
+ * look dark. Every role is filled in so that nothing is left over from
+ * the palette that was in use before.
+ */
+QPalette make_light_palette()
+{
+	QPalette p;
+
+	p.setColor(QPalette::Window, QColor(0xf0, 0xf0, 0xf0));
+	p.setColor(QPalette::WindowText, Qt::black);
+	p.setColor(QPalette::Disabled, QPalette::WindowText, QColor(0x7f, 0x7f, 0x7f));
+	p.setColor(QPalette::Base, Qt::white);
+	p.setColor(QPalette::AlternateBase, QColor(0xf7, 0xf7, 0xf7));
+	p.setColor(QPalette::ToolTipBase, QColor(0xff, 0xff, 0xdc));
+	p.setColor(QPalette::ToolTipText, Qt::black);
+	p.setColor(QPalette::Text, Qt::black);
+	p.setColor(QPalette::Disabled, QPalette::Text, QColor(0x7f, 0x7f, 0x7f));
+	p.setColor(QPalette::Button, QColor(0xf0, 0xf0, 0xf0));
+	p.setColor(QPalette::ButtonText, Qt::black);
+	p.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(0x7f, 0x7f, 0x7f));
+	p.setColor(QPalette::BrightText, Qt::red);
+	p.setColor(QPalette::Light, Qt::white);
+	p.setColor(QPalette::Midlight, QColor(0xe3, 0xe3, 0xe3));
+	p.setColor(QPalette::Mid, QColor(0xc0, 0xc0, 0xc0));
+	p.setColor(QPalette::Dark, QColor(0x9f, 0x9f, 0x9f));
+	p.setColor(QPalette::Shadow, QColor(0x69, 0x69, 0x69));
+	p.setColor(QPalette::Link, QColor(0x00, 0x00, 0xee));
+	p.setColor(QPalette::Highlight, QColor(0x30, 0x82, 0xda));
+	p.setColor(QPalette::Disabled, QPalette::Highlight, QColor(0xc0, 0xc0, 0xc0));
+	p.setColor(QPalette::HighlightedText, Qt::white);
+	p.setColor(QPalette::Disabled, QPalette::HighlightedText, QColor(0x7f, 0x7f, 0x7f));
+
+	return p;
+}
+
+/*
+ * The palette of the dark theme. Every role is filled in because a
+ * QPalette that is only partly set keeps the light defaults for the rest,
+ * which then shows up as light gray shading on a dark UI.
+ */
+QPalette make_dark_palette()
+{
+	QPalette p;
+
+	p.setColor(QPalette::Window, QColor(0x26, 0x26, 0x26));
+	p.setColor(QPalette::WindowText, Qt::white);
+	p.setColor(QPalette::Disabled, QPalette::WindowText, QColor(127, 127, 127));
+	p.setColor(QPalette::Base, QColor(0x2a, 0x2a, 0x2a));
+	p.setColor(QPalette::AlternateBase, QColor(0x42, 0x42, 0x42));
+	p.setColor(QPalette::ToolTipBase, QColor(0x35, 0x35, 0x35));
+	p.setColor(QPalette::ToolTipText, Qt::white);
+	p.setColor(QPalette::Text, Qt::white);
+	p.setColor(QPalette::Disabled, QPalette::Text, QColor(127, 127, 127));
+	p.setColor(QPalette::Button, QColor(0x35, 0x35, 0x35));
+	p.setColor(QPalette::ButtonText, Qt::white);
+	p.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(127, 127, 127));
+	p.setColor(QPalette::BrightText, Qt::red);
+	p.setColor(QPalette::Light, QColor(0x4a, 0x4a, 0x4a));
+	p.setColor(QPalette::Midlight, QColor(0x3a, 0x3a, 0x3a));
+	p.setColor(QPalette::Mid, QColor(0x2b, 0x2b, 0x2b));
+	p.setColor(QPalette::Dark, QColor(0x1e, 0x1e, 0x1e));
+	p.setColor(QPalette::Shadow, QColor(0x14, 0x14, 0x14));
+	p.setColor(QPalette::Link, QColor(42, 130, 218));
+	p.setColor(QPalette::Highlight, QColor(42, 130, 218));
+	p.setColor(QPalette::Disabled, QPalette::Highlight, QColor(80, 80, 80));
+	p.setColor(QPalette::HighlightedText, Qt::white);
+	p.setColor(QPalette::Disabled, QPalette::HighlightedText, QColor(127, 127, 127));
+
+	return p;
+}
+
+} // namespace
 
 const QString GlobalSettings::Key_General_Language = "General_Language";
 const QString GlobalSettings::Key_General_Theme = "General_Theme";
+/* Set once the theme value has been moved over to the UiTheme scheme. */
+const QString GlobalSettings::Key_General_ThemeScheme = "General_ThemeScheme";
 const QString GlobalSettings::Key_General_Style = "General_Style";
 const QString GlobalSettings::Key_General_SaveWithSetup = "General_SaveWithSetup";
 const QString GlobalSettings::Key_General_StartAllSessions = "General_StartAllSessions";
@@ -86,7 +243,6 @@ vector<GlobalSettingsInterface*> GlobalSettings::callbacks_;
 bool GlobalSettings::tracking_ = false;
 bool GlobalSettings::is_dark_theme_ = false;
 map<QString, QVariant> GlobalSettings::tracked_changes_;
-QString GlobalSettings::default_style_;
 QPalette GlobalSettings::default_palette_;
 
 GlobalSettings::GlobalSettings() :
@@ -97,10 +253,11 @@ GlobalSettings::GlobalSettings() :
 
 void GlobalSettings::save_internal_defaults()
 {
-	default_style_ = qApp->style()->objectName();
-	if (default_style_.isEmpty())
-		default_style_ = "fusion";
-
+	/*
+	 * The palette Qt reports at startup is the one the platform asked
+	 * for - on Qt 5 it is the only hint at the color scheme of the
+	 * desktop there is.
+	 */
 	default_palette_ = QApplication::palette();
 }
 
@@ -121,10 +278,35 @@ void GlobalSettings::set_defaults_where_needed()
 	}
 
 	// Use no theme by default
-	if (!contains(Key_General_Theme))
-		setValue(Key_General_Theme, 1);
-	if (!contains(Key_General_Style))
-		setValue(Key_General_Style, "");
+	/*
+	 * The theme setting used to be an index into a list of style sheets
+	 * (0 = bright, 1 = qdarkstyle) that no longer exists. Move the value
+	 * over to UiTheme so that a user who picked "bright" keeps a light UI
+	 * and one who picked "qdarkstyle" keeps a dark one; a fresh install
+	 * starts out following the system.
+	 */
+	if (!contains(Key_General_ThemeScheme)) {
+		if (!contains(Key_General_Theme))
+			setValue(Key_General_Theme, Theme_System);
+		else
+			setValue(Key_General_Theme,
+				(value(Key_General_Theme).toInt() == 0) ? Theme_Light : Theme_Dark);
+
+		setValue(Key_General_ThemeScheme, 1);
+	}
+
+	/*
+	 * Start out with the style the palettes of the themes are made for.
+	 * Every value that is not one of the two on offer counts as missing:
+	 * an empty one is what a run that was interrupted between two settings
+	 * writes leaves behind, and the others are entries that are no longer
+	 * offered, which is what the settings of an older build carry.
+	 */
+	const QString style_value =
+		value(Key_General_Style).toString().toLower();
+
+	if (style_value != Style_Fluent && style_value != Style_Fusion)
+		setValue(Key_General_Style, Style_Fusion);
 
 	// Save setup with .sr files by default
 	if (!contains(Key_General_SaveWithSetup))
@@ -184,7 +366,7 @@ void GlobalSettings::set_defaults_where_needed()
 
 	// Default theme is bright, so use its color scheme if undefined
 	if (!contains(Key_View_CursorFillColor)){
-		if (value(Key_General_Theme).toInt() == 1)
+		if (value(Key_General_Theme).toInt() == Theme_Dark)
 			set_dark_theme_default_colors();
 		else
 			set_bright_theme_default_colors();
@@ -219,63 +401,68 @@ bool GlobalSettings::current_theme_is_dark()
 
 void GlobalSettings::apply_theme()
 {
-	QString theme_name    = Themes.at(value(Key_General_Theme).toInt()).first;
-	QString resource_name = Themes.at(value(Key_General_Theme).toInt()).second;
+	const int theme = qBound(0, value(Key_General_Theme).toInt(),
+		(int)Themes.size() - 1);
 
-	if (!resource_name.isEmpty()) {
-		QFile file(resource_name);
-		file.open(QFile::ReadOnly | QFile::Text);
-		qApp->setStyleSheet(file.readAll());
-	} else
-		qApp->setStyleSheet("");
+	/*
+	 * The themes used to each carry a style sheet (qdarkstyle); those are
+	 * gone, so the application itself never carries one. The appearance
+	 * now comes from the widget style plus the palette alone.
+	 */
+	qApp->setStyleSheet("");
 
-	qApp->setPalette(default_palette_);
+	/* Light and dark both come from palettes built here, so that the UI
+	 * looks the same on every desktop and stays independent of whatever
+	 * the style would pick for the color scheme of the system. */
+	const bool dark = (theme == Theme_System) ?
+		system_prefers_dark(default_palette_) : (theme == Theme_Dark);
 
-	const QString style = value(Key_General_Style).toString();
-	if (style.isEmpty())
-		qApp->setStyle(default_style_);
-	else
-		qApp->setStyle(style);
+	/*
+	 * The FluentUI3 style reads its color scheme from this property, the
+	 * same one the style of that platform reads in the Qt versions that
+	 * carry it: 0 is light and 1 is dark. It has to be set before the
+	 * style is, because a style hands out the palette that goes with the
+	 * scheme it settled on while it is being installed.
+	 */
+	qApp->setProperty("_q_colorscheme", dark ? 1 : 0);
 
-	is_dark_theme_ = false;
+	/*
+	 * The palettes are made for Fusion, and Fusion is the style that
+	 * paints with them. The Windows style paints with the palette as well
+	 * -- it is the style of that platform written in Qt, not the native
+	 * one, which would follow the system colors and ignore the palette --
+	 * so it can be offered as a choice. The style has to be set before the
+	 * palette, because setStyle() installs the standard palette of the
+	 * new style.
+	 *
+	 * The FluentUI3 style is the one exception: it paints with a palette
+	 * of its own, which it puts in place of whatever palette it is given,
+	 * and the colors of Fluent are part of the look it is chosen for. It
+	 * takes its two palettes from the property above, so it still follows
+	 * the light and dark of this setting.
+	 */
+	const QString style_name = value(Key_General_Style).toString();
+	QStyle *base_style = nullptr;
 
-	if (value(Key_General_Theme).toInt() == 1) {
-		QPalette dark_palette;
-		// dark_palette.setColor(QPalette::Window, QColor(53, 53, 53));
-		dark_palette.setColor(QPalette::Window, QColor(0x26, 0x26, 0x26));
-		dark_palette.setColor(QPalette::WindowText, Qt::white);
-		dark_palette.setColor(QPalette::Base, QColor(42, 42, 42));
-		dark_palette.setColor(QPalette::Dark, QColor(35, 35, 35));
-		dark_palette.setColor(QPalette::Highlight, QColor(42, 130, 218));
-		qApp->setPalette(dark_palette);
-		is_dark_theme_ = true;
-	}
-	// else if (value(Key_General_Theme).toInt() == 0) {
-	// 	QPalette dark_palette;
-	// 	dark_palette.setColor(QPalette::Window, QColor(53, 53, 53));
-	// 	dark_palette.setColor(QPalette::WindowText, Qt::white);
-	// 	dark_palette.setColor(QPalette::Disabled, QPalette::WindowText, QColor(127, 127, 127));
-	// 	dark_palette.setColor(QPalette::Base, QColor(42, 42, 42));
-	// 	dark_palette.setColor(QPalette::AlternateBase, QColor(66, 66, 66));
-	// 	dark_palette.setColor(QPalette::ToolTipBase, Qt::white);
-	// 	dark_palette.setColor(QPalette::ToolTipText, QColor(53, 53, 53));
-	// 	dark_palette.setColor(QPalette::Text, Qt::white);
-	// 	dark_palette.setColor(QPalette::Disabled, QPalette::Text, QColor(127, 127, 127));
-	// 	dark_palette.setColor(QPalette::Dark, QColor(35, 35, 35));
+	if (style_name == Style_Fluent) {
+		register_fluentui_resources();
+		base_style = new FluentUI3Style;
+	} else if (!style_name.isEmpty())
+		base_style = QStyleFactory::create(style_name);
 
-	// 	dark_palette.setColor(QPalette::Shadow, QColor(20, 20, 20));
-	// 	dark_palette.setColor(QPalette::Button, QColor(53, 53, 53));
-	// 	dark_palette.setColor(QPalette::ButtonText, Qt::white);
-	// 	dark_palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(127, 127, 127));
-	// 	dark_palette.setColor(QPalette::BrightText, Qt::red);
-	// 	dark_palette.setColor(QPalette::Link, QColor(42, 130, 218));
-	// 	dark_palette.setColor(QPalette::Highlight, QColor(42, 130, 218));
-	// 	dark_palette.setColor(QPalette::Disabled, QPalette::Highlight, QColor(80, 80, 80));
-	// 	dark_palette.setColor(QPalette::HighlightedText, Qt::white);
-	// 	dark_palette.setColor(QPalette::Disabled, QPalette::HighlightedText, QColor(127, 127, 127));
-	// 	qApp->setPalette(dark_palette);
-	// 	is_dark_theme_ = true;
-	// }
+	if (!base_style)
+		base_style = QStyleFactory::create(Style_Fusion);
+	if (base_style)
+		qApp->setStyle(base_style);
+
+	qApp->setPalette(dark ? make_dark_palette() : make_light_palette());
+
+	is_dark_theme_ = dark;
+
+	qDebug() << "Theme:" << Themes.at(theme) << "style:" <<
+		qApp->style()->objectName() << "window:" <<
+		qApp->palette().color(QPalette::Window).name() <<
+		"dark:" << is_dark_theme_;
 
 	QPixmapCache::clear();
 
@@ -283,15 +470,45 @@ void GlobalSettings::apply_theme()
 	 * QApplication::setPalette() notifies the top level windows and lets
 	 * the widgets below them follow through the palette they inherit from
 	 * their parent. A widget that carries a style sheet is left out of
-	 * that propagation, so swapping out a theme that uses one - or coming
-	 * back from it - leaves the widgets that still had the style sheet
-	 * applied with the colors of the previous theme. Tell every widget
-	 * about the new palette instead of relying on the propagation.
+	 * that propagation, so it would keep the colors of the previous
+	 * theme. Tell every widget about the new palette instead of relying
+	 * on the propagation.
 	 */
 	QEvent palette_event(QEvent::ApplicationPaletteChange);
 	const QWidgetList widgets = QApplication::allWidgets();
 	for (QWidget *widget : widgets)
 		QCoreApplication::sendEvent(widget, &palette_event);
+
+	/*
+	 * A widget that was asked for its size remembers it, and it forgets it
+	 * when the change of style reaches it. It does not reach all of them:
+	 * after a switch to a style whose rows are taller, some of the rows of
+	 * a page keep the height of the previous style, and the height of a
+	 * page is what the settings dialog is sized by. Send the change to
+	 * every widget, the same way the palette is sent, so that every row
+	 * reports the height of the style that is in use.
+	 */
+	QEvent style_event(QEvent::StyleChange);
+	for (QWidget *widget : widgets)
+		QCoreApplication::sendEvent(widget, &style_event);
+
+	/*
+	 * The palette is propagated by the style, and a widget that carries a
+	 * style sheet is left out of that propagation: an empty style sheet
+	 * discards the palette pass instead of passing it on, so the widget
+	 * keeps the colors it was given at the start, and the copy it was
+	 * given at the start is the one the style made in the scheme that was
+	 * in use back then. Emptying the style sheet again is what puts the
+	 * palette back in the hands of the style and lets it reach those
+	 * widgets. The rule is only handed out when the sheet is empty to
+	 * begin with, so a non-empty one is not disturbed, and a sheet is
+	 * needed to disable the discarded one in the first place.
+	 */
+	const QByteArray sheet = qApp->styleSheet().toUtf8();
+	if (!sheet.isEmpty()) {
+		qApp->setStyleSheet(QString());
+		qApp->setStyleSheet(QString::fromUtf8(sheet));
+	}
 
 	/*
 	 * Widgets that draw with theme dependent colors of their own pick them
@@ -302,7 +519,7 @@ void GlobalSettings::apply_theme()
 		cb->on_setting_changed(Key_General_Theme, value(Key_General_Theme));
 
 	/*
-	 * The window decorations are not part of the style sheet and are set
+	 * The window decorations are not part of the palette and are set
 	 * per window, so every window that is already open has to be told
 	 * about the new theme; leaving that to the next QEvent::Show would
 	 * only reach the ones that have not been shown yet.
@@ -367,7 +584,8 @@ void GlobalSettings::undo_tracked_changes()
 	bool appearance_reverted = false;
 
 	for (auto& entry : tracked_changes_) {
-		if (entry.first == Key_General_Theme || entry.first == Key_General_Style)
+		if (entry.first == Key_General_Theme ||
+			entry.first == Key_General_Style)
 			appearance_reverted = true;
 		setValue(entry.first, entry.second);
 	}

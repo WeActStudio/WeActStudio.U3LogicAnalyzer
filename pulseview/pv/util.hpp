@@ -23,6 +23,7 @@
 #define PULSEVIEW_PV_UTIL_HPP
 
 #include <cmath>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -238,6 +239,15 @@ void show_message(QWidget *parent, const QString &title, const QString &text,
  * well. Does nothing where the platform has no such attribute.
  */
 void apply_window_theme(QWidget *window, bool dark);
+
+/**
+ * Calls @c callback whenever the color scheme of the desktop changes.
+ *
+ * Only Windows needs this: it announces the change with a broadcast
+ * message of its own, while Qt reports it by itself wherever the
+ * platform theme has such a thing to report. Does nothing elsewhere.
+ */
+void watch_color_scheme(const std::function<void()> &callback);
 
 } // namespace util
 } // namespace pv

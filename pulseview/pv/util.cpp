@@ -38,6 +38,7 @@
 #include <dwmapi.h>
 #endif
 
+#include <QAbstractNativeEventFilter>
 #include <QDebug>
 #include <QTextStream>
 #include <QCoreApplication>
@@ -544,6 +545,82 @@ void apply_window_theme(QWidget *window, bool dark)
 	(void)dark;
 #endif
 }
+
+#ifdef _WIN32
+namespace {
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+typedef qintptr native_event_result;
+#else
+typedef long native_event_result;
+#endif
+
+/*
+ * Watches the color scheme of the desktop.
+ *
+ * Changing it makes Windows broadcast a WM_SETTINGCHANGE message that
+ * carries the string "ImmersiveColorSet". Qt 6 turns that into
+ * QStyleHints::colorSchemeChanged, Qt 5 has no such signal, so the
+ * message itself is caught here. That is what lets a theme which
+ * follows the system follow a change that is made while the program is
+ * running.
+ */
+class ColorSchemeWatcher : public QAbstractNativeEventFilter
+{
+public:
+	explicit ColorSchemeWatcher(std::function<void()> callback) :
+		callback_(std::move(callback))
+	{
+	}
+
+	bool nativeEventFilter(const QByteArray &event_type, void *message,
+		native_event_result *result) override
+	{
+		(void)result;
+
+		if (event_type != "windows_generic_MSG" &&
+			event_type != "windows_dispatcher_MSG")
+			return false;
+
+		const MSG *msg = static_cast<const MSG *>(message);
+		if (msg->message != WM_SETTINGCHANGE || !msg->lParam)
+			return false;
+
+		if (QString::fromWCharArray(
+			reinterpret_cast<const wchar_t *>(msg->lParam)) !=
+			QLatin1String("ImmersiveColorSet"))
+			return false;
+
+		callback_();
+
+		return false;
+	}
+
+private:
+	std::function<void()> callback_;
+};
+
+} // namespace
+
+void watch_color_scheme(const std::function<void()> &callback)
+{
+	/*
+	 * The event dispatcher is handed the watcher and does not take
+	 * ownership of it, so it is left alive on purpose: it has to outlive
+	 * the application.
+	 */
+	QCoreApplication::instance()->installNativeEventFilter(
+		new ColorSchemeWatcher(callback));
+}
+
+#else
+
+void watch_color_scheme(const std::function<void()> &callback)
+{
+	(void)callback;
+}
+
+#endif
 
 } // namespace util
 } // namespace pv
