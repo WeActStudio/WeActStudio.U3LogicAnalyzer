@@ -562,12 +562,52 @@ if [ -n "${TOOL}" ] && [ -f "${DIST_DIR}/U3LogicAnalyzer" ]; then
         cp "${DIST_DIR}/share/icons/U3LogicAnalyzer.svg" \
            "${APPDIR}/usr/share/icons/hicolor/scalable/apps/" 2>/dev/null || true
 
-    cat > "${APPDIR}/AppRun" << 'AREOF'
+    cat > "${APPDIR}/AppRun" << AREOF
 #!/bin/sh
-HERE="$(dirname "$(readlink -f "$0")")"
-export LD_LIBRARY_PATH="$HERE/usr/lib:${LD_LIBRARY_PATH}"
-export SIGROKDECODE_DIR="$HERE/usr/share/libsigrokdecode/decoders"
-exec "$HERE/usr/bin/U3LogicAnalyzer" "$@"
+HERE="\$(dirname "\$(readlink -f "\$0")")"
+export LD_LIBRARY_PATH="\$HERE/usr/lib:\${LD_LIBRARY_PATH}"
+export SIGROKDECODE_DIR="\$HERE/usr/share/libsigrokdecode/decoders"
+
+# Desktop integration. The shell resolves the icon of a running window
+# from its app id (Wayland) or WM_CLASS (X11) by looking up the matching
+# .desktop file, and it only watches the data directories it knew about
+# when the session started - so exporting XDG_DATA_DIRS alone is not
+# enough for an AppImage that appears later. Copy the launcher and the
+# icon into the user data directory as well; U3LA_NO_INTEGRATION=1 skips
+# it, and every step is best effort (a read-only home just stays as is).
+if [ -z "\$U3LA_NO_INTEGRATION" ]; then
+    DATA_HOME="\${XDG_DATA_HOME:-\$HOME/.local/share}"
+    if mkdir -p "\$DATA_HOME/applications" \\
+                "\$DATA_HOME/icons/hicolor/256x256/apps" \\
+                "\$DATA_HOME/icons/hicolor/48x48/apps" 2>/dev/null; then
+        # Exec must be absolute and must survive this run: the mount point
+        # changes every time, so prefer the AppImage itself (the runtime
+        # exports its path) and fall back to the extracted binary.
+        EXEC="\$HERE/usr/bin/${APP_NAME}"
+        [ -n "\$APPIMAGE" ] && [ -f "\$APPIMAGE" ] && EXEC="\$APPIMAGE"
+        if [ -f "\$HERE/usr/share/applications/${APP_NAME}.desktop" ]; then
+            sed "s|^Exec=.*|Exec=\$EXEC|" \\
+                "\$HERE/usr/share/applications/${APP_NAME}.desktop" \\
+                > "\$DATA_HOME/applications/${APP_NAME}.desktop.\$\$" 2>/dev/null &&
+                mv -f "\$DATA_HOME/applications/${APP_NAME}.desktop.\$\$" \\
+                      "\$DATA_HOME/applications/${APP_NAME}.desktop" 2>/dev/null
+            rm -f "\$DATA_HOME/applications/${APP_NAME}.desktop.\$\$" 2>/dev/null
+        fi
+        for size in 256x256 48x48; do
+            [ -f "\$HERE/usr/share/icons/hicolor/\$size/apps/${APP_NAME}.png" ] &&
+                cp -f "\$HERE/usr/share/icons/hicolor/\$size/apps/${APP_NAME}.png" \\
+                      "\$DATA_HOME/icons/hicolor/\$size/apps/" 2>/dev/null
+        done
+        update-desktop-database "\$DATA_HOME/applications" 2>/dev/null || true
+        gtk-update-icon-cache -f -t "\$DATA_HOME/icons/hicolor" 2>/dev/null || true
+    fi
+fi
+
+# Makes the bundled icon theme and launcher visible to the application
+# itself and to anything it starts.
+export XDG_DATA_DIRS="\$HERE/usr/share\${XDG_DATA_DIRS:+:\$XDG_DATA_DIRS}"
+
+exec "\$HERE/usr/bin/${APP_NAME}" "\$@"
 AREOF
     chmod +x "${APPDIR}/AppRun"
 
@@ -640,7 +680,10 @@ if [ -f "${APPIMAGE}" ]; then
     [ -n "${RUNTIME_ARG}" ] && echo "      (this package uses uruntime, so FUSE is not needed at all)"
     [ -z "${RUNTIME_ARG}" ] && echo "   4) drop uruntime-${AI_ARCH} into dist/ and rerun to build a FUSE-free AppImage."
     echo ""
-    echo " An AppImage does not register a menu entry: use install.sh from the archive."
+    echo " The menu entry and the icons are registered in ~/.local/share on the"
+    echo " first run (AppRun), so the shell shows this app by name and icon"
+    echo " instead of falling back to the window title and a placeholder."
+    echo " Set U3LA_NO_INTEGRATION=1 to skip that."
 fi
 echo "============================================"
 
