@@ -38,6 +38,7 @@
 #include <QMessageBox>
 #include <QPixmap>
 #include <QSettings>
+#include <QTimer>
 #include <QToolTip>
 #include <QString>
 #include "mainbar.hpp"
@@ -2318,7 +2319,9 @@ namespace pv
 
 			dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
-			dialog->setFixedSize(channels_->sizeHint());
+			const QSize popup_size = channels_->sizeHint();
+			if (!popup_size.isEmpty())
+				dialog->setFixedSize(popup_size);
 
 			QVBoxLayout *layout = new QVBoxLayout(dialog);
 			layout->setContentsMargins(0, 0, 0, 0);
@@ -2330,7 +2333,22 @@ namespace pv
 			channels_->parent_dialog_ = dialog;
 
 			QWidget *mainWin = this->window();
-			dialog->move(mainWin->geometry().center() - dialog->rect().center());
+
+			/*
+			 * The dialog is placed at the centre of the main window, and it
+			 * is placed there once it has been shown rather than before it:
+			 * it has no size of its own until then. The popup it holds is
+			 * handed back to this tool bar every time the dialog is closed,
+			 * and the layout of a popup that is nobody's child any more --
+			 * hidden, that is -- has no size hint to give, so the hint read
+			 * here is empty on the second and every later opening. A dialog
+			 * centred on a size of nothing is centred on its corner, and it
+			 * came up with that corner at the centre of the main window
+			 * instead of with the dialog around it.
+			 */
+			QTimer::singleShot(0, dialog, [dialog, mainWin]() {
+				dialog->move(mainWin->geometry().center() - dialog->rect().center());
+			});
 
 			dialog->exec();
 

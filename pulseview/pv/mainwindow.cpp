@@ -1681,7 +1681,13 @@ void MainWindow::on_new_session_clicked()
 
 void MainWindow::on_settings_clicked()
 {
-	dialogs::Settings dlg(*device_manager_);
+	/*
+	 * The dialog is given this window as its parent so that it is a window
+	 * of this application rather than a window of its own: it then stays
+	 * above the main window, is placed over it, and does not take a place
+	 * of its own in the task bar.
+	 */
+	dialogs::Settings dlg(*device_manager_, this);
 	dlg.exec();
 }
 
