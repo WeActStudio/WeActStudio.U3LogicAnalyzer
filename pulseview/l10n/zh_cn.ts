@@ -1005,7 +1005,7 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="175"/>
         <source>Logging</source>
-        <translation>载入</translation>
+        <translation>日志</translation>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="239"/>
