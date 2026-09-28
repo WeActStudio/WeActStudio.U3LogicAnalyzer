@@ -103,20 +103,54 @@ pkg_check_modules(PKGDEPS REQUIRED ${PKGDEPS})
 
 set(CMAKE_AUTOMOC TRUE)
 
-find_package(Qt5 5.3 COMPONENTS Core Gui LinguistTools Widgets Svg REQUIRED)
+#===============================================================================
+#= Qt version
+#= The application builds against Qt 5 or Qt 6; pick one with
+#= -DQT_VERSION_MAJOR=6 (build.sh does it for you with --qt6).
+#-------------------------------------------------------------------------------
 
-message(STATUS "Qt version: ${Qt5_VERSION}")
+set(QT_VERSION_MAJOR "5" CACHE STRING "Qt major version to build against (5 or 6)")
+set_property(CACHE QT_VERSION_MAJOR PROPERTY STRINGS "5" "6")
+
+if(QT_VERSION_MAJOR STREQUAL "6")
+	set(QT_MIN_VERSION 6.2)
+	# Qt 6 renamed the commands and dropped the version prefix.
+	set(QT_QT6 TRUE)
+	# Qt 6 does not build with anything below C++17.
+	set(QT_CXX_STANDARD "c++17")
+elseif(QT_VERSION_MAJOR STREQUAL "5")
+	set(QT_MIN_VERSION 5.3)
+	set(QT_QT6 FALSE)
+	set(QT_CXX_STANDARD "c++14")
+else()
+	message(FATAL_ERROR "QT_VERSION_MAJOR must be 5 or 6 (got '${QT_VERSION_MAJOR}')")
+endif()
+
+find_package(Qt${QT_VERSION_MAJOR} ${QT_MIN_VERSION} COMPONENTS Core Gui LinguistTools Widgets Svg REQUIRED)
+
+message(STATUS "Qt version: ${Qt${QT_VERSION_MAJOR}_VERSION}")
+
+#= The FluentUI3 style of the widget style setting. It is built as a
+#= static library rather than loaded as a style plugin because the Qt
+#= in use is static. It is added here and not further down because the
+#= application sets its own C++ standard with add_definitions() below,
+#= and a sub-directory only picks up what is set at the point where it
+#= is added.
+add_subdirectory(3rdparty/fluentui3style)
 
 if(WIN32)
-	# MXE workaround: Use pkg-config to find Qt5 libs.
+	# MXE workaround: Use pkg-config to find the Qt libs.
 	# https://github.com/mxe/mxe/issues/1642
 	# Not required (and doesn't work) on MSYS2.
 	if(NOT DEFINED ENV{MSYSTEM})
-		pkg_check_modules(QT5ALL REQUIRED Qt5Widgets>=5.3 Qt5Gui>=5.3 Qt5Svg>=5.3)
+		pkg_check_modules(QTALL REQUIRED
+			Qt${QT_VERSION_MAJOR}Widgets>=${QT_MIN_VERSION}
+			Qt${QT_VERSION_MAJOR}Gui>=${QT_MIN_VERSION}
+			Qt${QT_VERSION_MAJOR}Svg>=${QT_MIN_VERSION})
 	endif()
 endif()
 
-set(QT_LIBRARIES Qt5::Gui Qt5::Widgets Qt5::Svg)
+set(QT_LIBRARIES Qt${QT_VERSION_MAJOR}::Gui Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Svg)
 
 set(BOOSTCOMPS filesystem serialization system)
 if(ENABLE_TESTS)
@@ -479,7 +513,11 @@ if(ANDROID)
 	)
 endif()
 
-qt5_add_resources(pulseview_RESOURCES_RCC ${pulseview_RESOURCES})
+if(QT_QT6)
+	qt_add_resources(pulseview_RESOURCES_RCC ${pulseview_RESOURCES})
+else()
+	qt5_add_resources(pulseview_RESOURCES_RCC ${pulseview_RESOURCES})
+endif()
 
 #===============================================================================
 #= Translations
@@ -491,10 +529,21 @@ if (NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
 	configure_file("translations.qrc" "translations.qrc" COPYONLY)
 endif ()
 
-qt5_add_translation(QM_FILES ${TS_FILES})
-qt5_create_translation(QM_FILES ${pulseview_SOURCES} ${TS_FILES})
+if(QT_QT6)
+	# Qt 6 dropped the command that runs lupdate and lrelease in one go, and
+	# refreshing the .ts files as part of the build rewrites them behind the
+	# developer's back; build.sh runs lrelease itself instead.
+	qt_add_translation(QM_FILES ${TS_FILES})
+else()
+	qt5_add_translation(QM_FILES ${TS_FILES})
+	qt5_create_translation(QM_FILES ${pulseview_SOURCES} ${TS_FILES})
+endif()
 
-qt5_add_resources(pulseview_RESOURCES_RCC ${CMAKE_BINARY_DIR}/translations.qrc)
+if(QT_QT6)
+	qt_add_resources(pulseview_RESOURCES_RCC ${CMAKE_BINARY_DIR}/translations.qrc)
+else()
+	qt5_add_resources(pulseview_RESOURCES_RCC ${CMAKE_BINARY_DIR}/translations.qrc)
+endif()
 
 #===============================================================================
 #= Global Definitions
@@ -503,10 +552,15 @@ qt5_add_resources(pulseview_RESOURCES_RCC ${CMAKE_BINARY_DIR}/translations.qrc)
 add_definitions(-DQT_NO_KEYWORDS)
 add_definitions(-D__STDC_LIMIT_MACROS)
 add_definitions(-Wall -Wextra)
-add_definitions(-std=c++14)
+add_definitions(-std=${QT_CXX_STANDARD})
 add_definitions(-DBOOST_MATH_DISABLE_FLOAT128=1)
 add_definitions(-DGLIBMM_STATIC_COMPILATION -DGLIB_STATIC_COMPILATION)
-add_definitions(-D_HAS_STD_BYTE=0)
+# The MinGW headers declare a global 'byte' typedef that clashes with
+# std::byte, which C++17 brings in. Qt 5 can be built without it, but Qt 6
+# requires std::byte and refuses to compile when this is defined.
+if(NOT QT_QT6)
+	add_definitions(-D_HAS_STD_BYTE=0)
+endif()
 if(WIN32)
 	add_definitions(-Wa,-mbig-obj -O3)
 endif()
@@ -738,12 +792,13 @@ if(WIN32)
 	# We also need QWindowsIntegrationPlugin, Qt5PlatformSupport (only for
 	# Qt < 5.8.0), and all Qt libs and their dependencies.
 	add_definitions(-DQT_STATICPLUGIN)
-	list(APPEND PULSEVIEW_LINK_LIBS Qt5::QSvgPlugin)
-	list(APPEND PULSEVIEW_LINK_LIBS Qt5::QWindowsIntegrationPlugin)
-	if(Qt5Gui_VERSION VERSION_LESS 5.8.0)
+	list(APPEND PULSEVIEW_LINK_LIBS fluentui3style)
+	list(APPEND PULSEVIEW_LINK_LIBS Qt${QT_VERSION_MAJOR}::QSvgPlugin)
+	list(APPEND PULSEVIEW_LINK_LIBS Qt${QT_VERSION_MAJOR}::QWindowsIntegrationPlugin)
+	if(QT_VERSION_MAJOR STREQUAL "5" AND Qt5Gui_VERSION VERSION_LESS 5.8.0)
 		list(APPEND PULSEVIEW_LINK_LIBS -lQt5PlatformSupport)
 	endif()
-	list(APPEND PULSEVIEW_LINK_LIBS ${QT5ALL_LDFLAGS})
+	list(APPEND PULSEVIEW_LINK_LIBS ${QTALL_LDFLAGS})
 	# Add hidapi for IAP dialog
 	list(APPEND PULSEVIEW_LINK_LIBS -lhidapi -lsetupapi -lusb-1.0 -ldwmapi)
 elseif(APPLE)

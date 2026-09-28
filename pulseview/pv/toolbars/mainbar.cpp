@@ -1276,7 +1276,7 @@ namespace pv
 		void MainBar::get_decoder_list_default(QString decoder_name)
 		{
 			string String = decoder_name.toLocal8Bit().toStdString();
-			istringstream iss(String);
+			std::istringstream iss(String);
 			std::string word;
 			decoder_list_default_.clear();
 			while (iss >> word)

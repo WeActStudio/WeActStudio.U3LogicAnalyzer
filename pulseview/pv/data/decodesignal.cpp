@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <QDebug>
 #include <QMessageBox>
+#include <QRegularExpression>
 #include "logic.hpp"
 #include "logicsegment.hpp"
 #include "decodesignal.hpp"
@@ -343,7 +344,7 @@ void DecodeSignal::auto_assign_signals(const shared_ptr<Decoder> dec)
 			continue;
 
 		QString ch_name = ch.name.toLower();
-		ch_name = ch_name.replace(QRegExp("[-_.]"), " ");
+		ch_name = ch_name.replace(QRegularExpression("[-_.]"), " ");
 
 		shared_ptr<data::SignalBase> match;
 		for (const shared_ptr<data::SignalBase>& s : session_.signalbases()) {
@@ -351,7 +352,7 @@ void DecodeSignal::auto_assign_signals(const shared_ptr<Decoder> dec)
 				continue;
 
 			QString s_name = s->name().toLower();
-			s_name = s_name.replace(QRegExp("[-_.]"), " ");
+			s_name = s_name.replace(QRegularExpression("[-_.]"), " ");
 
 			if (s->logic_data() &&
 				((ch_name.contains(s_name)) || (s_name.contains(ch_name)))) {
@@ -804,7 +805,7 @@ void DecodeSignal::save_settings(QSettings &settings) const
 	for (const shared_ptr<Decoder>& decoder : stack_) {
 		settings.beginGroup("decoder" + QString::number(decoder_idx++));
 
-		settings.setValue("id", decoder->get_srd_decoder()->id);
+		settings.setValue("id", QString::fromUtf8(decoder->get_srd_decoder()->id));
 		settings.setValue("visible", decoder->visible());
 
 		// Save decoder options

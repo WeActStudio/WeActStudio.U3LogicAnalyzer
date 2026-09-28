@@ -22,6 +22,10 @@
 
 #include <QToolButton>
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#include <QEnterEvent>
+#endif
+
 
 namespace pv {
 namespace widgets {
@@ -35,7 +39,11 @@ public:
 	void setMenu(QMenu *menu);
 
 protected:
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	void enterEvent(QEnterEvent *event) override;
+#else
 	void enterEvent(QEvent *event) override;
+#endif
 	bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:

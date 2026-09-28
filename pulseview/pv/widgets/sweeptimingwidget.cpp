@@ -32,6 +32,7 @@
 #include <QFontMetrics>
 
 using std::abs;
+using std::string;
 using std::vector;
 
 namespace pv {
@@ -61,7 +62,7 @@ SweepTimingWidget::SweepTimingWidget(const char *suffix,
 		this, SIGNAL(value_changed()));
 
 	setLayout(&layout_);
-	layout_.setMargin(0);
+	layout_.setContentsMargins(0, 0, 0, 0);
 	layout_.addWidget(&list_);
 	layout_.addWidget(&value_);
 

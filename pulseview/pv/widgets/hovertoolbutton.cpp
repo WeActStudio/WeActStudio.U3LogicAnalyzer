@@ -24,7 +24,11 @@ void HoverToolButton::setMenu(QMenu *menu)
     }
 }
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+void HoverToolButton::enterEvent(QEnterEvent *event)
+#else
 void HoverToolButton::enterEvent(QEvent *event)
+#endif
 {
     QToolButton::enterEvent(event);
 

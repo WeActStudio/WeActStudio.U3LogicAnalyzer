@@ -36,6 +36,10 @@
 #include <QScreen>
 #include <QWindow>
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#include <QInputDevice>
+#endif
+
 #include <QDebug>
 
 using std::abs;
@@ -137,7 +141,11 @@ bool Viewport::touch_event(QTouchEvent *event)
 		pinch_zoom_active_ = false;
 		return false;
 	}
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	if (event->device()->type() == QInputDevice::DeviceType::TouchPad) {
+#else
 	if (event->device()->type() == QTouchDevice::TouchPad) {
+#endif
 		return false;
 	}
 
@@ -343,9 +351,11 @@ void Viewport::wheelEvent(QWheelEvent *event)
 {
 	assert(event);
 
-	int delta = event->delta();
+	const QPoint angle_delta = event->angleDelta();
 
-	if (event->orientation() == Qt::Vertical) {
+	if (angle_delta.y() != 0) {
+		const int delta = angle_delta.y();
+
 		if (event->modifiers() & Qt::ControlModifier) {
 			// Vertical scrolling with the control key pressed
 			// is intrepretted as vertical scrolling
@@ -355,9 +365,10 @@ void Viewport::wheelEvent(QWheelEvent *event)
 			// Vertical scrolling is interpreted as zooming in/out
 			double steps = delta / 250.0;
 			double scale = view_.scale() * pow(2.0, -steps);
-			pv::util::Timestamp cursor_offset = view_.offset() + view_.scale() * event->x();
+			const int cursor_x = static_cast<int>(event->position().x());
+			pv::util::Timestamp cursor_offset = view_.offset() + view_.scale() * cursor_x;
 			pv::util::Timestamp new_scale = std::max(std::min(scale, view_.current_max_scale_), 1e-12);
-			pv::util::Timestamp new_offset = cursor_offset - new_scale * event->x();
+			pv::util::Timestamp new_offset = cursor_offset - new_scale * cursor_x;
 			new_offset = std::max(0.00, std::min((double)(view_.current_max_offset_ - new_scale * view_.viewport_width()), (double)new_offset));
 
 			// if ((double)new_offset + new_scale * view_.viewport_width() > view_.current_max_offset_){
@@ -368,8 +379,9 @@ void Viewport::wheelEvent(QWheelEvent *event)
 			// }
 			view_.set_scale_offset((double)new_scale, new_offset);
 		}
-	} else if (event->orientation() == Qt::Horizontal) {
+	} else if (angle_delta.x() != 0) {
 		// Horizontal scrolling is interpreted as moving left/right
+		const int delta = angle_delta.x();
 		view_.set_scale_offset(view_.scale(),
 			delta * view_.scale() + view_.offset());
 	}

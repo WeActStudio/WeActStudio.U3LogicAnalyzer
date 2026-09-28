@@ -2,7 +2,9 @@
 # ============================================================================
 # build.sh - CH32H417 U3LogicAnalyzer Build + Package
 # Usage:
-#   ./build.sh              # Build only
+#   ./build.sh              # Build only (Qt 5)
+#   ./build.sh --qt5        # Build against Qt 5 (default)
+#   ./build.sh --qt6        # Build against Qt 6
 #   ./build.sh --package    # Build + create dist/U3LogicAnalyzer/ package
 #   ./build.sh --clean      # Clean build
 # ============================================================================
@@ -18,14 +20,30 @@ PACKAGE=0
 IS_WINDOWS=0
 IS_MACOS=0
 
+# Qt version: 5 (default) or 6. Scanned before the platform detection,
+# which needs it to locate the Qt installation.
+QT_MAJOR=5
+for arg in "$@"; do
+    case "$arg" in
+        --qt5) QT_MAJOR=5 ;;
+        --qt6) QT_MAJOR=6 ;;
+    esac
+done
+# Set per platform below; empty on Linux, where Qt comes from the system.
+QT_PREFIX=""
+# Handed to the application's cmake call only.
+QT_CMAKE_EXTRA="-DQT_VERSION_MAJOR=$QT_MAJOR"
+
 # Platform detection
 if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ -n "$MSYSTEM" ]]; then
     IS_WINDOWS=1
     export PATH="/mingw64/bin:/usr/bin:$PATH"
+    QT_PREFIX="/mingw64/qt${QT_MAJOR}-static"
+    QT_CMAKE_EXTRA="$QT_CMAKE_EXTRA -DCMAKE_PREFIX_PATH=$QT_PREFIX"
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     IS_MACOS=1
     if command -v brew &>/dev/null; then
-        QT_PREFIX="$(brew --prefix qt@5 2>/dev/null || brew --prefix qt 2>/dev/null || true)"
+        QT_PREFIX="$(brew --prefix "qt@${QT_MAJOR}" 2>/dev/null || brew --prefix qt 2>/dev/null || true)"
         PYTHON_PREFIX="$(brew --prefix python@3.12 2>/dev/null || brew --prefix python3 2>/dev/null || true)"
         if [ -n "$QT_PREFIX" ]; then
             export PATH="$QT_PREFIX/bin:$PATH"
@@ -33,7 +51,13 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
         if [ -n "$PYTHON_PREFIX" ] && [ -d "$PYTHON_PREFIX/Frameworks/Python.framework/Versions/3.12" ]; then
             export PKG_CONFIG_PATH="$PYTHON_PREFIX/Frameworks/Python.framework/Versions/3.12/lib/pkgconfig:${PKG_CONFIG_PATH}"
         fi
-        for formula in qt@5 boost python@3.12 glib glibmm@2.66 libsigc++@2 libusb hidapi libzip; do
+        # Qt is found through CMAKE_PREFIX_PATH like the other formulas; add
+        # it here instead of on the command line so the rest is not dropped.
+        # "set -e" would end the script on a failed test, so use an if.
+        if [ -n "$QT_PREFIX" ]; then
+            export CMAKE_PREFIX_PATH="${QT_PREFIX}${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
+        fi
+        for formula in "qt@${QT_MAJOR}" boost python@3.12 glib glibmm@2.66 libsigc++@2 libusb hidapi libzip; do
             p="$(brew --prefix "$formula" 2>/dev/null || true)"
             [ -z "$p" ] && continue
             export CMAKE_PREFIX_PATH="${p}${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
@@ -55,6 +79,7 @@ while [ $# -gt 0 ]; do
     case $1 in
         --clean) CLEAN=1 ;;
         --package) PACKAGE=1 ;;
+        --qt5|--qt6) ;;   # already picked up above
         --prefix)
             if [ $# -lt 2 ]; then
                 echo "[error] --prefix requires a path argument" >&2
@@ -95,6 +120,7 @@ echo "============================================"
 echo "Source:  $SCRIPT_DIR"
 echo "Build:   $BUILD_DIR"
 echo "Install: $PREFIX"
+echo "Qt:      $QT_MAJOR${QT_PREFIX:+ ($QT_PREFIX)}"
 [ $PACKAGE -eq 1 ] && echo "Package: $DIST_DIR"
 echo ""
 
@@ -175,7 +201,7 @@ echo "===== Step 4/4: U3LogicAnalyzer ====="
 if ls "${SCRIPT_DIR}/pulseview/l10n/"*.ts >/dev/null 2>&1; then
     echo "  Generating translations..."
     if [ $IS_WINDOWS -eq 1 ]; then
-        export PATH="/mingw64/qt5-static/bin:$PATH"
+        export PATH="$QT_PREFIX/bin:$PATH"
     fi
     for ts in "${SCRIPT_DIR}/pulseview/l10n/"*.ts; do
         [ -f "$ts" ] && lrelease "$ts" -qm "${ts%.ts}.qm" 2>/dev/null || true
@@ -193,12 +219,19 @@ cmake "${SCRIPT_DIR}/pulseview" \
     -DENABLE_FLOW=OFF \
     -DENABLE_TESTS=OFF \
     -DENABLE_SIGNALS=OFF \
-    -DDISABLE_WERROR=ON $MINGW_EXTRA
+    -DDISABLE_WERROR=ON $MINGW_EXTRA $QT_CMAKE_EXTRA
 cmake --build . -j"$JOBS"
 
 PVDIR="$BUILD_DIR/logicanalyzer_build"
 PV_BIN="$PVDIR/U3LogicAnalyzer"
 [ $IS_WINDOWS -eq 1 ] && PV_BIN="$PVDIR/U3LogicAnalyzer.exe"
+
+# Runtime DLLs taken from /mingw64/bin.  Neither Qt build is fully
+# static: Qt 6 links against the system image and text stack (webp,
+# freetype, harfbuzz, png, jpeg, tiff and their dependencies), so these
+# are needed next to the executable.  Kept in one place, because the
+# copy in the build directory and the copy in the package must agree.
+SYSTEM_DLLS="libglib-2.0-0.dll libglibmm-2.4-1.dll libgobject-2.0-0.dll libsigc-2.0-0.dll libstdc++-6.dll libwinpthread-1.dll libgcc_s_seh-1.dll libgmodule-2.0-0.dll libusb-1.0.dll libhidapi-0.dll libintl-8.dll libiconv-2.dll libpcre2-8-0.dll libffi-8.dll libzip.dll libbz2-1.dll liblzma-5.dll zlib1.dll libzstd.dll libpcre2-16-0.dll libpng16-16.dll libjpeg-8.dll libtiff-6.dll libwebp-7.dll libwebpmux-3.dll libwebpdemux-2.dll libsharpyuv-0.dll libbrotlicommon.dll libbrotlidec.dll libfreetype-6.dll libharfbuzz-0.dll libgraphite2.dll libLerc.dll libdeflate.dll libjbig-0.dll libb2-1.dll"
 
 if [ $IS_WINDOWS -eq 1 ]; then
     # Deploy DLLs and create run.bat in build dir
@@ -210,11 +243,7 @@ if [ $IS_WINDOWS -eq 1 ]; then
         cp "$BUILD_DIR/libsigrok_build/$dll" "$PVDIR/" 2>/dev/null || true
         cp "$BUILD_DIR/libsigrokdecode_build/$dll" "$PVDIR/" 2>/dev/null || true
     done
-    for dll in libglib-2.0-0.dll libglibmm-2.4-1.dll libgobject-2.0-0.dll \
-        libsigc-2.0-0.dll libstdc++-6.dll libwinpthread-1.dll \
-        libgcc_s_seh-1.dll libgmodule-2.0-0.dll libusb-1.0.dll libhidapi-0.dll \
-        libintl-8.dll libiconv-2.dll libpcre2-8-0.dll libffi-8.dll \
-        libzip.dll libbz2-1.dll liblzma-5.dll zlib1.dll libzstd.dll "$PYDLL"; do
+    for dll in $SYSTEM_DLLS "$PYDLL"; do
         cp "/mingw64/bin/$dll" "$PVDIR/" 2>/dev/null || true
     done
 #     cat > "$PVDIR/run.bat" << 'RBEOF'
@@ -264,14 +293,7 @@ if [ $PACKAGE -eq 1 ]; then
 
 	# 3. Copy system DLLs
         echo "  System DLLs..."
-        for dll in \
-            libglib-2.0-0.dll libglibmm-2.4-1.dll libgobject-2.0-0.dll \
-            libsigc-2.0-0.dll libstdc++-6.dll libwinpthread-1.dll \
-            libgcc_s_seh-1.dll libgmodule-2.0-0.dll \
-            libusb-1.0.dll libhidapi-0.dll \
-            libintl-8.dll libiconv-2.dll libpcre2-8-0.dll libffi-8.dll \
-            libzip.dll libbz2-1.dll liblzma-5.dll \
-            zlib1.dll libzstd.dll "$PYDLL"; do
+        for dll in $SYSTEM_DLLS "$PYDLL"; do
             cp "/mingw64/bin/$dll" "$DIST_DIR/" 2>/dev/null || true
         done
 
@@ -352,11 +374,11 @@ if [ $PACKAGE -eq 1 ]; then
 
     # 10. Copy Qt translations
     echo "  Qt translations..."
-    QT_TRANSLATIONS_SRC="/mingw64/qt5-static/share/qt5/translations"
+    QT_TRANSLATIONS_SRC="$QT_PREFIX/share/qt${QT_MAJOR}/translations"
     LANGUAGES="zh_CN en de es"
 
     if [ -d "$QT_TRANSLATIONS_SRC" ]; then
-        mkdir -p "$DIST_DIR/share/qt5/translations"
+        mkdir -p "$DIST_DIR/share/qt${QT_MAJOR}/translations"
         for lang in $LANGUAGES; do
             cp "$QT_TRANSLATIONS_SRC"/*_${lang}.qm "$DIST_DIR/share/qt5/translations/" 2>/dev/null
         done
@@ -716,10 +738,10 @@ EOF
         fi
 
         echo "  Qt translations..."
-        QT_TRANSLATIONS_SRC="/usr/share/qt5/translations"
+        QT_TRANSLATIONS_SRC="/usr/share/qt${QT_MAJOR}/translations"
         LANGUAGES="zh_CN en de es"
         if [ -d "$QT_TRANSLATIONS_SRC" ]; then
-            mkdir -p "$DIST_DIR/share/qt5/translations"
+            mkdir -p "$DIST_DIR/share/qt${QT_MAJOR}/translations"
             for lang in $LANGUAGES; do
                 cp "$QT_TRANSLATIONS_SRC"/*_${lang}.qm "$DIST_DIR/share/qt5/translations/" 2>/dev/null || true
             done
@@ -801,7 +823,7 @@ EOF
 
         echo ""
         echo "To distribute: copy dist/U3LogicAnalyzer/."
-        echo "To run: ./U3LogicAnalyzer (Qt5 and other system libraries must be installed)."
+        echo "To run: ./U3LogicAnalyzer (Qt${QT_MAJOR} and other system libraries must be installed)."
     fi
 
     echo ""

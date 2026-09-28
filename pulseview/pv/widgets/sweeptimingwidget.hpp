@@ -30,7 +30,7 @@
 #include <QLineEdit>
 #include <QWidget>
 #include <vector>
-using namespace std;
+
 namespace pv {
 namespace widgets {
 
@@ -55,7 +55,7 @@ public:
 	void show_min_max_step(uint64_t min, uint64_t max, uint64_t step);
 	void show_list(const uint64_t *vals, size_t count);
 	void show_list_time(const uint64_t *vals, size_t count);
-	string formatTranFer(double num);
+	std::string formatTranFer(double num);
 	void show_125_list(uint64_t min, uint64_t max);
 
 	uint64_t value() const;

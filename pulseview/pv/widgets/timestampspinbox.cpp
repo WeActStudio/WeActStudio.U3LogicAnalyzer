@@ -22,7 +22,7 @@
 #include "timestampspinbox.hpp"
 
 #include <QLineEdit>
-#include <QRegExp>
+#include <QRegularExpression>
 bool settingValue_ = false;
 namespace pv {
 namespace widgets {
@@ -95,10 +95,12 @@ void TimestampSpinBox::setValue(const pv::util::Timestamp& val)
 
 void TimestampSpinBox::on_editingFinished()
 {
-	QRegExp re(R"(\s*([-+]?)\s*([0-9]+\.?[0-9]*).*)");
+	const QRegularExpression re(QRegularExpression::anchoredPattern(
+		R"(\s*([-+]?)\s*([0-9]+\.?[0-9]*).*)"));
 
-	if (re.exactMatch(text())) {
-		QStringList captures = re.capturedTexts();
+	const QRegularExpressionMatch match = re.match(text());
+	if (match.hasMatch()) {
+		QStringList captures = match.capturedTexts();
 		captures.removeFirst(); // remove entire match
 		QString str = captures.join("");
 		setValue(pv::util::Timestamp(str.toStdString()));
