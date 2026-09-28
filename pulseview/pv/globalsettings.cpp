@@ -228,6 +228,15 @@ QPalette make_dark_palette()
 	return p;
 }
 
+/*
+ * The area between the two cursors -- the "measure" area -- is filled with
+ * this color. It is a pale blue on a bright background and a dark yellow
+ * on a dark one: the same color would either disappear into the traces or
+ * wash out the whole view.
+ */
+const QColor BrightCursorFillColor(220, 231, 243);
+const QColor DarkCursorFillColor(98, 98, 49);
+
 } // namespace
 
 const QString GlobalSettings::Key_General_Language = "General_Language";
@@ -265,6 +274,7 @@ const QString GlobalSettings::Key_ThresholdLevel = "ThresholdLevel";
 vector<GlobalSettingsInterface*> GlobalSettings::callbacks_;
 bool GlobalSettings::tracking_ = false;
 bool GlobalSettings::is_dark_theme_ = false;
+bool GlobalSettings::theme_applied_ = false;
 map<QString, QVariant> GlobalSettings::tracked_changes_;
 QPalette GlobalSettings::default_palette_;
 
@@ -405,16 +415,36 @@ void GlobalSettings::set_bright_theme_default_colors()
 {
 	setValue(Key_View_FillSignalHighAreaColor,
 		QColor(0, 0, 0, 5 * 256 / 100).rgba());
-	setValue(Key_View_CursorFillColor,
-		QColor(220, 231, 243).rgba());	
+	setValue(Key_View_CursorFillColor, BrightCursorFillColor.rgba());
 }
 
 void GlobalSettings::set_dark_theme_default_colors()
 {
 	setValue(Key_View_FillSignalHighAreaColor,
 		QColor(0, 0, 0, 5 * 256 / 100).rgba());
-	setValue(Key_View_CursorFillColor,
-		QColor(98, 98, 49).rgba());
+	setValue(Key_View_CursorFillColor, DarkCursorFillColor.rgba());
+}
+
+/*
+ * Move the colors that differ between the two schemes along with the
+ * theme.
+ *
+ * set_defaults_where_needed() writes these colors once, when the setting
+ * is created, and it uses the theme that happens to be in use at that
+ * moment. An installation that started out bright therefore keeps the
+ * bright color of the measure area after the desktop is switched to dark,
+ * and a pale block is drawn over the dark traces. Only a color that is
+ * still one of the two defaults is moved: a color that was picked by hand
+ * is what it is, whichever theme is in use.
+ */
+void GlobalSettings::follow_theme_default_colors(bool dark)
+{
+	const QColor current = QColor::fromRgba(
+		value(Key_View_CursorFillColor).value<uint32_t>());
+
+	if (current == (dark ? BrightCursorFillColor : DarkCursorFillColor))
+		setValue(Key_View_CursorFillColor,
+			(dark ? DarkCursorFillColor : BrightCursorFillColor).rgba());
 }
 
 bool GlobalSettings::current_theme_is_dark()
@@ -480,7 +510,20 @@ void GlobalSettings::apply_theme()
 
 	qApp->setPalette(dark ? make_dark_palette() : make_light_palette());
 
+	/*
+	 * The colors that belong to the scheme are moved along with it. The
+	 * first call counts as a change even when the scheme is light, which
+	 * is the value is_dark_theme_ starts out with: that is what corrects
+	 * a color that was written while the other scheme was in use, at
+	 * startup or when the desktop switches the scheme.
+	 */
+	const bool scheme_changed = (dark != is_dark_theme_) || !theme_applied_;
+	theme_applied_ = true;
+
 	is_dark_theme_ = dark;
+
+	if (scheme_changed)
+		follow_theme_default_colors(dark);
 
 	qDebug() << "Theme:" << Themes.at(theme) << "style:" <<
 		qApp->style()->objectName() << "window:" <<

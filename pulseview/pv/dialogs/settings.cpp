@@ -374,7 +374,7 @@ QWidget *Settings::get_general_settings_form(QWidget *parent) const
 	return form;
 }
 
-QWidget *Settings::get_view_settings_form(QWidget *parent) const
+QWidget *Settings::get_view_settings_form(QWidget *parent)
 {
 	GlobalSettings settings;
 	QCheckBox *cb;
@@ -445,12 +445,12 @@ QWidget *Settings::get_view_settings_form(QWidget *parent) const
 		SLOT(on_view_snapDistance_changed(int)));
 	trace_view_layout->addRow(tr("Maximum distance from edges before markers snap to them"), snap_distance_sb);
 
-	ColorButton* cursor_fill_cb = new ColorButton(parent);
-	cursor_fill_cb->set_color(QColor::fromRgba(
+	cursor_fill_color_ = new ColorButton(parent);
+	cursor_fill_color_->set_color(QColor::fromRgba(
 		settings.value(GlobalSettings::Key_View_CursorFillColor).value<uint32_t>()));
-	connect(cursor_fill_cb, SIGNAL(selected(QColor)),
+	connect(cursor_fill_color_, SIGNAL(selected(QColor)),
 		this, SLOT(on_view_cursorFillColor_changed(QColor)));
-	trace_view_layout->addRow(tr("Color to fill cursor area with"), cursor_fill_cb);
+	trace_view_layout->addRow(tr("Color to fill cursor area with"), cursor_fill_color_);
 
 	QComboBox *thr_disp_mode_cb = new QComboBox();
 	thr_disp_mode_cb->addItem(tr("None"), GlobalSettings::ConvThrDispMode_None);
@@ -792,6 +792,15 @@ void Settings::on_general_theme_changed(int value)
 	GlobalSettings settings;
 	settings.setValue(GlobalSettings::Key_General_Theme, value);
 	settings.apply_theme();
+
+	/*
+	 * The color of the cursor area belongs to the scheme (see
+	 * GlobalSettings::follow_theme_default_colors), so the button that
+	 * shows it has to be shown the color that is in use now.
+	 */
+	if (cursor_fill_color_)
+		cursor_fill_color_->set_color(QColor::fromRgba(
+			settings.value(GlobalSettings::Key_View_CursorFillColor).value<uint32_t>()));
 }
 
 void Settings::on_general_style_changed(int index)

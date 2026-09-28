@@ -32,6 +32,7 @@
 #include "pv/util.hpp"
 #include "ruler.hpp"
 #include "view.hpp"
+#include "viewport.hpp"
 
 using std::max;
 using std::make_pair;
@@ -296,8 +297,16 @@ pair<float, float> CursorPair::get_cursor_offsets() const
 
 void CursorPair::on_setting_changed(const QString &key, const QVariant &value)
 {
-	if (key == GlobalSettings::Key_View_CursorFillColor)
+	/*
+	 * The fill color follows the theme as well (see
+	 * GlobalSettings::follow_theme_default_colors), and a change of the
+	 * scheme of the desktop reaches the views without a change of the
+	 * theme setting, so the view has to be asked to paint again here.
+	 */
+	if (key == GlobalSettings::Key_View_CursorFillColor) {
 		fill_color_ = QColor::fromRgba(value.value<uint32_t>());
+		view_.viewport()->update();
+	}
 
 	if (key == GlobalSettings::Key_View_CursorShowFrequency)
 		show_frequency_ = value.value<bool>();

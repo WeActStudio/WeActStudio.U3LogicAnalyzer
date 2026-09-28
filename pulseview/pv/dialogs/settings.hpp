@@ -37,6 +37,10 @@ namespace pv {
 
 class DeviceManager;
 
+namespace widgets {
+	class ColorButton;
+}
+
 namespace dialogs {
 
 class PageListWidget;
@@ -53,7 +57,9 @@ public:
 	QPlainTextEdit *create_log_view() const;
 
 	QWidget *get_general_settings_form(QWidget *parent) const;
-	QWidget *get_view_settings_form(QWidget *parent) const;
+	/* Not const: it keeps the color button it builds, so that the theme
+	 * can move the color it shows (see on_general_theme_changed). */
+	QWidget *get_view_settings_form(QWidget *parent);
 	QWidget *get_decoder_settings_form(QWidget *parent);
 	QWidget *get_about_page(QWidget *parent) const;
 	QWidget *get_logging_page(QWidget *parent) const;
@@ -122,6 +128,10 @@ private:
 #endif
 
 	QPlainTextEdit *log_view_;
+
+	/* The color of the cursor area follows the theme, so the button that
+	 * shows it has to be refreshed after a change of the theme. */
+	widgets::ColorButton *cursor_fill_color_ = nullptr;
 };
 
 } // namespace dialogs

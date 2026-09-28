@@ -118,6 +118,7 @@ public:
 	void set_defaults_where_needed();
 	void set_bright_theme_default_colors();
 	void set_dark_theme_default_colors();
+	void follow_theme_default_colors(bool dark);
 
 	static bool current_theme_is_dark();
 	void apply_theme();
@@ -166,6 +167,14 @@ private:
 	static QPalette default_palette_;
 
 	static bool is_dark_theme_;
+
+	/*
+	 * Whether apply_theme() has run at least once. The first run has to
+	 * treat the scheme as new even though it matches the initial value of
+	 * is_dark_theme_ (a light scheme), because a color that was written
+	 * under the other scheme is only corrected there.
+	 */
+	static bool theme_applied_;
 };
 
 } // namespace pv
