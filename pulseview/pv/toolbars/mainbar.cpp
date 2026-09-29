@@ -1553,6 +1553,13 @@ namespace pv
 
 		void MainBar::commit_channel_number(uint64_t channelNum)
 		{
+			/*
+			 * The clean up hands 0 over on the way out, and no device
+			 * takes it, so nothing is sent for it.
+			 */
+			if (channelNum == 0)
+				return;
+
 			const shared_ptr<devices::Device> device = device_selector_.selected_device();
 			if (!device)
 				return;
@@ -1661,6 +1668,14 @@ namespace pv
 				else if (sample_count > max_samples)
 					sample_count = (uint64_t)max_samples;
 			}
+			/*
+			 * The selectors hold no value yet while the bar is being set
+			 * up, which leaves the count at 0; no device takes that, so
+			 * wait for a call that has a count instead of failing here.
+			 */
+			if (sample_count == 0)
+				return;
+
 			if (sample_count_supported_)
 			{
 				try

@@ -567,9 +567,17 @@ void Session::restore_settings(QSettings &settings)
 			qDebug() << "Found connected device, using it instead of saved settings";
 		}
 
-		if (device)
-			set_device(device);
-		else {
+		if (device) {
+			/* The default session has already selected and opened the very
+			 * device that is connected now. Selecting it once more would
+			 * close and re-open it, and with that run the whole round of
+			 * configuration a second time - which is a full USB round trip
+			 * at start-up and writes every setting twice. */
+			if (device != device_)
+				set_device(device);
+			else
+				qDebug() << "Device is already the selected one, keeping it open";
+		} else {
 			// No device found, fall back to the demo device
 			qDebug() << "No device found, selecting default device";
 			set_default_device();
