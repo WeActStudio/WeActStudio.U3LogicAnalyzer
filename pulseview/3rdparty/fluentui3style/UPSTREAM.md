@@ -91,6 +91,20 @@ or a plugin, where none of this comes up.
    the height the widget had is kept in a property of its own so that
    `unpolish()` can put it back.
 
+7. `src/fluentui3styleproperties.h`, `src/menupopupanimation_p.cpp`,
+   `src/fluentui3style.cpp`: the length of the menu open animation is no
+   longer the fixed 400 ms of upstream, it is read from a property, and the
+   built-in default is 150 ms. Upstream opens every menu over 400 ms, which
+   is a whole two fifths of a second of a menu that does not answer the
+   mouse either: while the animation runs, the event filter of the animator
+   swallows the mouse and key events of that menu. The property is
+   `menuPopupAnimationDuration`, it is read on every popup -- from the menu
+   first, then from `QApplication`, then from what `polish()` put on the
+   animator -- so a value set at run time takes effect on the next menu, and
+   a value of 0 or less skips the animation altogether. The same is already
+   true of upstream's `menuPopupAnimationEnabled`, which switches it off
+   altogether.
+
 ## Why it is built as a static library
 
 Upstream ships the style as a Qt style plugin so that an application can

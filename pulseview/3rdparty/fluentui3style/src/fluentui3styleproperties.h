@@ -51,6 +51,11 @@ enum ProgressBarStyle
     "comboBoxPopupDropDownAnimationEnabled";
 // 可同时设置在 qApp 和单个 QMenu 上，规则同 ComboBox。
 [[maybe_unused]] constexpr const char *MenuPopupAnimationEnabledProperty = "menuPopupAnimationEnabled";
+// 菜单展开动画时长（毫秒），可同时设置在 qApp 和单个 QMenu 上，优先级：
+// QMenu 局部属性 > qApp 全局属性 > 样式内置默认值。值 <= 0 表示不做展开动画，
+// 菜单直接显示。每次弹出时重新读取，运行期改属性即刻生效。
+[[maybe_unused]] constexpr const char *MenuPopupAnimationDurationProperty = "menuPopupAnimationDuration";
+[[maybe_unused]] constexpr int MenuPopupAnimationDefaultDuration = 150;
 // Flyout 阴影绘制在透明顶层窗口内部；布局和弹出位置必须共用同一预留宽度。
 [[maybe_unused]] constexpr int FlyoutShadowBorderWidth = 6;
 [[maybe_unused]] constexpr int FlyoutPopupOffset = 3;

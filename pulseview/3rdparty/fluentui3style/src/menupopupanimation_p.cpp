@@ -119,6 +119,30 @@ public:
 
     void setDuration( int duration ) { m_duration = qMax( 0, duration ); }
 
+    // Duration of the next open animation. It is looked up again on every
+    // popup, so changing the property at run time takes effect at once.
+    int effectiveDuration() const
+    {
+        if ( m_menu )
+        {
+            const QVariant localValue =
+                m_menu->property( MenuPopupAnimationDurationProperty );
+            if ( localValue.isValid() )
+            {
+                return localValue.toInt();
+            }
+        }
+
+        const QVariant globalValue =
+            qApp ? qApp->property( MenuPopupAnimationDurationProperty ) : QVariant();
+        if ( globalValue.isValid() )
+        {
+            return globalValue.toInt();
+        }
+
+        return m_duration;
+    }
+
     void stop() { stop( true ); }
 
     void stop( bool repaintRealMenu )
@@ -387,6 +411,14 @@ private:
             return;
         }
 
+        // A non-positive duration means "no animation": show the menu as it is.
+        const int duration = effectiveDuration();
+        if ( duration <= 0 )
+        {
+            restoreMenu();
+            return;
+        }
+
         const QPixmap snapshot = renderMenuSnapshot();
         if ( snapshot.isNull() )
         {
@@ -429,7 +461,7 @@ private:
         m_animation = new QVariantAnimation( m_menu );
         m_animation->setStartValue( 0.0 );
         m_animation->setEndValue( 1.0 );
-        m_animation->setDuration( m_duration );
+        m_animation->setDuration( duration );
         m_animation->setEasingCurve( QEasingCurve::OutCubic );
 
         connect( m_animation,
@@ -547,7 +579,7 @@ private:
     QList<QPointer<QWidget>> m_hiddenChildren;
     QRegion m_originalMenuMask;
     int m_startSnapshotY = 0;
-    int m_duration       = 400;
+    int m_duration       = MenuPopupAnimationDefaultDuration;
     bool m_isOpening     = false;
     bool m_preparedForShow = false;
     bool m_hadOriginalMenuMask = false;
