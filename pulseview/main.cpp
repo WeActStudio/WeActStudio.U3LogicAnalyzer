@@ -232,9 +232,12 @@ int main(int argc, char *argv[])
 	bool debug_console = false;
 	int loglevel = -1;
 
-	// Enable high DPI scaling before creating QApplication
+	// Enable high DPI scaling before creating QApplication. Qt 6 has both
+	// of them on all the time and no longer wants to be asked.
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 	QApplication::setAttribute(Qt::AA_EnableHighDpiScaling, true);
 	QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps, true);
+#endif
 #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
 	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
 		Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);

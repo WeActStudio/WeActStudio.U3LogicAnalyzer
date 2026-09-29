@@ -57,6 +57,26 @@ namespace trace {
 const QColor LightBlue = QColor(17, 133, 209, 200);
 const QColor Gray = QColor(200, 200, 200, 200);
 const QColor Orange = QColor(238, 178, 17, 255);
+
+/* The touch points of an event, and where one of them is: Qt 6 asks for
+ * points() and position(), Qt 5 has neither of the two. */
+static QList<QTouchEvent::TouchPoint> touch_points(const QTouchEvent *event)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	return event->points();
+#else
+	return event->touchPoints();
+#endif
+}
+
+static QPointF touch_point_position(const QTouchEvent::TouchPoint &point)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	return point.position();
+#else
+	return point.pos();
+#endif
+}
 Viewport::Viewport(View &parent) :
 	ViewWidget(parent),
 	pinch_zoom_active_(false)
@@ -135,7 +155,7 @@ vector< shared_ptr<ViewItem> > Viewport::items()
 
 bool Viewport::touch_event(QTouchEvent *event)
 {
-	QList<QTouchEvent::TouchPoint> touchPoints = event->touchPoints();
+	const QList<QTouchEvent::TouchPoint> touchPoints = touch_points(event);
 
 	if (touchPoints.count() != 2) {
 		pinch_zoom_active_ = false;
@@ -154,16 +174,16 @@ bool Viewport::touch_event(QTouchEvent *event)
 
 	if (!pinch_zoom_active_ ||
 	    (event->touchPointStates() & Qt::TouchPointPressed)) {
-		pinch_offset0_ = (view_.offset() + view_.scale() * touchPoint0.pos().x()).convert_to<double>();
-		pinch_offset1_ = (view_.offset() + view_.scale() * touchPoint1.pos().x()).convert_to<double>();
+		pinch_offset0_ = (view_.offset() + view_.scale() * touch_point_position(touchPoint0).x()).convert_to<double>();
+		pinch_offset1_ = (view_.offset() + view_.scale() * touch_point_position(touchPoint1).x()).convert_to<double>();
 		pinch_zoom_active_ = true;
 	}
 
-	double w = touchPoint1.pos().x() - touchPoint0.pos().x();
+	double w = touch_point_position(touchPoint1).x() - touch_point_position(touchPoint0).x();
 	if (abs(w) >= 1.0) {
 		const double scale =
 			fabs((pinch_offset1_ - pinch_offset0_) / w);
-		double offset = pinch_offset0_ - touchPoint0.pos().x() * scale;
+		double offset = pinch_offset0_ - touch_point_position(touchPoint0).x() * scale;
 		if (scale > 0)
 			view_.set_scale_offset(scale, offset);
 	}
@@ -177,7 +197,7 @@ bool Viewport::touch_event(QTouchEvent *event)
 		} else {
 			// Update the mouse down fields so that continued
 			// dragging with the primary touch will work correctly
-			mouse_down_point_ = touchPoint0.pos().toPoint();
+			mouse_down_point_ = touch_point_position(touchPoint0).toPoint();
 			drag();
 		}
 	}

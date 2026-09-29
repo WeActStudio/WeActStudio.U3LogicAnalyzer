@@ -18,7 +18,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
+#ifndef ENABLE_DECODE
 #define ENABLE_DECODE
+#endif
 #include <extdef.h>
 #include <QApplication>
 #include "pv/application.hpp"
@@ -217,7 +219,7 @@ namespace pv
 					this, SLOT(on_actionNewView_triggered()));
 
 			action_open_->setIcon(QIcon(":/icons/document-open.png"));
-			action_open_->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_O));
+			action_open_->setShortcut(pv::util::key_sequence(Qt::CTRL, Qt::Key_O));
 			connect(action_open_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionOpen_triggered()));
 
@@ -225,7 +227,7 @@ namespace pv
 					this, SLOT(on_actionRestoreSetup_triggered()));
 
 			action_save_->setIcon(QIcon(":/icons/document-save-as.png"));
-			action_save_->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_S));
+			action_save_->setShortcut(pv::util::key_sequence(Qt::CTRL, Qt::Key_S));
 			connect(action_save_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionSave_triggered()));
 
@@ -234,7 +236,7 @@ namespace pv
 					this, SLOT(on_actionSaveAs_triggered()));
 
 			action_save_selection_as_->setIcon(QIcon(":/icons/document-save-as.png"));
-			action_save_selection_as_->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_R));
+			action_save_selection_as_->setShortcut(pv::util::key_sequence(Qt::CTRL, Qt::Key_R));
 			connect(action_save_selection_as_, SIGNAL(triggered(bool)),
 					this, SLOT(on_actionSaveSelectionAs_triggered()));
 
@@ -1700,7 +1702,7 @@ namespace pv
 		void MainBar::show_session_error(const QString text, const QString info_text)
 		{
 			pv::util::show_message(this, tr("Error"), text + "\n\n" + info_text,
-				QMessageBox::standardIcon(QMessageBox::Warning));
+				pv::util::message_box_icon(QMessageBox::Warning));
 		}
 
 		void MainBar::export_file(shared_ptr<OutputFormat> format, bool selection_only, QString file_name)
@@ -2421,7 +2423,7 @@ namespace pv
 				}
 			}
 			pv::util::show_message(this, tr("Version Info"), text,
-				QMessageBox::standardIcon(QMessageBox::Information),
+				pv::util::message_box_icon(QMessageBox::Information),
 				400, true);
 		}
 
@@ -2463,7 +2465,7 @@ namespace pv
 			{
 				pv::util::show_message(this, tr("Warning"),
 					tr("The current device does not support firmware upgrade.\nPlease connect the CH32H417 device and try again."),
-					QMessageBox::standardIcon(QMessageBox::Warning), 350);
+					pv::util::message_box_icon(QMessageBox::Warning), 350);
 				return;
 			}
 
@@ -2533,7 +2535,7 @@ namespace pv
 					iap_upgrading_ = false;
 					pv::util::show_message(this, tr("Update Failed"),
 						tr("Firmware Update Failed!\nPlease check the device connection and firmware file."),
-						QMessageBox::standardIcon(QMessageBox::Critical), 0);
+						pv::util::message_box_icon(QMessageBox::Critical), 0);
 				}
 				workerThread->quit(); });
 			connect(workerThread, &QThread::finished, workerThread, &QThread::deleteLater);
@@ -2559,7 +2561,7 @@ namespace pv
 			{
 				pv::util::show_message(this, tr("Information"),
 					tr("PDF file not found:\n%1\n\nMake sure the doc directory and the user manual are present.").arg(pdfPath),
-					QMessageBox::standardIcon(QMessageBox::Information), 500);
+					pv::util::message_box_icon(QMessageBox::Information), 500);
 				return;
 			}
 
@@ -2570,7 +2572,7 @@ namespace pv
 			{
 				pv::util::show_message(this, tr("Open Failed"),
 					tr("The PDF file could not be opened. Make sure a PDF reader is installed."),
-					QMessageBox::standardIcon(QMessageBox::Warning));
+					pv::util::message_box_icon(QMessageBox::Warning));
 			}
 		}
 
@@ -2617,7 +2619,7 @@ namespace pv
 					iap_upgrading_ = false;
 					pv::util::show_message(this, tr("Update Success"),
 						tr("Firmware Update Success!\nDevice already restart."),
-						QMessageBox::standardIcon(QMessageBox::Information),
+						pv::util::message_box_icon(QMessageBox::Information),
 						400, false, false, false);
 				}
 				/* CH32H417 plugged in: if the device is coming back after an IAP upgrade, clear the upgrade flag */

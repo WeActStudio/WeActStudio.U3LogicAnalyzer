@@ -39,6 +39,7 @@
 #endif
 
 #include <QAbstractNativeEventFilter>
+#include <QApplication>
 #include <QDebug>
 #include <QTextStream>
 #include <QCoreApplication>
@@ -47,6 +48,8 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
+#include <QMouseEvent>
+#include <QStyle>
 #include <QTimer>
 #include <QWidget>
 #include <QPixmap>
@@ -359,6 +362,57 @@ std::streamsize text_width(const QFontMetrics &metric, const QString &string)
 }
 
 
+QPoint mouse_global_position(const QMouseEvent *event)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	return event->globalPosition().toPoint();
+#else
+	return event->globalPos();
+#endif
+}
+
+
+QPoint mouse_position(const QMouseEvent *event)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	return event->position().toPoint();
+#else
+	return event->pos();
+#endif
+}
+
+
+QPixmap message_box_icon(QMessageBox::Icon icon)
+{
+	QStyle::StandardPixmap standard_pixmap;
+
+	switch (icon) {
+	case QMessageBox::Information:
+		standard_pixmap = QStyle::SP_MessageBoxInformation;
+		break;
+	case QMessageBox::Warning:
+		standard_pixmap = QStyle::SP_MessageBoxWarning;
+		break;
+	case QMessageBox::Critical:
+		standard_pixmap = QStyle::SP_MessageBoxCritical;
+		break;
+	case QMessageBox::Question:
+		standard_pixmap = QStyle::SP_MessageBoxQuestion;
+		break;
+	default:
+		return QPixmap();
+	}
+
+	QStyle *style = QApplication::style();
+
+	int size = style->pixelMetric(QStyle::PM_MessageBoxIconSize);
+	if (size <= 0)
+		size = 32;
+
+	return style->standardIcon(standard_pixmap).pixmap(QSize(size, size));
+}
+
+
 void show_message(QWidget *parent, const QString &title, const QString &text,
 	const QPixmap &icon, int min_width, bool rich_text, bool open_links,
 	bool modal)
@@ -427,7 +481,7 @@ void show_message(QWidget *parent, const QString &title, const QString &text,
 	QMessageBox::Icon icon, int min_width, bool rich_text, bool open_links,
 	bool modal)
 {
-	show_message(parent, title, text, QMessageBox::standardIcon(icon),
+	show_message(parent, title, text, message_box_icon(icon),
 		min_width, rich_text, open_links, modal);
 }
 

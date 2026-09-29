@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QEvent>
 #include <QMouseEvent>
+#include <pv/util.hpp>
 #include <QDebug>
 
 namespace pv {
@@ -39,7 +40,13 @@ bool HoverToolButton::eventFilter(QObject *watched, QEvent *event)
 {
     if (watched == m_menu && event->type() == QEvent::Hide) {
         QToolButton::setAttribute(Qt::WA_UnderMouse, false);
-        QHoverEvent hoverEvent(QEvent::HoverLeave, QPoint(10, 10), QPoint(0, 0));
+        /* Qt 6.3 wants the scene and global positions told apart, Qt 5
+         * has no such constructor. */
+#if QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
+        QHoverEvent hoverEvent(QEvent::HoverLeave, QPointF(10, 10), QPointF(10, 10), QPointF(0, 0));
+#else
+        QHoverEvent hoverEvent(QEvent::HoverLeave, QPointF(10, 10), QPointF(0, 0));
+#endif
         QCoreApplication::sendEvent(this, &hoverEvent);
         setDown(false);
 
@@ -48,7 +55,7 @@ bool HoverToolButton::eventFilter(QObject *watched, QEvent *event)
 
     if (m_menu && m_menu->isVisible() && event->type() == QEvent::MouseMove) {
         QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
-        QPoint globalPos = mouseEvent->globalPos();
+        QPoint globalPos = pv::util::mouse_global_position(mouseEvent);
 
         QRect menuRect = m_menu->geometry();
         QRect btnRect  = geometry();

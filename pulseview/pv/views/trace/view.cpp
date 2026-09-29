@@ -1650,7 +1650,7 @@ bool View::eventFilter(QObject *object, QEvent *event)
 		else if (object == ruler_)
 			hover_point_ = mouse_event->pos();
 		else if (object == header_)
-			hover_point_ = QPoint(0, mouse_event->y());
+			hover_point_ = QPoint(0, pv::util::mouse_position(mouse_event).y());
 		else
 			hover_point_ = QPoint(-1, -1);
 

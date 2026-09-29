@@ -105,20 +105,31 @@ bool CustomFilterProxyModel::filterAcceptsRow(int sourceRow,
 	return result;
 }
 
+void CustomFilterProxyModel::invalidate_filter()
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+	// endFilterChange() came in with Qt 6.10; only rows are filtered here
+	beginFilterChange();
+	endFilterChange(QSortFilterProxyModel::Direction::Rows);
+#else
+	invalidateFilter();
+#endif
+}
+
 void CustomFilterProxyModel::set_sample_range(uint64_t start_sample,
 	uint64_t end_sample)
 {
 	range_start_sample_ = start_sample;
 	range_end_sample_ = end_sample;
 
-	invalidateFilter();
+	invalidate_filter();
 }
 
 void CustomFilterProxyModel::enable_range_filtering(bool value)
 {
 	range_filtering_enabled_ = value;
 
-	invalidateFilter();
+	invalidate_filter();
 }
 
 
@@ -205,7 +216,7 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 	// Configure actions
 	save_action_->setText(tr("&Save..."));
 	save_action_->setIcon(QIcon(":/icons/document-save-as.png"));
-	save_action_->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_S));
+	save_action_->setShortcut(pv::util::key_sequence(Qt::CTRL, Qt::Key_S));
 	connect(save_action_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionSave_triggered()));
 

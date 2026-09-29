@@ -123,6 +123,12 @@ protected:
 	bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
 
 private:
+	/**
+	 * Tells the model that the filter has to be run again. Qt 6 wants the
+	 * change to be bracketed, Qt 5 has no such call, hence the two ways.
+	 */
+	void invalidate_filter();
+
 	uint64_t range_start_sample_, range_end_sample_;
 	bool range_filtering_enabled_;
 };

@@ -180,7 +180,7 @@ bool MainWindow::checkSystemRequirements()
 
 		// Create the icon label
 		QLabel *iconLabel = new QLabel(&dialog);
-		iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Information));
+		iconLabel->setPixmap(pv::util::message_box_icon(QMessageBox::Information));
 		iconLabel->setAlignment(Qt::AlignTop);
 		contentLayout->addWidget(iconLabel);
 
@@ -738,7 +738,7 @@ void MainWindow::show_device_detach()
 
 	// Create the icon label
 	QLabel *iconLabel = new QLabel(dialog);
-	iconLabel->setPixmap(QMessageBox::standardIcon(QMessageBox::Warning));
+	iconLabel->setPixmap(pv::util::message_box_icon(QMessageBox::Warning));
 	iconLabel->setAlignment(Qt::AlignTop);
 	contentLayout->addWidget(iconLabel);
 
@@ -1306,7 +1306,7 @@ void MainWindow::setup_ui()
 	session_selector_.tabBar()->setVisible(false);  // hidden session 1
 	// session_selector_.setCornerWidget(static_tab_widget_, Qt::TopLeftCorner);
 	session_selector_.setTabsClosable(false);
-	close_application_shortcut_ = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_Q), this, SLOT(close()));
+	close_application_shortcut_ = new QShortcut(pv::util::key_sequence(Qt::CTRL, Qt::Key_Q), this, SLOT(close()));
 	close_application_shortcut_->setAutoRepeat(false);
 
 	// close_current_tab_shortcut_ = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_W), this, SLOT(on_close_current_tab()));
@@ -1929,7 +1929,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         if (QWidget *w = qobject_cast<QWidget*>(obj))
         {
 			/* Only standalone top-level windows have decorations of their own. */
-			if (w->isTopLevel()) {
+			if (w->isWindow()) {
 				GlobalSettings settings;
 				util::apply_window_theme(w, settings.current_theme_is_dark());
 			}

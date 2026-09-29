@@ -37,10 +37,13 @@
 #include <QMetaType>
 #include <QString>
 #include <QFontMetrics>
+#include <QKeySequence>
 #include <QMessageBox>
 
 using std::string;
 using std::vector;
+
+class QMouseEvent;
 
 namespace pv {
 namespace util {
@@ -185,6 +188,65 @@ vector<string> split_string(string text, string separator);
  * @return width of the string in pixels
  */
 std::streamsize text_width(const QFontMetrics &metric, const QString &string);
+
+
+/**
+ * Where a mouse event happened on the screen, as opposed to
+ * mouse_position(), which is relative to the widget.
+ *
+ * @param[in] event The mouse event to look at.
+ */
+QPoint mouse_global_position(const QMouseEvent *event);
+
+
+/**
+ * Where a mouse event happened, as a point of the widget it went to.
+ *
+ * QMouseEvent::x() and y() are on their way out in Qt 6, and the
+ * position() that replaces them does not exist in Qt 5, hence the two
+ * ways.
+ *
+ * @param[in] event The mouse event to look at.
+ */
+QPoint mouse_position(const QMouseEvent *event);
+
+
+/**
+ * A key sequence of one modifier and one key, such as Ctrl+O.
+ *
+ * Qt 6 wants the two put together with | and has Qt::operator+ on its way
+ * out, while Qt 5 has nothing to combine them into, hence the two ways.
+ *
+ * @param[in] modifier The modifier, such as Qt::CTRL.
+ * @param[in] key The key, such as Qt::Key_O.
+ */
+/* A template, as the type of Qt::CTRL is not the same everywhere: Qt 6
+ * and Qt 5.15 have Qt::Modifier, older Qt 5 versions only have
+ * Qt::KeyboardModifier. */
+template <typename Modifier>
+QKeySequence key_sequence(Modifier modifier, Qt::Key key)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	return QKeySequence(modifier | key);
+#else
+	return QKeySequence(modifier + key);
+#endif
+}
+
+
+/**
+ * The pixmap of one of the standard message box icons, in the size the
+ * style says a message box uses.
+ *
+ * QMessageBox::standardIcon() is on its way out, and the icons it hands
+ * out come from the style anyway, so ask the style directly. Works the
+ * same in Qt 5 and Qt 6.
+ *
+ * @param[in] icon Which of the standard icons is wanted.
+ * @return The icon as a pixmap, or a null pixmap for an icon that has no
+ *  standard counterpart.
+ */
+QPixmap message_box_icon(QMessageBox::Icon icon);
 
 
 /**

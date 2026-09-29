@@ -50,6 +50,7 @@
 #include "viewport.hpp"
 
 #include <pv/globalsettings.hpp>
+#include <pv/util.hpp>
 #include <pv/session.hpp>
 #include <pv/strnatcmp.hpp>
 #include <pv/data/decodesignal.hpp>
@@ -777,9 +778,10 @@ void DecodeTrace::mouse_left_press_event(const QMouseEvent* event)
 			continue;
 
 		unsigned int y = get_row_y(&r);
-		if ((event->x() > 0) && (event->x() <= (int)(ArrowSize + 3 + r.title_width)) &&
-			(event->y() > (int)(y - (default_row_height_ / 2))) &&
-			(event->y() <= (int)(y + (default_row_height_ / 2)))) {
+		const QPoint mouse_pos = pv::util::mouse_position(event);
+		if ((mouse_pos.x() > 0) && (mouse_pos.x() <= (int)(ArrowSize + 3 + r.title_width)) &&
+			(mouse_pos.y() > (int)(y - (default_row_height_ / 2))) &&
+			(mouse_pos.y() <= (int)(y + (default_row_height_ / 2)))) {
 
 			if (r.expanded) {
 				r.collapsing = true;
