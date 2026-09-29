@@ -809,22 +809,23 @@ static int config_list(uint32_t key, GVariant **data,
 	case SR_CONF_VOLTAGE_THRESHOLD:
 	{
 		/*
-		 * The value is a voltage in volts, in 0.1 V steps. The accepted
-		 * range depends on the hardware variant: "b5" devices take
-		 * 0.5-1.65 V, all others 0.8-2.3 V.
+		 * The value is the level on the pins, in volts. On the "b5"
+		 * variant that is half the input level the GUI spin box shows, so
+		 * config_set() doubles it again; its list runs in 0.05 V steps,
+		 * the one of every other device in 0.1 V steps.
 		 */
-		double lo, hi,step_size;
+		double lo, hi, step_size;
 
 		if (!devc || !devc->profile)
 			return SR_ERR_NA;
 
 		if (str_startswith(devc->profile->SN_start, "b5")) {
-			lo = 0.5; /* 1.0 V */
-			hi = 1.65; /* 3.3 V */
+			lo = 0.5;  /* 0.5 V on the pins, 1.0 V at the input */
+			hi = 1.65; /* 1.65 V on the pins, 3.3 V at the input */
 			step_size = 0.05;
 		} else {
 			lo = 0.8;  /* 0.8 V */
-			hi = 2.3; /* 2.3 V */
+			hi = 2.3;  /* 2.3 V */
 			step_size = 0.1;
 		}
 
