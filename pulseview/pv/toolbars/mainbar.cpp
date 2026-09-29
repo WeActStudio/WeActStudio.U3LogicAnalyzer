@@ -211,6 +211,31 @@ namespace pv
 				"QToolBar QToolButton::menu-arrow:hover {"
 				"    background: rgba(180, 180, 180, 60);"
 				"}"
+				// The overflow button Qt adds when the bar is too narrow paints
+				// its arrow with palette(Button) - the very colour it is filled
+				// with - so the stock arrow is invisible (measured contrast of
+				// only 2..19 out of 255, on both light and dark themes). Qt
+				// ignores icon and text for that button, hence the arrow is
+				// supplied as a background image with a mid grey stroke that
+				// reads well on either background.
+				"QToolBar QToolButton#qt_toolbar_ext_button {"
+				"    background-image: url(:/icons/toolbar-arrow-down.svg);"
+				"    background-position: center;"
+				"    background-repeat: no-repeat;"
+				"    border: 1px solid palette(mid);"
+				"    border-radius: 2px;"
+				"}"
+				"QToolBar QToolButton#qt_toolbar_ext_button:hover {"
+				"    background-color: rgba(180, 180, 180, 60);"
+				"    border: 1px solid rgba(120, 120, 120, 100);"
+				"}"
+				// Flip the arrow while the overflow menu is open, so the button
+				// reads "collapse" instead of "expand". :checked covers the menu
+				// being open, :pressed covers the moment it is being clicked.
+				"QToolBar QToolButton#qt_toolbar_ext_button:checked,"
+				"QToolBar QToolButton#qt_toolbar_ext_button:pressed {"
+				"    background-image: url(:/icons/toolbar-arrow-up.svg);"
+				"}"
 			);
 
 			// Actions

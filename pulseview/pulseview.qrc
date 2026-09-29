@@ -30,6 +30,8 @@
 	<file>icons/status-grey.svg</file>
 	<file>icons/status-red.svg</file>
 	<file>icons/show-cursors.png</file>
+	<file>icons/toolbar-arrow-down.svg</file>
+	<file>icons/toolbar-arrow-up.svg</file>
 	<file>icons/trigger-change.svg</file>
 	<file>icons/trigger-change-normal.svg</file>
 	<file>icons/trigger-falling.svg</file>

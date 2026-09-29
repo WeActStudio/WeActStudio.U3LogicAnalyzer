@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Arrow for the toolbar overflow button (the one QToolBar shows when the bar
+  is too narrow; clicking it opens a drop-down with the hidden actions, hence
+  the pointing-down arrow). Qt paints that button's own arrow with
+  palette(Button), which is also the button's background colour, so the stock
+  arrow is invisible (measured contrast as low as 2 on a light theme). MainBar
+  uses this file as the button's background-image instead.
+
+  The mid grey is deliberate: it keeps a usable contrast against both the
+  light (#f3f3f3) and the dark (#1f1f1f) toolbar background.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path d="M3.5 6 L8 10.5 L12.5 6" fill="none" stroke="#8c8c8c"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Same arrow as toolbar-arrow-down.svg, flipped: shown while the tool bar
+  overflow button is open (checked/pressed) so the user gets a "collapse"
+  affordance instead of another "expand" arrow.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path d="M3.5 10 L8 5.5 L12.5 10" fill="none" stroke="#8c8c8c"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
