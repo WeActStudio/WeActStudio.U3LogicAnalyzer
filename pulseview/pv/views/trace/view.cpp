@@ -1781,7 +1781,10 @@ void View::renew_bezier_measure()
 {
 	bool find_edge = false;
 	bool find_match = false;
-	float point_x, point_y;
+	// Both are read further down to build the bezier points, and point_y is
+	// only set when the cursor is inside the signal, so both need a value to
+	// fall back on.
+	float point_x = 0, point_y = hover_point_.y();
 	uint8_t edge_index = 0;
 	vector<data::LogicSegment::EdgePair> edges;
 	static pv::util::Timestamp t_start;
@@ -1911,11 +1914,15 @@ void View::renew_measure()
 			{
 				// check left edge ,right edge, mid edge
 				// left edge x axis
-				uint64_t start_sample = edges[0].first;
-				uint64_t mid_sample = edges[1].first;
-				uint64_t end_sample = 0;
-				edges = signal_under_mouse_cursor_->get_nearest_level_changes(mid_sample);
-				for (int i = 0;i < edges.size(); i++) {
+				// An edge sample number is signed, so keep it signed here as
+				// well: comparing a signed with an unsigned number turns the
+				// signed one into a huge unsigned value.
+				const int64_t start_sample = edges[0].first;
+				const int64_t mid_sample = edges[1].first;
+				int64_t end_sample = 0;
+				edges = signal_under_mouse_cursor_->get_nearest_level_changes(
+					(mid_sample < 0) ? 0 : (uint64_t)mid_sample);
+				for (size_t i = 0; i < edges.size(); i++) {
 					if (edges[i].first > mid_sample) {
 						end_sample = edges[i].first;
 						break;

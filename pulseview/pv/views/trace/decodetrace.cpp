@@ -1500,6 +1500,12 @@ void DecodeTrace::update_rows()
 			nr.decode_row->set_base_color(base_->color());
 			nr.height = default_row_height_;
 			nr.expanded_height = default_row_height_;
+			// Every field has to be set here: the row is copied into rows_
+			// below, and a copy reads the fields it was given, so leaving one
+			// out means copying, and later reading, an undefined value.
+			nr.title_width = 0;  // Measured in initialize_row_widgets()
+			nr.animation_step = 0;
+			nr.exists = true;
 			nr.currently_visible = false;
 			nr.has_hidden_classes = decode_row->has_hidden_classes();
 			nr.expand_marker_highlighted = false;
@@ -1507,9 +1513,12 @@ void DecodeTrace::update_rows()
 			nr.expanded = false;
 			nr.collapsing = false;
 			nr.expand_marker_shape = default_marker_shape_;
+			nr.anim_height = default_row_height_;
+			nr.anim_shape = 0;
 			nr.container = new ContainerWidget(owner_->view()->scrollarea());
 			nr.header_container = new QWidget(nr.container);
 			nr.selector_container = new QWidget(nr.container);
+			nr.row_visibility_checkbox = nullptr;
 
 			rows_.push_back(nr);
 			r = &rows_.back();
