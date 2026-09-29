@@ -778,9 +778,17 @@ void Channels::set_default_bank_threshold(float threshold_1, float threshold_2)
 		if (voltage_level_spinbox_) {
 			voltage_level_spinbox_->setValue(threshold_1);
 			if(is_weact_logic_v2_)
+			{
+				if(round(threshold_1 * 10) <= 10)
+					threshold_1 = 1.0;
 				on_input_level_changed(threshold_1);
+			}
 			else
+			{
+				if(round(threshold_1 * 10) >= 23)
+					threshold_1 = 2.3;
 				on_voltage_level_changed(threshold_1);
+			}
 		}
 		return;
 	}
@@ -1084,50 +1092,19 @@ void Channels::showEvent(QShowEvent* event)
 
 void Channels::on_voltage_level_changed(double value)
 {
-	// Mapping table from voltage to the A1 command value
-	static const QMap<double, uint16_t> voltage_to_raw = {
-		{2.3, 33},
-		{2.2, 93},
-		{2.1, 123},
-		{2.0, 200},
-		{1.9, 225},
-		{1.8, 280},
-		{1.7, 308},
-		{1.6, 400},
-		{1.5, 428},
-		{1.4, 500},
-		{1.3, 545},
-		{1.2, 574},
-		{1.1, 620},
-		{1.0, 675},
-		{0.9, 725},
-		{0.8, 751},
-	};
-
-	// Pick the table entry closest to the requested voltage. The spin box
-	// steps by 0.1 V, but a custom value may fall between mapped entries.
-	auto nearest = voltage_to_raw.constBegin();
-	for (auto it = voltage_to_raw.constBegin(); it != voltage_to_raw.constEnd(); ++it) {
-		if (std::abs(value - it.key()) < std::abs(value - nearest.key()))
-			nearest = it;
-	}
-	const uint16_t raw_value = nearest.value();
-
-	qDebug() << "Threshold Level changed to:" << value << "V, raw value:" << raw_value;
-	threshold_value_raw_changed(raw_value);
+	qDebug() << "Threshold Level changed to:" << value << "V";
+	threshold_value_raw_changed(value);
 	threshold_value_change_ch32h417(static_cast<float>(value));
 }
 
 void Channels::on_input_level_changed(double value)
 {
-	uint16_t raw_value = static_cast<uint16_t>(round(value * 10)) | 0x8000;
-
-	qDebug() << "Input level changed to:" << value << "V, raw value:" << raw_value;
-	threshold_value_raw_changed(raw_value);
+	qDebug() << "Input level changed to:" << value << "V";
+	threshold_value_raw_changed(value/2.0);
 	threshold_value_change_ch32h417(static_cast<float>(value));
 
-	threshold_label_->setText(tr("Threshold Level") + ": " + QString::number(voltage_level_spinbox_->value()/2, 'f', 2) + "V" + \
-										", " + QString::number(voltage_level_spinbox_->value()/2*1.394, 'f', 2) + "V" + "(" + tr("Buffer Board") + ")");
+	threshold_label_->setText(tr("Threshold Level") + ": " + QString::number(value/2, 'f', 2) + "V" + \
+										", " + QString::number(value/2*1.394, 'f', 2) + "V" + "(" + tr("Buffer Board") + ")");
 }
 
 // ============================================================================

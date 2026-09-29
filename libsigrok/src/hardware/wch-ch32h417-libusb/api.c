@@ -53,10 +53,10 @@ static const uint32_t devopts[] = {
 	SR_CONF_CAPTURE_RATIO | SR_CONF_GET | SR_CONF_SET,
 	SR_CONF_NUM_LOGIC_CHANNELS | SR_CONF_GET | SR_CONF_SET,
 	SR_CONF_PATTERN_MODE | SR_CONF_GET | SR_CONF_SET | SR_CONF_LIST,
-	SR_CONF_THRESHOLD_VALUE_1 | SR_CONF_GET | SR_CONF_SET,
+	SR_CONF_VOLTAGE_THRESHOLD | SR_CONF_GET | SR_CONF_SET | SR_CONF_LIST,
 	SR_CONF_HARDWARE_VERSION | SR_CONF_GET,
-	SR_CONF_USB_VERSION | SR_CONF_GET,
-	SR_CONF_LINK_STOP_REASON | SR_CONF_GET,
+	SR_CONF_USB_VERSION | SR_CONF_GET | SR_CONF_LIST,
+	SR_CONF_LINK_STOP_REASON | SR_CONF_GET | SR_CONF_LIST,
 };
 
 /* ADC channel group device options */
@@ -80,6 +80,39 @@ static const int32_t trigger_matches[] = {
 static const char *mode_names[] = {
 	[MODE_LOGIC_ANALYZER] = "Logic Analyzer",
 	[MODE_ADC] = "ADC",
+};
+
+/*
+ * Values of SR_CONF_USB_VERSION: 2 is USB 2.0 and 3 is USB 3.0, which is
+ * what config_get() answers for the link the device is on.
+ */
+static const uint64_t usb_versions[] = {
+	2, 3,
+};
+
+/* Values of SR_CONF_LINK_STOP_REASON, see the LINK_STOP_* in protocol.h. */
+static const uint64_t link_stop_reasons[] = {
+	LINK_STOP_NONE,
+	LINK_STOP_NO_DATA,
+};
+
+static const uint16_t voltage_to_raw[][2] = {
+	{23, 33},
+	{22, 93},
+	{21, 123},
+	{20, 200},
+	{19, 225},
+	{18, 280},
+	{17, 308},
+	{16, 400},
+	{15, 428},
+	{14, 500},
+	{13, 545},
+	{12, 574},
+	{11, 620},
+	{10, 675},
+	{9, 725},
+	{8, 751},
 };
 
 static char serial_number[256] = {0};
@@ -570,8 +603,8 @@ static int config_get(uint32_t key, GVariant **data,
 		/* Return the ADC channel: 0 or 1 */
 		*data = g_variant_new_uint64((devc->adc_channel == ADC_CHANNEL_1) ? 0 : 1);
 		break;
-	case SR_CONF_THRESHOLD_VALUE_1:
-		*data = g_variant_new_uint64(devc->threshold_value_1);
+	case SR_CONF_VOLTAGE_THRESHOLD:
+		*data = std_gvar_tuple_double(devc->cur_threshold, devc->cur_threshold);
 		break;
 	default:
 		return SR_ERR_NA;
@@ -610,8 +643,16 @@ static int config_set(uint32_t key, GVariant *data,
 		devc->limit_samples = g_variant_get_uint64(data);
 		break;
 	case SR_CONF_CAPTURE_RATIO:
-		devc->capture_ratio = g_variant_get_uint64(data);
+	{
+		uint64_t ratio = g_variant_get_uint64(data);
+		if (ratio > 100)
+		{
+			sr_err("Invalid capture ratio: %" PRIu64 " (must be 0-100)", ratio);
+			return SR_ERR_ARG;
+		}
+		devc->capture_ratio = ratio;
 		break;
+	}
 	case SR_CONF_NUM_LOGIC_CHANNELS:
 	{
 		int32_t num = g_variant_get_int32(data);
@@ -637,6 +678,14 @@ static int config_set(uint32_t key, GVariant *data,
 		int mode_idx = std_str_idx(data, ARRAY_AND_SIZE(mode_names));
 		if (mode_idx < 0)
 			return SR_ERR_ARG;
+
+		/* Refuse the ADC mode on a device that has no ADC, which is
+		 * what config_list() leaves out for it as well. */
+		if (mode_idx == MODE_ADC &&
+			!(devc->profile->dev_caps & DEV_CAPS_ADC)) {
+			sr_err("This device has no ADC, so it cannot be set to the ADC mode");
+			return SR_ERR_ARG;
+		}
 
 		if (mode_idx == (int)devc->mode)
 			break;
@@ -681,29 +730,42 @@ static int config_set(uint32_t key, GVariant *data,
 		}
 	}
 	break;
-	case SR_CONF_THRESHOLD_VALUE_1:
+	case SR_CONF_VOLTAGE_THRESHOLD:
 	{
-		uint64_t value = g_variant_get_uint64(data);
-		if(((value>>8) & 0x80) == 0x80)
+		double low, high;
+		double threshold;
+		g_variant_get(data, "(dd)", &low, &high);
+		threshold = (low + high) / 2.0;
+		uint16_t set = 0;
+		if (str_startswith(devc->profile->SN_start, "b5"))
 		{
-			if((value & 0xff) > 33)
+			set = (uint16_t)round(threshold * 10.0 * 2.0);
+			if(set > 33)
 			{
-				sr_err("threshold_value_1 Input Level value out of range: %" PRIu64 " (must be 10-33)", value & 0xff);
+				sr_err("voltage_threshold Input Level value out of range: %" PRIu16 " (must be 10-33)", set);
 				return SR_ERR_ARG;
 			}
-			devc->threshold_value_1 = (uint16_t)value;
-			sr_info("Setting threshold_value_1 to %x", devc->threshold_value_1);
+            set |= 0x8000;
 		}
 		else
 		{
-			if (value > 1024) {
-				sr_err("DAC value out of range: %" PRIu64 " (must be 0-1024)", value);
+			set = (uint16_t)round(threshold * 10.0);
+			for(int i = 0; i < sizeof(voltage_to_raw)/sizeof(voltage_to_raw[0]); i++)
+			{
+				if(set == voltage_to_raw[i][0])
+				{	
+					set = voltage_to_raw[i][1];
+					break;
+				}
+			}
+			if (set > 1024) {
+				sr_err("voltage_threshold DAC value out of range: %" PRIu16 " (must be 0-1024)", set);
 				return SR_ERR_ARG;
 			}
-			devc->threshold_value_1 = (uint16_t)value;
-			sr_info("Setting threshold_value_1 to %d", devc->threshold_value_1);
 		}
-		return ch32h417_libusb_set_threshold_value(sdi, devc->threshold_value_1);
+		devc->cur_threshold = threshold;
+		sr_info("Setting cur_threshold to %f, %" PRIu16 "", devc->cur_threshold, set);
+		return ch32h417_libusb_set_threshold_value(sdi, set);
 	}
 	break;
 	default:
@@ -741,19 +803,58 @@ static int config_list(uint32_t key, GVariant **data,
 		*data = std_gvar_array_i32(ARRAY_AND_SIZE(trigger_matches));
 		break;
 	case SR_CONF_PATTERN_MODE:
-		*data = g_variant_new_strv(ARRAY_AND_SIZE(mode_names));
-		break;
-	case SR_CONF_THRESHOLD_VALUE_1:
-		if (!devc)
+	{
+		/*
+		 * Only a device that carries an ADC can be switched into the ADC
+		 * mode, so the list is built for the device that is asked about
+		 * instead of being the same one for every device.
+		 */
+		const char *modes[ARRAY_SIZE(mode_names)];
+		size_t i, n;
+
+		if (!devc || !devc->profile)
 			return SR_ERR_NA;
-		if(str_startswith(devc->profile->SN_start, "b5"))
-		{
-			*data = std_gvar_min_max_step_thresholds(1.0, 3.3, 0.1);
+
+		n = 0;
+		for (i = 0; i < ARRAY_SIZE(mode_names); i++) {
+			if (i == MODE_ADC && !(devc->profile->dev_caps & DEV_CAPS_ADC))
+				continue;
+			modes[n++] = mode_names[i];
 		}
-		else
-		{
-			*data = std_gvar_min_max_step_thresholds(0.8, 2.3, 0.1);
+
+		*data = g_variant_new_strv(modes, n);
+	}
+	break;
+	case SR_CONF_VOLTAGE_THRESHOLD:
+	{
+		/*
+		 * The value is a voltage in volts, in 0.1 V steps. The accepted
+		 * range depends on the hardware variant: "b5" devices take
+		 * 0.5-1.65 V, all others 0.8-2.3 V.
+		 */
+		double lo, hi, step_size;
+
+		if (!devc || !devc->profile)
+			return SR_ERR_NA;
+
+		if (str_startswith(devc->profile->SN_start, "b5")) {
+			lo = 0.5; /* 0.5 V */
+			hi = 1.65; /* 1.65 V */
+			step_size = 0.05;
+		} else {
+			lo = 0.8;  /* 0.8 V */
+			hi = 2.3; /* 2.3 V */
+			step_size = 0.1;
 		}
+
+		*data = std_gvar_min_max_step_thresholds(lo, hi, step_size);
+		break;
+	}
+	case SR_CONF_USB_VERSION:
+		*data = std_gvar_array_u64(ARRAY_AND_SIZE(usb_versions));
+		break;
+	case SR_CONF_LINK_STOP_REASON:
+		*data = std_gvar_array_u64(ARRAY_AND_SIZE(link_stop_reasons));
 		break;
 	default:
 		return SR_ERR_NA;

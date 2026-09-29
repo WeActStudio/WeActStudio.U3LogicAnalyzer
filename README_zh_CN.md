@@ -26,10 +26,6 @@ sudo ./install_udev_rules.sh      # 免 root 打开设备（只需一次）
 ./build.sh
 ./start_pv.sh
 
-# macOS（Homebrew）
-./setup_env_macos.sh
-./build.sh
-./start_pv.sh
 ```
 
 `start_pv.sh` 会自己设好 `PYTHONHOME` / `SIGROKDECODE_DIR` / `LD_LIBRARY_PATH`
@@ -37,11 +33,15 @@ sudo ./install_udev_rules.sh      # 免 root 打开设备（只需一次）
 
 ## 环境要求
 
-| 平台 | 依赖安装 |
-|---|---|
-| Windows 10/11 + MSYS2 MINGW64 | `./setup_env.sh` |
-| Linux（Debian / Ubuntu） | `./setup_env_linux.sh`（apt） |
-| macOS | `./setup_env_macos.sh`（Homebrew） |
+| 平台 | 状态 | 依赖安装 |
+|---|---|---|
+| Windows 10/11 + MSYS2 MINGW64 | ✅ 支持 | `./setup_env.sh` |
+| Linux（Debian / Ubuntu） | ✅ 支持 | `./setup_env_linux.sh`（apt） |
+| macOS | ❌ **未适配** | 不提供（`setup_env_macos.sh` 保留但已不再维护） |
+
+> **macOS 尚未适配**：`setup_env_macos.sh` 与 `build.sh` 里的 macOS 分支是早期留下的，
+> 从未在 macOS 上实机编译或运行验证过。libusb 后端在代码层面不依赖任何 Windows 专有库，
+> 理论上可以工作，但目前**不提供 macOS 构建支持**，遇到依赖或编译问题请自行解决。
 
 **Windows（MSYS2 MINGW64）**
 
@@ -57,7 +57,7 @@ pacman -S --needed --noconfirm \
 ```
 
 > 在 Windows 上必须用 **MSYS2 MINGW64** shell（开始菜单 → MSYS2 MINGW64）。
-> macOS / Linux 用普通 shell 即可，`build.sh` 会自动识别平台。
+> Linux 用普通 shell 即可，`build.sh` 会自动识别平台（macOS 未适配）。
 > Qt 版本由 `--qt5` / `--qt6` 选择，Windows 上对应 `qt5-static` / `qt6-static`，
 > Linux 上用系统自带的 Qt。
 
@@ -65,15 +65,16 @@ pacman -S --needed --noconfirm \
 
 | | Windows | Linux | macOS |
 |---|---|---|---|
+| 整体支持 | ✅ | ✅ | ❌ 未适配 |
 | `wch-ch32h417`（CH375DLL） | ✅ 默认绑定 | ❌ 不参与构建 | ❌ 不参与构建 |
-| `wch-ch32h417-libusb`（libusb） | ✅ 需先用 Zadig 改绑 WinUSB | ✅ | ✅ |
-| 热插拔 | CH375 回调 + libusb 轮询 | libusb 轮询 | libusb 轮询 |
-| 固件升级（IAP） | 两个后端都行 | 仅 libusb 后端 | 仅 libusb 后端 |
+| `wch-ch32h417-libusb`（libusb） | ✅ 需先用 Zadig 改绑 WinUSB | ✅ | 未验证 |
+| 热插拔 | CH375 回调 + libusb 轮询 | libusb 轮询 | 未验证 |
+| 固件升级（IAP） | 两个后端都行 | 仅 libusb 后端 | 未验证 |
 
 Windows 上设备默认绑在 `CH375WDM.sys`（走 `wch-ch32h417` 驱动），
 想用 libusb 后端需先用 Zadig 改绑 WinUSB。非 Windows 平台只有 libusb 后端，
 CH375 驱动的源文件会在 CMake 配置阶段被移除（`libsigrok/CMakeLists.txt` 中
-`if(NOT WIN32)` 的 `list(REMOVE_ITEM ...)`）。
+`if(NOT WIN32)` 的 `list(REMOVE_ITEM ...)`）。其中 Linux 已实机验证，macOS 未适配。
 
 **Linux 免 root 访问**：默认 `/dev/bus/usb/*` 归 root 所有，libusb 打开设备会报
 `LIBUSB_ERROR_ACCESS`（`lsusb` 能看到设备，但软件里扫描不到）。
@@ -115,7 +116,7 @@ export PYTHONHOME=/mingw64
 export SIGROKDECODE_DIR=install/share/libsigrokdecode/decoders
 cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer.exe
 
-# Linux / macOS（用系统 Python，不需要 PYTHONHOME）
+# Linux（用系统 Python，不需要 PYTHONHOME；macOS 未适配）
 export SIGROKDECODE_DIR=install/share/libsigrokdecode/decoders
 export LD_LIBRARY_PATH=install/lib:$LD_LIBRARY_PATH
 cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer
@@ -129,7 +130,7 @@ cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer
 .
 ├── setup_env.sh                 # Windows 环境部署
 ├── setup_env_linux.sh           # Linux（Debian/Ubuntu）环境部署
-├── setup_env_macos.sh           # macOS 环境部署
+├── setup_env_macos.sh           # macOS 环境部署（保留，未适配、不再维护）
 ├── build.sh                     # 构建 + 便携包
 ├── package_installer.sh         # 安装包（NSIS / deb+tar.gz+AppImage）
 ├── install_udev_rules.sh        # Linux udev 规则安装

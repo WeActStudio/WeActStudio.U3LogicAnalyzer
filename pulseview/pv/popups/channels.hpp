@@ -103,7 +103,7 @@ Q_SIGNALS:
 	void mode_changed(int mode);
 	void adc_channel_changed(int channel);
 	void adc_precision_changed(int precision);
-	void threshold_value_raw_changed(uint16_t value);
+	void threshold_value_raw_changed(double value);
 	void channel_selection_changed();
 
 public Q_SLOTS:

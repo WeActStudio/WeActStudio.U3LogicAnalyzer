@@ -206,7 +206,7 @@ private Q_SLOTS:
 	void on_mode_changed(int mode);
 	void on_adc_channel_changed(int channel);  // Handle an ADC channel switch
 	void on_adc_precision_changed(int precision);  // Handle an ADC resolution switch
-	void on_threshold_value_raw_changed(uint16_t value);  // Set the raw DAC value
+	void on_threshold_value_raw_changed(double value);  // Set the threshold voltage value
 	void on_ch32h417_device_event(unsigned long eventStatus);
 	void on_channel_selection_changed();  // Handle a channel selection change, used to update the channel height
 	void update_device_status_icon();  // Update the device status icon

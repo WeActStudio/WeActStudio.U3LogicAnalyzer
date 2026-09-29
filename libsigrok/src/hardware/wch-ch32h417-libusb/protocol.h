@@ -161,7 +161,7 @@ struct dev_context {
 	uint64_t sent_samples;
 	uint8_t sample_width;      /* 8bit or 16bit */
 	int32_t num_channels;      /* 8 or 16 channels */
-	uint16_t threshold_value_1;  /* Raw DAC threshold value (0-1024) */
+	double cur_threshold;    /* Current threshold value (0.5-1.65V/0.8-2.3V) */
 
 	/* ADC configuration */
 	uint8_t adc_width;         /* 8bit or 10bit */

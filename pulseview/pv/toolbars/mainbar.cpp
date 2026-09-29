@@ -1100,7 +1100,7 @@ namespace pv
 			}
 		}
 
-		void MainBar::on_threshold_value_raw_changed(uint16_t value)
+		void MainBar::on_threshold_value_raw_changed(double value)
 		{
 			const shared_ptr<devices::Device> device = device_selector_.selected_device();
 			if (!device)
@@ -1108,13 +1108,14 @@ namespace pv
 			const shared_ptr<sigrok::Device> sr_dev = device->device();
 			try
 			{
-				sr_dev->config_set(ConfigKey::THRESHOLD_VALUE_1,
-								   Glib::Variant<guint64>::create((uint64_t)value));
-				qDebug() << "THRESHOLD_VALUE_1 set to:" << value;
+				sr_dev->config_set(ConfigKey::VOLTAGE_THRESHOLD,
+					Glib::Variant<std::tuple<double, double>>::create(
+						std::make_tuple(value, value)));
+				qDebug() << "VOLTAGE_THRESHOLD set to:" << value;
 			}
 			catch (Error &error)
 			{
-				qDebug() << "Failed to set THRESHOLD_VALUE_1:" << error.what();
+				qDebug() << "Failed to set VOLTAGE_THRESHOLD:" << error.what();
 			}
 		}
 
@@ -1410,7 +1411,7 @@ namespace pv
 			connect(channels_, SIGNAL(mode_changed(int)), this, SLOT(on_mode_changed(int)));
 			connect(channels_, SIGNAL(adc_channel_changed(int)), this, SLOT(on_adc_channel_changed(int)));
 			connect(channels_, SIGNAL(adc_precision_changed(int)), this, SLOT(on_adc_precision_changed(int)));
-			connect(channels_, SIGNAL(threshold_value_raw_changed(uint16_t)), this, SLOT(on_threshold_value_raw_changed(uint16_t)));
+			connect(channels_, SIGNAL(threshold_value_raw_changed(double)), this, SLOT(on_threshold_value_raw_changed(double)));
 			connect(channels_, SIGNAL(channel_selection_changed()), this, SLOT(on_channel_selection_changed()));
 			// end
 			//  channels_button_.set_popup(channels_);

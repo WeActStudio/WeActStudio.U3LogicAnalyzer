@@ -28,10 +28,6 @@ sudo ./install_udev_rules.sh      # open the device without root (once)
 ./build.sh
 ./start_pv.sh
 
-# macOS (Homebrew)
-./setup_env_macos.sh
-./build.sh
-./start_pv.sh
 ```
 
 `start_pv.sh` sets `PYTHONHOME`, `SIGROKDECODE_DIR` and `LD_LIBRARY_PATH` for
@@ -39,11 +35,17 @@ you and starts `build_cmake/logicanalyzer_build/U3LogicAnalyzer`.
 
 ## Requirements
 
-| Platform | How the dependencies are installed |
-|---|---|
-| Windows 10/11 + MSYS2 MINGW64 | `./setup_env.sh` |
-| Linux (Debian / Ubuntu) | `./setup_env_linux.sh` (apt) |
-| macOS | `./setup_env_macos.sh` (Homebrew) |
+| Platform | State | How the dependencies are installed |
+|---|---|---|
+| Windows 10/11 + MSYS2 MINGW64 | supported | `./setup_env.sh` |
+| Linux (Debian / Ubuntu) | supported | `./setup_env_linux.sh` (apt) |
+| macOS | **not ported** | none (`setup_env_macos.sh` is kept but no longer maintained) |
+
+> **macOS is not ported.** `setup_env_macos.sh` and the macOS branch of
+> `build.sh` are left over from an earlier attempt and were never compiled or
+> run on macOS. The libusb back end needs nothing Windows specific, so it
+> could work in principle, but macOS is **not supported** for now and any
+> dependency or build problem there is up to you to sort out.
 
 **Windows (MSYS2 MINGW64)**
 
@@ -59,7 +61,8 @@ pacman -S --needed --noconfirm \
 ```
 
 > On Windows the **MSYS2 MINGW64** shell is required (Start menu -> MSYS2 MINGW64).
-> A plain shell is fine on macOS and Linux; `build.sh` detects the platform itself.
+> A plain shell is fine on Linux; `build.sh` detects the platform itself
+> (macOS is not ported).
 > The Qt version is picked with `--qt5` / `--qt6`: on Windows that means
 > `qt5-static` / `qt6-static`, on Linux the Qt of the system is used.
 
@@ -67,16 +70,18 @@ pacman -S --needed --noconfirm \
 
 | | Windows | Linux | macOS |
 |---|---|---|---|
+| Overall | supported | supported | not ported |
 | `wch-ch32h417` (CH375DLL) | yes, the default binding | not built | not built |
-| `wch-ch32h417-libusb` (libusb) | yes, after rebinding to WinUSB with Zadig | yes | yes |
-| Hot plug | CH375 callback + libusb polling | libusb polling | libusb polling |
-| Firmware upgrade (IAP) | either back end | libusb only | libusb only |
+| `wch-ch32h417-libusb` (libusb) | yes, after rebinding to WinUSB with Zadig | yes | unverified |
+| Hot plug | CH375 callback + libusb polling | libusb polling | unverified |
+| Firmware upgrade (IAP) | either back end | libusb only | unverified |
 
 On Windows the device is bound to `CH375WDM.sys` by default, which is what the
 `wch-ch32h417` driver talks to; using the libusb back end there needs a WinUSB
 rebind with Zadig first. Off Windows only the libusb back end exists - the
 sources of the CH375 driver are dropped while CMake configures
 (`list(REMOVE_ITEM ...)` under `if(NOT WIN32)` in `libsigrok/CMakeLists.txt`).
+Of the two, Linux has been built and run; macOS has not been ported.
 
 **Using the device without root on Linux**: by default the `/dev/bus/usb/*`
 nodes belong to root, so libusb fails with `LIBUSB_ERROR_ACCESS` - `lsusb`
@@ -122,7 +127,7 @@ export PYTHONHOME=/mingw64
 export SIGROKDECODE_DIR=install/share/libsigrokdecode/decoders
 cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer.exe
 
-# Linux / macOS (system Python, no PYTHONHOME)
+# Linux (system Python, no PYTHONHOME; macOS is not ported)
 export SIGROKDECODE_DIR=install/share/libsigrokdecode/decoders
 export LD_LIBRARY_PATH=install/lib:$LD_LIBRARY_PATH
 cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer
@@ -137,7 +142,7 @@ cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer
 .
 ├── setup_env.sh                 # environment setup, Windows
 ├── setup_env_linux.sh           # environment setup, Debian/Ubuntu
-├── setup_env_macos.sh           # environment setup, macOS
+├── setup_env_macos.sh           # environment setup, macOS (kept, not ported)
 ├── build.sh                     # build + portable package
 ├── package_installer.sh         # installer (NSIS / deb + tar.gz + AppImage)
 ├── install_udev_rules.sh        # installs the udev rules on Linux
