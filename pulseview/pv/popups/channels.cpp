@@ -229,8 +229,14 @@ void Channels::init_ui()
 	populate_group(nullptr, global_logic_sigs);
 	populate_group(nullptr, global_analog_sigs);
 
-	connect(&check_box_mapper_, SIGNAL(mapped(QWidget*)),
-		this, SLOT(on_channel_checked(QWidget*)));
+	/*
+	 * mappedObject() is what Qt 5.15 and Qt 6 both carry; the older
+	 * mapped(QWidget*) of Qt 5 is gone in Qt 6, where the mapper is a
+	 * QtCore class and does not know about QWidget, and mappedWidget()
+	 * never made it there.
+	 */
+	connect(&check_box_mapper_, SIGNAL(mappedObject(QObject*)),
+		this, SLOT(on_channel_checked(QObject*)));
 
 	init_channel_state();
 
@@ -506,7 +512,9 @@ void Channels::populate_group(shared_ptr<ChannelGroup> group,
 			QCheckBox* checkbox = new QCheckBox(sig->internal_name());
 			analog_checkboxes_.push_back(checkbox);
 
-			check_box_mapper_.setMapping(checkbox, checkbox);
+			/* QObject, so that the mapper emits mappedObject() on Qt 5
+			 * as well, where a QWidget mapping emits mapped(QWidget*). */
+			check_box_mapper_.setMapping(checkbox, static_cast<QObject*>(checkbox));
 			connect(checkbox, SIGNAL(toggled(bool)), this, SLOT(checkbox_toggled(bool)));
 
 			checkbox_signal_map_[checkbox] = sig;
@@ -565,7 +573,7 @@ void Channels::populate_group(shared_ptr<ChannelGroup> group,
 			analog_checkboxes_.push_back(checkbox);
 		}
 
-		check_box_mapper_.setMapping(checkbox, checkbox);
+		check_box_mapper_.setMapping(checkbox, static_cast<QObject*>(checkbox));
 		connect(checkbox, SIGNAL(toggled(bool)), this, SLOT(checkbox_toggled(bool)));
 
 		grid->addWidget(checkbox, row, col);
@@ -1044,7 +1052,7 @@ void Channels::checkbox_toggled(bool state)
 	}
 }
 
-void Channels::on_channel_checked(QWidget* widget)
+void Channels::on_channel_checked(QObject* widget)
 {
 	if (updating_channels_) {
 		return;

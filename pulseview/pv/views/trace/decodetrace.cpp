@@ -190,14 +190,19 @@ DecodeTrace::DecodeTrace(pv::Session &session,
 	connect(decode_signal_.get(), SIGNAL(channels_updated()),
 		this, SLOT(on_channels_updated()));
 
-	connect(&delete_mapper_, SIGNAL(mapped(int)),
+	/*
+	 * mappedInt() and mappedObject() are what Qt 5.15 and Qt 6 both
+	 * carry; the older mapped(int) and mapped(QWidget*) are gone in Qt 6,
+	 * where the mapper is a QtCore class and does not know about QWidget.
+	 */
+	connect(&delete_mapper_, SIGNAL(mappedInt(int)),
 		this, SLOT(on_delete_decoder(int)));
-	connect(&show_hide_mapper_, SIGNAL(mapped(int)),
+	connect(&show_hide_mapper_, SIGNAL(mappedInt(int)),
 		this, SLOT(on_show_hide_decoder(int)));
-	connect(&row_show_hide_mapper_, SIGNAL(mapped(int)),
+	connect(&row_show_hide_mapper_, SIGNAL(mappedInt(int)),
 		this, SLOT(on_show_hide_row(int)));
-	connect(&class_show_hide_mapper_, SIGNAL(mapped(QWidget*)),
-		this, SLOT(on_show_hide_class(QWidget*)));
+	connect(&class_show_hide_mapper_, SIGNAL(mappedObject(QObject*)),
+		this, SLOT(on_show_hide_class(QObject*)));
 
 	connect(&delayed_trace_updater_, SIGNAL(timeout()),
 		this, SLOT(on_delayed_trace_update()));
@@ -1463,7 +1468,9 @@ void DecodeTrace::initialize_row_widgets(DecodeTraceRow* r, unsigned int row_id)
 		cb->setProperty("ann_class_ptr", QVariant::fromValue((void*)ann_class));
 		cb->setProperty("decode_trace_row_ptr", QVariant::fromValue((void*)r));
 
-		class_show_hide_mapper_.setMapping(cb, cb);
+		/* QObject, so that the mapper emits mappedObject() on Qt 5 as
+		 * well, where a QWidget mapping emits mapped(QWidget*). */
+		class_show_hide_mapper_.setMapping(cb, static_cast<QObject*>(cb));
 		connect(cb, SIGNAL(stateChanged(int)),
 			&class_show_hide_mapper_, SLOT(map()));
 	}
@@ -1750,7 +1757,7 @@ void DecodeTrace::on_show_hide_row(int row_id)
 	owner_->row_item_appearance_changed(false, true);
 }
 
-void DecodeTrace::on_show_hide_class(QWidget* sender)
+void DecodeTrace::on_show_hide_class(QObject* sender)
 {
 	void* ann_class_ptr = sender->property("ann_class_ptr").value<void*>();
 	assert(ann_class_ptr);

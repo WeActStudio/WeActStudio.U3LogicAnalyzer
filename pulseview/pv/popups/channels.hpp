@@ -114,7 +114,7 @@ protected:
 	void changeEvent(QEvent *event) override;
 
 private Q_SLOTS:
-	void on_channel_checked(QWidget *widget);
+	void on_channel_checked(QObject *widget);
 	void on_mode_changed(int index);
 	void on_adc_channel_changed(int index);
 	void on_adc_precision_changed(int index);

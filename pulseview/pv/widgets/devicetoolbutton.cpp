@@ -62,7 +62,8 @@ DeviceToolButton::DeviceToolButton(QWidget *parent,
 
 	connect(this, SIGNAL(clicked()), this, SLOT(on_button_clicked()));
 
-	connect(&mapper_, SIGNAL(mapped(QObject*)),
+	/* mappedObject() is what Qt 5.15 and Qt 6 both carry. */
+	connect(&mapper_, SIGNAL(mappedObject(QObject*)),
 		this, SLOT(on_action(QObject*)));
 
 	connect(&menu_, SIGNAL(hovered(QAction*)),
