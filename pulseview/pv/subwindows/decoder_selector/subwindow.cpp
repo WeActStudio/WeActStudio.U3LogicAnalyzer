@@ -204,7 +204,8 @@ vector<const char*> SubWindow::get_decoder_inputs(const srd_decoder* d) const
 	return ret_val;
 }
 
-vector<const srd_decoder*> SubWindow::get_decoders_providing(const char* output) const
+vector<const srd_decoder*> SubWindow::get_decoders_providing(const char* output,
+	const vector<const srd_decoder*>& exclude) const
 {
 	vector<const srd_decoder*> ret_val;
 
@@ -215,11 +216,19 @@ vector<const srd_decoder*> SubWindow::get_decoders_providing(const char* output)
 		if (!d->outputs)
 			continue;
 
+		// A decoder that the stack already holds cannot supply it again.
+		if (std::find(exclude.begin(), exclude.end(), d) != exclude.end())
+			continue;
+
 		const int maxlen = 1024;
 
-		// TODO For now we ignore that d->outputs is actually a list
-		if (strncmp((char*)(d->outputs->data), output, maxlen) == 0)
-			ret_val.push_back(d);
+		// d->outputs is a list, and a decoder may provide more than one
+		// type, so every entry of it has to be looked at.
+		for (GSList* ol = d->outputs; ol; ol = ol->next)
+			if (strncmp((const char*)ol->data, output, maxlen) == 0) {
+				ret_val.push_back(d);
+				break;
+			}
 	}
 
 	return ret_val;
@@ -297,24 +306,39 @@ void SubWindow::on_item_activated(const QModelIndex& index)
 		return;
 	}
 
-	// Check if we can automatically fulfill the stacking requirements
-	while (strcmp(inputs.at(0), "logic") != 0) {
-		vector<const srd_decoder*> prov_decoders = get_decoders_providing(inputs.at(0));
+	// Check if we can automatically fulfill the stacking requirements.
+	// A decoder that the stack already holds is never offered again:
+	// arm_tpiu wants uart and provides uart at the same time, so without
+	// that rule the same question comes back for ever and the stack never
+	// reaches a decoder whose input is logic.
+	const unsigned int max_stack_depth = 10;
+
+	while (!inputs.empty() && (strcmp(inputs.front(), "logic") != 0)) {
+		if (decoders.size() >= max_stack_depth) {
+			qWarning() << "Decoder stack got deeper than" << max_stack_depth
+				<< "decoders, stopping here";
+			break;
+		}
+
+		const vector<const srd_decoder*> prov_decoders =
+			get_decoders_providing(inputs.front(), decoders);
 
 		if (prov_decoders.size() == 0) {
 			// Emit warning and add the stack that we could gather so far
 			qWarning() << "Protocol decoder" << QString::fromUtf8(decoders.back()->id) \
-				<< "has input that no other decoder provides:" << QString::fromUtf8(inputs.at(0));
+				<< "has input that no other decoder provides:" << QString::fromUtf8(inputs.front());
 			break;
 		}
 
+		const srd_decoder* chosen = nullptr;
+
 		if (prov_decoders.size() == 1) {
-			decoders.push_back(prov_decoders.front());
+			chosen = prov_decoders.front();
 		} else {
 			// Let user decide which one to use
 			QString caption = QString(tr("Protocol decoder <b>%1</b> requires input type <b>%2</b> " \
 				"which several decoders provide.<br>Choose which one to use:<br>"))
-					.arg(QString::fromUtf8(decoders.back()->id), QString::fromUtf8(inputs.at(0)));
+					.arg(QString::fromUtf8(decoders.back()->id), QString::fromUtf8(inputs.front()));
 
 			QStringList items;
 			for (const srd_decoder* d : prov_decoders)
@@ -326,11 +350,17 @@ void SubWindow::on_item_activated(const QModelIndex& index)
 			if ((!ok_clicked) || (item.isEmpty()))
 				return;
 
-			QString d = item.section(' ', 0, 0);
-			decoders.push_back(srd_decoder_get_by_id(d.toUtf8()));
+			chosen = srd_decoder_get_by_id(item.section(' ', 0, 0).toUtf8());
 		}
 
-		inputs = get_decoder_inputs(decoders.back());
+		if (!chosen) {
+			qWarning() << "Protocol decoder chosen for input type"
+				<< QString::fromUtf8(inputs.front()) << "could not be found";
+			return;
+		}
+
+		decoders.push_back(chosen);
+		inputs = get_decoder_inputs(chosen);
 	}
 
 	// Reverse decoder list and add the stack

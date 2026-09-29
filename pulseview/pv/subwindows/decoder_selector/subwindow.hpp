@@ -124,9 +124,12 @@ public:
 
 	/**
 	 * Returns a list of protocol decoder IDs which provide a given output
-	 * ("uart", "spi", etc.)
+	 * ("uart", "spi", etc.). The decoders in 'exclude' are left out: one
+	 * that is already in the stack cannot supply an input of its own, or
+	 * the same question would be asked again and again.
 	 */
-	vector<const srd_decoder*> get_decoders_providing(const char* output) const;
+	vector<const srd_decoder*> get_decoders_providing(const char* output,
+		const vector<const srd_decoder*>& exclude = vector<const srd_decoder*>()) const;
 
 Q_SIGNALS:
 	void new_decoders_selected(vector<const srd_decoder*> decoders);
