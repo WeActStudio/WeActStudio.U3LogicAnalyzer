@@ -708,6 +708,45 @@ void LogicSignal::populate_popup_form(QWidget *parent, QFormLayout *form)
 
 	if (!trig_types.empty()) {
 		trigger_bar_ = new QToolBar(parent);
+		/*
+		 * The style draws the checked state of a flat tool button as little
+		 * more than a hairline outline, which is easy to miss among six
+		 * identical-looking icons. Paint it explicitly instead: a translucent
+		 * fill plus a solid border, in the highlight colour of the dialog's
+		 * own palette so it fits whichever theme is in use. The icons stay
+		 * fully visible because the fill is translucent, not opaque.
+		 */
+		trigger_bar_->setObjectName(QStringLiteral("trigger_button_bar"));
+		const QColor highlight =
+			parent->palette().color(QPalette::Highlight);
+		QColor checked_fill = highlight;
+		checked_fill.setAlpha(80);
+		QColor hover_fill = highlight;
+		hover_fill.setAlpha(40);
+		trigger_bar_->setStyleSheet(
+			QStringLiteral(
+				"QToolBar#trigger_button_bar {"
+				"    border: none;"
+				"    spacing: 2px;"
+				"}"
+				"QToolBar#trigger_button_bar QToolButton {"
+				"    padding: 2px;"
+				"    border: 1px solid transparent;"
+				"    border-radius: 3px;"
+				"}"
+				"QToolBar#trigger_button_bar QToolButton:hover {"
+				"    background-color: rgba(%5, %6, %7, %8);"
+				"}"
+				"QToolBar#trigger_button_bar QToolButton:checked,"
+				"QToolBar#trigger_button_bar QToolButton:pressed {"
+				"    background-color: rgba(%1, %2, %3, %4);"
+				"    border: 1px solid %9;"
+				"}")
+				.arg(checked_fill.red()).arg(checked_fill.green())
+				.arg(checked_fill.blue()).arg(checked_fill.alpha())
+				.arg(hover_fill.red()).arg(hover_fill.green())
+				.arg(hover_fill.blue()).arg(hover_fill.alpha())
+				.arg(highlight.name()));
 		init_trigger_actions(trigger_bar_);
 		trigger_bar_->addAction(trigger_none_);
 		trigger_none_->setChecked(!trigger_match_);
