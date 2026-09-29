@@ -438,6 +438,9 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 		connect(pre_trigger_selector_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
 			this, &Channels::pre_trigger_changed);
 		pre_trigger_selector_->setValue(0);
+		pre_trigger_selector_->setToolTip(tr(
+			"With a repeating signal the trigger point floats: this is a limit "
+			"rather than a fixed place."));
 		layout->addRow(tr("Pre-trigger"), pre_trigger_selector_);
 
 		adc_channel_selector_ = new QComboBox();
@@ -1158,6 +1161,10 @@ void Channels::retranslate_ui()
 	set_field_label(serial_number_label_, tr("SN:"));
 	set_field_label(mode_selector_, tr("Device Mode"));
 	set_field_label(pre_trigger_selector_, tr("Pre-trigger"));
+	if (pre_trigger_selector_)
+		pre_trigger_selector_->setToolTip(tr(
+			"With a repeating signal the trigger point floats: this is a limit "
+			"rather than a fixed place."));
 	set_field_label(threshold_selector_1_, tr("Trigger Threshold(0~7 Channel)"));
 	set_field_label(threshold_selector_2_, tr("Trigger Threshold(8~15 Channel)"));
 	set_field_label(voltage_level_spinbox_,

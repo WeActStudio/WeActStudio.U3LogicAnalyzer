@@ -1343,6 +1343,10 @@ Please check the device connection and firmware file.</source>
         <translation>预触发</translation>
     </message>
     <message>
+        <source>With a repeating signal the trigger point floats: this is a limit rather than a fixed place.</source>
+        <translation>对周期信号触发点会浮动，此处是上限而非固定位置。</translation>
+    </message>
+    <message>
         <source>Options</source>
         <translation>选项</translation>
     </message>
