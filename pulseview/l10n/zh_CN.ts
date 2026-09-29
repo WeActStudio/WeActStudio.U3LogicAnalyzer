@@ -183,10 +183,6 @@ Do you want to save the session?</source>
         <translation>此会话包含未保存的数据。确定关闭？</translation>
     </message>
     <message>
-        <source>Save</source>
-        <translation type="vanished">保存</translation>
-    </message>
-    <message>
         <source>No udev access rules were found for the CH32H417. Without them the device (VID 1a86 / PID 5537) cannot be opened by an unprivileged user, so the logic analyzer will not be detected.
 
 Enter your administrator password to install:
@@ -1766,10 +1762,6 @@ Please check the device connection and firmware file.</source>
         <translation>固件升级</translation>
     </message>
     <message>
-        <source>About</source>
-        <translation>关于</translation>
-    </message>
-    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="311"/>
         <source>Help</source>
         <translation>帮助</translation>
@@ -1870,11 +1862,6 @@ Please check the device connection and firmware file.</source>
         <location filename="../pv/toolbars/mainbar.cpp" line="1629"/>
         <source>Import %1</source>
         <translation>导入 %1</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2123"/>
-        <source>Version Info</source>
-        <translation>版本信息</translation>
     </message>
     <message>
         <source>&lt;b&gt;Software Version:&lt;/b&gt; %1&lt;br/&gt;</source>

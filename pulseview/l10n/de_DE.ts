@@ -2047,10 +2047,6 @@ Bei einer Änderung benötigt PulseView eventuell einen Neustart, damit alles ko
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>About</source>
-        <translation type="obsolete">Programmdetails</translation>
-    </message>
-    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="310"/>
         <source>Help</source>
         <translation type="unfinished"></translation>
@@ -2195,11 +2191,6 @@ Bei einer Änderung benötigt PulseView eventuell einen Neustart, damit alles ko
         <location filename="../pv/toolbars/mainbar.cpp" line="2047"/>
         <source>Device Options</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2126"/>
-        <source>Version Info</source>
-        <translation>Versionsinformationen</translation>
     </message>
     <message>
         <source>&lt;b&gt;Software Version:&lt;/b&gt; %1&lt;br/&gt;</source>

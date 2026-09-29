@@ -2032,10 +2032,6 @@ Please keep in mind that PulseView may need a restart to display correctly.</sou
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>About</source>
-        <translation type="obsolete">Acerca de</translation>
-    </message>
-    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="310"/>
         <source>Help</source>
         <translation type="unfinished"></translation>
@@ -2185,11 +2181,6 @@ Please keep in mind that PulseView may need a restart to display correctly.</sou
         <location filename="../pv/toolbars/mainbar.cpp" line="2047"/>
         <source>Device Options</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2126"/>
-        <source>Version Info</source>
-        <translation>Información de versión</translation>
     </message>
     <message>
         <source>&lt;b&gt;Software Version:&lt;/b&gt; %1&lt;br/&gt;</source>
