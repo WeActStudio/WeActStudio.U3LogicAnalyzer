@@ -27,6 +27,7 @@
 #include <QColor>
 #include <QDebug>
 #include <QEvent>
+#include <QFile>
 #include <QFontMetrics>
 #include <QPixmapCache>
 #include <QString>
@@ -296,15 +297,34 @@ void GlobalSettings::save_internal_defaults()
 
 void GlobalSettings::set_defaults_where_needed()
 {
-	if (!contains(Key_General_Language)) {
-		QString langTag = QLocale().uiLanguages().first(); // "es-MX", "zh-CN", "de-DE"
-		QStringList parts = langTag.split('-');
-		QString lang;
-		if (parts.size() >=2 && parts[1].length() ==2) {
-			// language-region, drop the script subtag
-			lang = parts[0] + "_" + parts[1];
-		} else {
-			lang = parts[0];
+	/*
+	 * Recompute not only when the key is missing, but also when the stored
+	 * value has no translation: an older build stored "zh" on a Chinese
+	 * Windows (see below), and that entry would otherwise pin the UI to
+	 * English forever.
+	 */
+	const QString stored_lang = value(Key_General_Language).toString();
+	const bool lang_is_usable =
+		(stored_lang == "en") || QFile::exists(":/l10n/" + stored_lang + ".qm");
+
+	if (!contains(Key_General_Language) || !lang_is_usable) {
+		/*
+		 * Use the first UI language we actually ship a translation for,
+		 * falling back to English. The platform hands out BCP-47 tags and
+		 * the first one usually carries a script subtag ("zh-Hans-CN" on a
+		 * Chinese Windows), so the tag cannot be turned into a file name by
+		 * splitting on '-': that yields "zh", for which there is no .qm, and
+		 * the UI silently stays English. QLocale parses such a tag into
+		 * "zh_CN"; matching against the installed .qm files keeps the
+		 * fallback to English honest for languages we do not ship.
+		 */
+		QString lang = "en";
+		for (const QString &langTag : QLocale().uiLanguages()) {
+			const QString name = QLocale(langTag).name();  // "zh_CN", "de_DE", ...
+			if (QFile::exists(":/l10n/" + name + ".qm")) {
+				lang = name;
+				break;
+			}
 		}
 		setValue(Key_General_Language, lang);
 		apply_language();
@@ -329,17 +349,17 @@ void GlobalSettings::set_defaults_where_needed()
 	}
 
 	/*
-	 * Start out with the style the palettes of the themes are made for.
-	 * Every value that is not one of the two on offer counts as missing:
-	 * an empty one is what a run that was interrupted between two settings
-	 * writes leaves behind, and the others are entries that are no longer
-	 * offered, which is what the settings of an older build carry.
+	 * Start out with FluentUI3, the style the palettes of the themes are
+	 * made for. Every value that is not one of the two on offer counts as
+	 * missing: an empty one is what a run that was interrupted between two
+	 * settings writes leaves behind, and the others are entries that are no
+	 * longer offered, which is what the settings of an older build carry.
 	 */
 	const QString style_value =
 		value(Key_General_Style).toString().toLower();
 
 	if (style_value != Style_Fluent && style_value != Style_Fusion)
-		setValue(Key_General_Style, Style_Fusion);
+		setValue(Key_General_Style, Style_Fluent);
 
 	// Save setup with .sr files by default
 	if (!contains(Key_General_SaveWithSetup))
