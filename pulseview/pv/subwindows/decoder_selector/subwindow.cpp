@@ -27,6 +27,7 @@
 #include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -81,6 +82,36 @@ void QCustomTreeView::currentChanged(const QModelIndex& current,
 }
 
 
+void QCustomTreeView::mousePressEvent(QMouseEvent* event)
+{
+	// Remember what the press hit, so that the release can tell whether
+	// the view has reacted on its own in the meantime (it does when the
+	// branch indicator is clicked).
+	press_index_ = indexAt(event->pos());
+	press_was_expanded_ = press_index_.isValid() && isExpanded(press_index_);
+
+	QTreeView::mousePressEvent(event);
+}
+
+
+void QCustomTreeView::mouseReleaseEvent(QMouseEvent* event)
+{
+	QTreeView::mouseReleaseEvent(event);
+
+	// A category opens and closes on a single click. Decoders are leaves
+	// and keep the behaviour they had; a click on the branch indicator is
+	// left to the view, which is what the state comparison is for.
+	const QModelIndex index = indexAt(event->pos());
+
+	if ((event->button() != Qt::LeftButton) || !index.isValid() ||
+		(index != press_index_) || (model()->rowCount(index) == 0) ||
+		(isExpanded(index) != press_was_expanded_))
+		return;
+
+	setExpanded(index, !isExpanded(index));
+}
+
+
 SubWindow::SubWindow(Session& session, QWidget* parent) :
 	SubWindowBase(session, parent),
 	splitter_(new QSplitter()),
@@ -119,6 +150,9 @@ SubWindow::SubWindow(Session& session, QWidget* parent) :
 
 	tree_view_->setModel(sort_filter_model_);
 	tree_view_->setRootIsDecorated(true);
+	// A category is opened and closed with a single click (see
+	// QCustomTreeView), so the double click must not do it a second time.
+	tree_view_->setExpandsOnDoubleClick(false);
 	tree_view_->setSortingEnabled(true);
 	tree_view_->sortByColumn(0, Qt::AscendingOrder);
 

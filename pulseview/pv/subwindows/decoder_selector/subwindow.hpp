@@ -100,8 +100,16 @@ class QCustomTreeView : public QTreeView
 public:
 	void currentChanged(const QModelIndex& current, const QModelIndex& previous);
 
+protected:
+	void mousePressEvent(QMouseEvent* event) override;
+	void mouseReleaseEvent(QMouseEvent* event) override;
+
 Q_SIGNALS:
 	void current_changed(const QModelIndex& current);
+
+private:
+	QModelIndex press_index_;
+	bool press_was_expanded_ = false;
 };
 
 class SubWindow : public SubWindowBase
