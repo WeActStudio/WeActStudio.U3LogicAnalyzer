@@ -61,13 +61,9 @@ void Logic::push_segment(shared_ptr<LogicSegment> &segment)
 	connect(segment.get(), SIGNAL(completed()), this, SLOT(on_segment_completed()));
 }
 
-const deque< shared_ptr<LogicSegment> >& Logic::logic_segments() const
+deque< shared_ptr<LogicSegment> > Logic::logic_segments() const
 {
-	return segments_;
-}
-
-deque< shared_ptr<LogicSegment> >& Logic::logic_segments()
-{
+	lock_guard<mutex> lock(segments_mutex_);
 	return segments_;
 }
 
@@ -79,6 +75,7 @@ vector< shared_ptr<Segment> > Logic::segments() const
 
 uint32_t Logic::get_segment_count() const
 {
+	lock_guard<mutex> lock(segments_mutex_);
 	return (uint32_t)segments_.size();
 }
 

@@ -50,8 +50,14 @@ public:
 
 	void push_segment(shared_ptr<LogicSegment> &segment);
 
-	const deque< shared_ptr<LogicSegment> >& logic_segments() const;
-	deque< shared_ptr<LogicSegment> >& logic_segments();
+	/*
+	 * Takes a copy rather than returning a reference: the segments are
+	 * appended to by the sampling thread, so handing out the deque itself
+	 * would let callers walk a container that is being changed underneath
+	 * them. A deque of shared pointers is cheap to copy, and the lock is
+	 * held for the copy.
+	 */
+	deque< shared_ptr<LogicSegment> > logic_segments() const;
 
 	vector< shared_ptr<Segment> > segments() const;
 
