@@ -875,7 +875,16 @@ static gpointer data_read_thread(gpointer arg)
 
 	buffer = g_try_malloc(devc->buffer_size);
 	if (!buffer) {
+		/*
+		 * Stop the acquisition the same way a link problem does instead of
+		 * just returning: acq_aborted is still FALSE at this point, so the
+		 * timer callback would keep the capture running and the GUI would
+		 * wait forever for data that is never going to come.
+		 */
 		sr_err("Failed to allocate read buffer");
+		send_stop_command_once(sdi);
+		acquisition_set_aborted(devc, TRUE);
+		sr_dbg("data_read_thread EXIT (no buffer)");
 		return NULL;
 	}
 
@@ -936,6 +945,20 @@ static gpointer data_read_thread(gpointer arg)
 		if (length == 0) {
 			g_usleep(1000);
 			continue;
+		}
+
+		/*
+		 * The read is handed the size of the buffer and reports back how
+		 * much arrived, and nothing guarantees that the two agree. The
+		 * length also becomes the number of samples that are passed on to
+		 * the session, which copies them out of the buffer, so it has to
+		 * stay within what was allocated. The command replies are clamped
+		 * the same way; this path used to be the one that was not.
+		 */
+		if (length > (unsigned long)devc->buffer_size) {
+			sr_warn("Read %lu bytes, more than the %lu byte buffer",
+				length, (unsigned long)devc->buffer_size);
+			length = (unsigned long)devc->buffer_size;
 		}
 
 		sr_dbg("Read %lu bytes from pipe %lu", length, pipe_num);
@@ -1307,6 +1330,16 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 		sr_err("Failed to create read thread");
 		if (!ch375_clear_buf_upload(devc->device_index, pipe_num)) {
 			sr_warn("Failed to clear upload buffer pipe %lu for device at index %d", pipe_num, devc->device_index);
+		}
+		/*
+		 * Give back what was set up for the acquisition and mark it as
+		 * over: there is no thread to read anything, and leaving the flag
+		 * alone would keep the timer callback waiting for one.
+		 */
+		acquisition_set_aborted(devc, TRUE);
+		if (devc->stl) {
+			soft_trigger_logic_free(devc->stl);
+			devc->stl = NULL;
 		}
 		send_stop_command_once(sdi);
 		return SR_ERR;
