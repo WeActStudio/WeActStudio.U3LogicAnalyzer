@@ -130,6 +130,7 @@ private:
 	void init_other_ui();
 	void init_channel_radios(QVBoxLayout* layout);
 	void init_threshold_selectors(QFormLayout* layout);
+	void update_threshold_label(double level);
 	void init_channel_state();
 
 	DeviceMode determineDeviceMode() const;

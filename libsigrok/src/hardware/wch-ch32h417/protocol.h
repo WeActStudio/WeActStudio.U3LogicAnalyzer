@@ -154,7 +154,7 @@ struct dev_context {
 	uint64_t sent_samples;
 	uint8_t sample_width;      /* 8bit or 16bit */
 	int32_t num_channels;      /* 8 or 16 channels */
-	double cur_threshold;    /* Current threshold value (0.5-1.65V/0.8-2.3V) */
+	double cur_threshold;    /* Current threshold value (0.6-1.5V/0.8-2.3V) */
 
 	/* ADC configuration */
 	uint8_t adc_width;         /* 8bit or 10bit */

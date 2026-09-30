@@ -732,12 +732,27 @@ static int config_set(uint32_t key, GVariant *data,
 		uint16_t set = 0;
 		if (str_startswith(devc->profile->SN_start, "b5"))
 		{
-			set = (uint16_t)round(threshold * 10.0 * 2.0);
-			if(set > 33)
+			/*
+			 * What is handed over is the level on the input pins, and
+			 * the DAC is given the level at the input in 0.1 V. The two
+			 * are not a fixed ratio of one another: measured, 0.6 V on
+			 * the pins is 1.0 V at the input and 1.5 V on the pins is
+			 * 3.3 V at it. The line between those two is what the level
+			 * that was handed over is read back along.
+			 */
+			const double pin_lo = 0.6, pin_hi = 1.5;
+			const double input_lo = 1.0, input_hi = 3.3;
+			const double input = input_lo + (threshold - pin_lo) *
+				(input_hi - input_lo) / (pin_hi - pin_lo);
+
+			const double code = round(input * 10.0);
+
+			if(code < 10.0 || code > 33.0)
 			{
-				sr_err("voltage_threshold Input Level value out of range: %" PRIu16 " (must be 10-33)", set);
+				sr_err("voltage_threshold Input Level value out of range: %.0f (must be 10-33)", code);
 				return SR_ERR_ARG;
 			}
+			set = (uint16_t)code;
             set |= 0x8000;
 		}
 		else
@@ -821,10 +836,12 @@ static int config_list(uint32_t key, GVariant **data,
 	case SR_CONF_VOLTAGE_THRESHOLD:
 	{
 		/*
-		 * The value is the level on the pins, in volts. On the "b5"
-		 * variant that is half the input level the GUI spin box shows, so
-		 * config_set() doubles it again; its list runs in 0.05 V steps,
-		 * the one of every other device in 0.1 V steps.
+		 * The value is the level on the input pins, in volts, which is
+		 * what the GUI shows and hands back, so nothing is converted
+		 * between the two. Measured on the b5 variant: the pins take
+		 * 0.6 V to 1.5 V, in 0.05 V steps, and that is 1.0 V to 3.3 V at
+		 * the input. config_set() walks that line to reach the input
+		 * level, which is what the DAC is given.
 		 */
 		double lo, hi, step_size;
 
@@ -832,8 +849,8 @@ static int config_list(uint32_t key, GVariant **data,
 			return SR_ERR_NA;
 
 		if (str_startswith(devc->profile->SN_start, "b5")) {
-			lo = 0.5;  /* 0.5 V on the pins, 1.0 V at the input */
-			hi = 1.65; /* 1.65 V on the pins, 3.3 V at the input */
+			lo = 0.6;  /* 1.0 V at the input */
+			hi = 1.5;  /* 3.3 V at the input */
 			step_size = 0.05;
 		} else {
 			lo = 0.8;  /* 0.8 V */

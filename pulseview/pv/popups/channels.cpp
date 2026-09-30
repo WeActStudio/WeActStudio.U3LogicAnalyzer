@@ -68,6 +68,26 @@ using namespace pv::util;
 namespace pv {
 namespace popups {
 
+namespace {
+
+/*
+ * The setting is the level at the input, and the level on the input pins is
+ * what the driver is given. Measured on this device: 1.0 V at the input
+ * puts 0.6 V on the pins and 3.3 V at the input puts 1.5 V on them, so the
+ * two are not a fixed ratio of one another. The levels in between follow
+ * the line those two draw.
+ */
+double input_level_to_pin_level(double input)
+{
+	const double input_lo = 1.0, input_hi = 3.3;
+	const double pin_lo = 0.6, pin_hi = 1.5;
+
+	return pin_lo + (input - input_lo) *
+		(pin_hi - pin_lo) / (input_hi - input_lo);
+}
+
+}   // namespace
+
 Channels::Channels(Session &session, QString device_name, QWidget *parent) :
 	Popup(parent),
 	session_(session),
@@ -433,8 +453,8 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 		connect(voltage_level_spinbox_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
 			this, is_weact_logic_v2_? &Channels::on_input_level_changed : &Channels::on_voltage_level_changed);
 		
-		threshold_label_ = new QLabel(tr("Threshold Level") + ": " + QString::number(voltage_level_spinbox_->value()/2, 'f', 2) + "V" + \
-										", " + QString::number(voltage_level_spinbox_->value()/2*1.394, 'f', 2) + "V" + "(" + tr("Buffer Board") + ")");
+		threshold_label_ = new QLabel();
+		update_threshold_label(voltage_level_spinbox_->value());
 		if(is_weact_logic_v2_)
 			layout->addRow(threshold_label_);
 		layout->addRow(is_weact_logic_v2_?tr("Input Level") :tr("Threshold Level"), voltage_level_spinbox_);
@@ -1122,11 +1142,29 @@ void Channels::on_voltage_level_changed(double value)
 void Channels::on_input_level_changed(double value)
 {
 	qDebug() << "Input level changed to:" << value << "V";
-	threshold_value_raw_changed(value/2.0);
+
+	/*
+	 * The spin box shows the level at the input, while the driver takes
+	 * the level on the pins, so the level is walked along the line the two
+	 * draw before it is handed over.
+	 */
+	threshold_value_raw_changed(input_level_to_pin_level(value));
 	threshold_value_change_ch32h417(static_cast<float>(value));
 
-	threshold_label_->setText(tr("Threshold Level") + ": " + QString::number(value/2, 'f', 2) + "V" + \
-										", " + QString::number(value/2*1.394, 'f', 2) + "V" + "(" + tr("Buffer Board") + ")");
+	update_threshold_label(value);
+}
+
+void Channels::update_threshold_label(double input)
+{
+	if (!threshold_label_)
+		return;
+
+	const double pins = input_level_to_pin_level(input);
+
+	threshold_label_->setText(tr("Threshold Level") + ": " +
+		QString::number(pins, 'f', 2) + "V" + ", " +
+		QString::number(input/2 * 1.394, 'f', 2) + "V(" +
+		tr("Buffer Board") + ")");
 }
 
 // ============================================================================
