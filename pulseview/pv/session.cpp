@@ -1403,13 +1403,21 @@ void Session::update_signals()
 		return;
 	}
 
+	/*
+	 * A file brings the channels it holds with it, while the count the
+	 * tool bar was last left at belongs to the hardware. Taking it over
+	 * for a file would claim channels the file has no samples for.
+	 */
+	const bool from_file = using_file_device();
+
 	// Detect what data types we will receive
 	auto channels = sr_dev->channels();
 	unsigned int logic_channel_count = count_if(
 		channels.begin(), channels.end(),
 		[] (shared_ptr<Channel> channel) {
 			return channel->type() == sigrok::ChannelType::LOGIC; });
-	logic_channel_count = main_bar_->get_channel_number();
+	if (!from_file)
+		logic_channel_count = main_bar_->get_channel_number();
 	logic_channel_count_ = logic_channel_count;
 	// Create a common data container for the logic signalbases
 	{
@@ -1439,8 +1447,20 @@ void Session::update_signals()
 		}
 	}
 
+	/*
+	 * A file names the channels it was captured with and leaves the rest
+	 * of them disabled, so those are the ones a signal is made for. A
+	 * file that enables none of them is taken as it stands, rather than
+	 * ending up with nothing to show at all.
+	 */
+	bool file_picks_channels = from_file && any_of(
+		channels.begin(), channels.end(),
+		[] (shared_ptr<Channel> channel) { return channel->enabled(); });
+
 	// Create signalbases if necessary
 	for (auto channel : sr_dev->channels()) {
+		if (file_picks_channels && !channel->enabled())
+			continue;
 
 		// Try to find the channel in the list of existing signalbases
 		const auto iter = find_if(signalbases_.cbegin(), signalbases_.cend(),
@@ -2041,7 +2061,16 @@ void Session::feed_in_logic(shared_ptr<sigrok::Logic> logic)
 			logic->unit_size() , cur_samplerate_,
 			main_bar_->get_sample_count());
 		logic_data_->push_segment(cur_logic_segment_);
-		if (!is_wch_device(main_bar_->get_vendorName()) && main_bar_->get_vendorName() != "demo") {
+		if (using_file_device()) {
+			/*
+			 * What the segment is told is how wide a sample in the file
+			 * is, which is every channel the file holds and not only the
+			 * ones given a signal: the ones that are shown are addressed
+			 * by their bit, and D5 of an eight channel file still sits in
+			 * the sixth bit of a one byte sample.
+			 */
+			logic_channel_count_ = logic_data_->num_channels();
+		} else if (!is_wch_device(main_bar_->get_vendorName()) && main_bar_->get_vendorName() != "demo") {
 			logic_channel_count_ = 16;
 		} else {
 			logic_channel_count_ = main_bar_->get_channel_number();

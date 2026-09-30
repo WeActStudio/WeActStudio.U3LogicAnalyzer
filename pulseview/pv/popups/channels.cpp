@@ -166,7 +166,18 @@ void Channels::init_ui()
 
 	map<shared_ptr<Channel>, shared_ptr<SignalBase>> signal_map;
 	unordered_set<shared_ptr<SignalBase>> sigs;
+
+	/*
+	 * A file was captured with the channels it enables and holds no
+	 * samples for the rest of them, so those are left out instead of
+	 * being offered as channels that cannot be shown. A device names
+	 * every channel it has, so all of them stay listed for it.
+	 */
+	const bool from_file = session_.using_file_device();
+
 	for (const shared_ptr<data::SignalBase>& b : session_.signalbases()) {
+		if (from_file && !b->enabled())
+			continue;
 		sigs.insert(b);
 	}
 	for (const shared_ptr<SignalBase>& sig : sigs) {
