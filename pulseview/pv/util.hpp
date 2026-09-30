@@ -269,6 +269,16 @@ void show_message(QWidget *parent, const QString &title, const QString &text,
 	bool open_links = false, bool modal = true);
 
 /**
+ * How much physical memory is left for allocation right now, in bytes.
+ *
+ * Windows reports the physical availability, Linux reads MemAvailable from
+ * /proc/meminfo, which is the figure that accounts for what the page cache
+ * can hand back, and macOS the free plus inactive pages. Returns 0 when the
+ * figure cannot be had.
+ */
+uint64_t available_memory();
+
+/**
  * Whether the udev access rules of the CH32H417 are installed.
  *
  * Without them the /dev/bus/usb nodes stay owned by root and libusb_open()

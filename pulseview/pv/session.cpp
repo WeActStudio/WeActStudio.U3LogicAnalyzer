@@ -120,6 +120,16 @@ using pv::views::trace::AnalogSignal;
 using pv::views::trace::LogicSignal;
 using namespace pv::util;
 volatile int done_;
+
+/*
+ * How often the memory that is left is looked at, in packets, and how much of
+ * it has to be there for a capture to carry on. A capture is held in memory
+ * in full, so running the machine out of memory makes it swap and the window
+ * stop responding long before anything actually fails.
+ */
+static const int MemoryCheckInterval = 64;
+static const uint64_t MemoryStopThreshold = 512ULL * 1024 * 1024;
+
 namespace pv {
 
 shared_ptr<sigrok::Context> Session::sr_context;
@@ -137,9 +147,16 @@ Session::Session(DeviceManager &device_manager, QString name) :
 	setObjectName(name_);
 	done_ = 0;
 	out_of_memory_ = false;
+	memory_check_countdown_ = 0;
 	is_first_trigger_ = false;
 	link_stop_reported_ = false;
 	connect(this, SIGNAL(notify_acq_done()), this, SLOT(on_notify_acq_done()));
+	/*
+	 * The memory check runs on the thread that receives the data, so this
+	 * is a queued connection and on_show_Error() ends up on the GUI thread,
+	 * where stopping the capture is safe.
+	 */
+	connect(this, SIGNAL(memory_exhausted()), this, SLOT(on_show_Error()));
 }
 
 Session::~Session()
@@ -1896,6 +1913,30 @@ void Session::feed_in_logic(shared_ptr<sigrok::Logic> logic)
 		return;
 	}
 
+	/*
+	 * The whole capture is held in memory, so a long one at a high sample
+	 * rate can use up everything the machine has. Once that happens the
+	 * system starts swapping, the window stops responding and the capture
+	 * is unusable anyway, so it is worth stopping before it gets there.
+	 * The check is spread over several packets so that the system call
+	 * stays out of the hot path.
+	 */
+	if (--memory_check_countdown_ <= 0) {
+		memory_check_countdown_ = MemoryCheckInterval;
+
+		if (out_of_memory_)
+			return;
+
+		const uint64_t available = pv::util::available_memory();
+		if (available > 0 && available < MemoryStopThreshold) {
+			qDebug() << "Only" << (qulonglong)available
+				 << "bytes of memory left, stopping the capture.";
+			out_of_memory_ = true;
+			Q_EMIT memory_exhausted();
+			return;
+		}
+	}
+
 	if (logic->unit_size() > 8)
 		throw QString(tr("Can't handle more than 64 logic channels."));
 		
@@ -2064,7 +2105,14 @@ void Session::data_feed_in(shared_ptr<sigrok::Device> device,
 			shared_ptr<Logic> logic = dynamic_pointer_cast<Logic>(packet->payload());
 			feed_in_logic(logic);
 		} catch (bad_alloc&) {
-			
+			/*
+			 * Ran out of memory in the middle of the capture. Handled the
+			 * same way as the analog case below rather than being swallowed:
+			 * the capture has to be stopped, and the stop belongs on the
+			 * GUI thread.
+			 */
+			out_of_memory_ = true;
+			Q_EMIT memory_exhausted();
 		}
 		break;
 

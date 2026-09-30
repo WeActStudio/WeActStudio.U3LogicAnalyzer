@@ -30,7 +30,13 @@
 #include <sstream>
 
 #ifdef __linux__
+#include <sys/sysinfo.h>
 #include <unistd.h>
+#endif
+
+#ifdef __APPLE__
+#include <mach/mach.h>
+#include <mach/mach_host.h>
 #endif
 
 #ifdef _WIN32
@@ -585,6 +591,55 @@ bool install_udev_rules(const std::string &password, std::string &error_out)
 }
 
 #endif
+
+uint64_t available_memory()
+{
+#ifdef _WIN32
+	MEMORYSTATUSEX statex;
+	statex.dwLength = sizeof(statex);
+	if (!GlobalMemoryStatusEx(&statex))
+		return 0;
+
+	return (uint64_t)statex.ullAvailPhys;
+#elif defined(__APPLE__)
+	vm_size_t page_size = 0;
+	if (host_page_size(mach_host_self(), &page_size) != KERN_SUCCESS)
+		return 0;
+
+	vm_statistics64_data_t vmstat;
+	mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+	if (host_statistics64(mach_host_self(), HOST_VM_INFO64,
+	    (host_info64_t)&vmstat, &count) != KERN_SUCCESS)
+		return 0;
+
+	return (uint64_t)(vmstat.free_count + vmstat.inactive_count) *
+		(uint64_t)page_size;
+#else
+	/*
+	 * MemAvailable is the estimate that counts what the page cache can give
+	 * back; sysinfo().freeram leaves that out and under-reports on almost
+	 * every system.
+	 */
+	long avail_kb = -1;
+	FILE *f = fopen("/proc/meminfo", "r");
+	if (f) {
+		char line[256];
+		while (fgets(line, sizeof(line), f)) {
+			if (sscanf(line, "MemAvailable: %ld kB", &avail_kb) == 1)
+				break;
+		}
+		fclose(f);
+	}
+	if (avail_kb >= 0)
+		return (uint64_t)avail_kb * 1024;
+
+	struct sysinfo si;
+	if (sysinfo(&si) == 0)
+		return (uint64_t)si.freeram * si.mem_unit;
+
+	return 0;
+#endif
+}
 
 void apply_window_theme(QWidget *window, bool dark)
 {

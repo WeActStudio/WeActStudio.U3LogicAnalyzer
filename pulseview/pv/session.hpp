@@ -309,6 +309,15 @@ Q_SIGNALS:
 	void new_segment(int new_segment_id);
 	void segment_completed(int segment_id);
 
+	/**
+	 * The free memory of the machine ran low while a capture was running.
+	 *
+	 * Emitted from whichever thread receives the data, so it reaches the
+	 * GUI thread through the event loop; whatever handles it can then stop
+	 * the capture without having to be careful about the caller.
+	 */
+	void memory_exhausted();
+
 	void data_received();
 
 	void add_view(ViewType type, Session *session);
@@ -375,6 +384,11 @@ private:
 	std::thread sampling_thread_;
 
 	bool out_of_memory_;
+	/*
+	 * Counts down to the next look at the memory that is left. Looking on
+	 * every packet would mean a system call per packet, see feed_in_logic().
+	 */
+	int memory_check_countdown_;
 	bool data_saved_;
 	bool frame_began_;
 	bool is_stop_capture_;
