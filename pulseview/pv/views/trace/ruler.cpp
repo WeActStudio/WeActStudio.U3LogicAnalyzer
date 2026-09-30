@@ -26,6 +26,7 @@
 #include <QMouseEvent>
 
 #include <pv/globalsettings.hpp>
+#include <pv/session.hpp>
 #include <pv/util.hpp>
 
 #include "ruler.hpp"
@@ -343,6 +344,84 @@ void Ruler::draw_hover_mark(QPainter &p, int text_height)
 		QPointF(x + hover_arrow_size, b - hover_arrow_size)
 	};
 	p.drawPolygon(points, countof(points));
+
+	/*
+	 * Say what time the arrow points at, in the format the ticks are
+	 * labelled with. It sits between two of them, and its time can
+	 * otherwise only be counted out from the ones around it.
+	 */
+	const pv::util::Timestamp time = get_ruler_time_from_x_pos(x);
+	QString label = format_time_with_distance(
+		view_.tick_period(), time, view_.tick_prefix(),
+		view_.time_unit(), view_.tick_precision());
+
+	/*
+	 * Add which sample of the capture that is, which is what the data is
+	 * indexed by. It is the absolute time that counts here, the zero point
+	 * is only where the ruler starts. Left out while the ticks are already
+	 * labelled with samples.
+	 */
+	const double samplerate = view_.session().get_samplerate();
+	if ((samplerate > 0) &&
+		(view_.time_unit() != pv::util::TimeUnit::Samples)) {
+		const pv::util::Timestamp abs_time = get_absolute_time_from_x_pos(x);
+		const int64_t sample =
+			(abs_time * samplerate).convert_to<int64_t>();
+		label += QString(" (%1)").arg(sample);
+	}
+
+	// Centre it on the arrow and keep it inside the ruler, which the
+	// arrow itself reaches while the pointer is at one of its borders.
+	// The label sits a little above the arrow, so that the two do not
+	// read as one shape.
+	const int LabelPadding = 3;
+	const int LabelVPadding = 3;
+	const int LabelRaise = 1;
+	const QFontMetrics label_metrics(font());
+
+	/*
+	 * The height of a whole line, not just the ascent the ruler itself is
+	 * laid out with: the text is centred in the tag, and a tag only as tall
+	 * as the ascent leaves it with nothing underneath the text.
+	 */
+	const int label_text_height = label_metrics.height();
+	const int label_width =
+		util::text_width(label_metrics, label) + 2 * LabelPadding;
+	const int label_height = label_text_height + 2 * LabelVPadding;
+	const int label_x = min(max(x - label_width / 2, 0),
+		width() - label_width);
+	const QRect label_rect(label_x,
+		b - hover_arrow_size - label_height - LabelRaise,
+		label_width, label_height);
+
+	/*
+	 * The label lands on the ticks, so it brings the background along and
+	 * covers them: letting them show through the text leaves both the text
+	 * and the ticks hard to read. It is drawn as a rounded tag rather than
+	 * as a plain rectangle, so that it reads as something put on top of the
+	 * ruler instead of as a gap in it.
+	 */
+	const QColor label_color = palette().color(foregroundRole());
+	const qreal corner_radius = 3.0;
+
+	/*
+	 * The outline is a faint one: at full strength it sits right next to
+	 * the text in the same colour and the two read as one, while all it has
+	 * to do is set the tag apart from the ticks behind it.
+	 */
+	QColor label_outline = label_color;
+	label_outline.setAlpha(110);
+
+	p.setRenderHint(QPainter::Antialiasing, true);
+	p.setPen(QPen(label_outline, 1));
+	p.setBrush(palette().brush(QPalette::Base));
+	// Half a pixel in, so that the one pixel outline lands on the pixel
+	// grid instead of being smeared over two of them.
+	p.drawRoundedRect(QRectF(label_rect).adjusted(0.5, 0.5, -0.5, -0.5),
+		corner_radius, corner_radius);
+
+	p.setPen(label_color);
+	p.drawText(label_rect, AlignCenter, label);
 }
 
 int Ruler::calculate_text_height() const
