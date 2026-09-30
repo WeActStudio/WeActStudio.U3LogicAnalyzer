@@ -4,7 +4,8 @@
 
 该工程仅支持项目对应的 **WeAct Studio CH32H417 逻辑分析仪**，主程序名为 **U3LogicAnalyzer**
 （基于 sigrok PulseView）。自带 132 个协议解码器（I²C / SPI / UART 等），
-sigrok 的硬件驱动已裁剪到只剩本项目相关的两个，纯 CMake 一键构建。
+sigrok 的硬件驱动已裁剪到只剩本项目相关的两个（PulseView 自带的 `demo` 驱动保留），
+纯 CMake 一键构建。
 
 > **来源**：本软件是在 **Q2H2** 的项目上修改而来。CH375 驱动
 > （`libsigrok/src/hardware/wch-ch32h417/`）、`demo` 驱动以及 libsigrok /
@@ -124,6 +125,38 @@ cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer
 
 > 写入 `~/.bashrc` 可永久生效。已安装的 deb / 归档 / AppImage 不需要这些变量。
 
+## 使用说明
+
+### 打开已保存的采集文件
+
+`.sr`（sigrok session）文件可从菜单打开，也可以在命令行直接交给程序：
+
+```bash
+./U3LogicAnalyzer <file>.sr            # Windows：U3LogicAnalyzer.exe <file>.sr
+./U3LogicAnalyzer -i <file>.sr         # 等价的选项写法
+```
+
+显示的内容以文件本身为准：文件里只有被启用通道的数据，所以只为这些通道建立信号，
+通道弹窗里也只列它们 —— 不会给文件里没有数据的通道留空行。比窗口更短的采集打开即
+铺满窗口；更长的采集用滚轮缩小或点「适应窗口」，缩到头就是数据的末尾 —— 这个上限
+取自文件本身的数据，而不是工具栏上的采样数（后者属于硬件）。
+
+### 8 / 16 通道
+
+设备可以按 8 或 16 路逻辑通道采集（`SR_CONF_NUM_LOGIC_CHANNELS`）。8 通道窄模式下
+一个采样只占 1 字节而不是 2 字节，同样的采集量内存减半 —— 或者说同样的内存能存
+2 倍采样点。通道数在工具栏选择，开始采集前下发给设备，可选的采样率也随之变化。
+
+> 窄模式采集存下来也是窄的：`.sr` 的探针数按采样的实际宽度写入，
+> 所以 8 通道文件不会被当成 16 通道读回。
+
+### 长采集与内存
+
+采集数据在内存里完整保存，长时间高采样率有可能耗尽机器内存。程序在收数过程中会
+查看剩余可用内存，一旦低于 512 MB 就停止采集并给出提示，而不是等系统开始换页、
+窗口卡死。已采到的数据会保留，只是采集提前结束 —— 想装进内存就用更少的通道、
+更低的采样率或更短的时长。
+
 ## 项目结构
 
 ```
@@ -132,10 +165,13 @@ cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer
 ├── setup_env_linux.sh           # Linux（Debian/Ubuntu）环境部署
 ├── setup_env_macos.sh           # macOS 环境部署（保留，未适配、不再维护）
 ├── build.sh                     # 构建 + 便携包
+├── build_pv.sh                  # 只构建，start_pv.sh 走的就是它
+├── build_pv_debug.sh            # 同上，debug 配置
 ├── package_installer.sh         # 安装包（NSIS / deb+tar.gz+AppImage）
 ├── install_udev_rules.sh        # Linux udev 规则安装
 ├── 99-weact-ch32h417.rules      # 设备免 root 访问规则
 ├── start_pv.sh                  # 带环境变量启动（-l 5）
+├── start_pv_debug.sh            # 启动 debug 构建（-l 5）
 ├── install/                     # libsigrok / libsigrokcxx / libsigrokdecode
 ├── libsigrok/
 │   └── src/hardware/

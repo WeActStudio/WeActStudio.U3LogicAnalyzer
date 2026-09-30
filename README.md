@@ -4,8 +4,9 @@
 
 This tree builds **U3LogicAnalyzer**, the host application for the
 WeAct Studio CH32H417 logic analyzer. It is based on sigrok PulseView, ships 132 protocol
-decoders (I²C, SPI, UART, ...) and keeps only the two hardware drivers that
-belong to this device. Everything is built by CMake through one script.
+decoders (I²C, SPI, UART, ...) and keeps the hardware drivers down to the two
+that belong to this device (PulseView's `demo` driver is kept as well).
+Everything is built by CMake through one script.
 
 > **Origin**: this software is a modification of the project of **Q2H2**. The
 > CH375 driver (`libsigrok/src/hardware/wch-ch32h417/`), the `demo` driver and
@@ -136,6 +137,48 @@ cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer
 > Put these into `~/.bashrc` to keep them. An installed deb, archive or
 > AppImage does not need any of them.
 
+## Using the application
+
+### Opening a saved capture
+
+A capture saved as a sigrok session file (`.sr`) opens from the file menu, or
+can be handed to the application on the command line:
+
+```bash
+./U3LogicAnalyzer <file>.sr            # Windows: U3LogicAnalyzer.exe <file>.sr
+./U3LogicAnalyzer -i <file>.sr         # the same through the option
+```
+
+What the file was captured with is what gets shown. A file holds samples only
+for the channels it enables, so those are the ones given a signal, and the
+channel popup lists them alone - no empty rows for channels the file has
+nothing for. A capture shorter than the window opens fitted to it; for a
+longer one, zoom out or use zoom-to-fit, and the view stops at the end of the
+data. That limit is taken from the file itself and not from the sample count
+of the tool bar, which belongs to the hardware.
+
+### 8 or 16 logic channels
+
+The device captures either 8 or 16 logic channels
+(`SR_CONF_NUM_LOGIC_CHANNELS`). In the narrow 8 channel mode one sample is a
+single byte instead of two, so the same capture takes half the memory - or
+twice the samples for the memory a 16 channel capture would need. The number
+is chosen in the tool bar and is sent to the device before a capture starts;
+the sample rate it offers follows from it.
+
+> A narrow capture is stored as one too: the probe count written into a `.sr`
+> file follows the width of the samples, so an 8 channel file is not read
+> back as though it held sixteen channels.
+
+### Long captures and memory
+
+A capture is held in memory in full, so a long one at a high sample rate can
+use up everything the machine has. The application looks at what is left
+while the data comes in and stops the capture with a message once less than
+512 MB is available, rather than letting the system swap and the window stop
+responding. What was captured is kept, the capture just ends early - fewer
+channels, a lower sample rate or a shorter run is what fits it into memory.
+
 ## Layout
 
 ```
@@ -144,10 +187,13 @@ cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer
 ├── setup_env_linux.sh           # environment setup, Debian/Ubuntu
 ├── setup_env_macos.sh           # environment setup, macOS (kept, not ported)
 ├── build.sh                     # build + portable package
+├── build_pv.sh                  # build only, the way start_pv.sh runs it
+├── build_pv_debug.sh            # the same with a debug configuration
 ├── package_installer.sh         # installer (NSIS / deb + tar.gz + AppImage)
 ├── install_udev_rules.sh        # installs the udev rules on Linux
 ├── 99-weact-ch32h417.rules      # rules for using the device without root
 ├── start_pv.sh                  # start with the environment set (-l 5)
+├── start_pv_debug.sh            # start the debug build (-l 5)
 ├── install/                     # libsigrok / libsigrokcxx / libsigrokdecode
 ├── libsigrok/
 │   └── src/hardware/
