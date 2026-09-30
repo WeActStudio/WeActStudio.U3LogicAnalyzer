@@ -656,6 +656,21 @@ void apply_window_theme(QWidget *window, bool dark)
 	if (FAILED(DwmSetWindowAttribute(hwnd, 20, &use_dark, sizeof(use_dark))))
 		return;
 
+	/*
+	 * 35 is DWMWA_CAPTION_COLOR, which the systems before Windows 11 do
+	 * not have: the call fails there and is left alone, so that the dark
+	 * mode that was just set stands as it always did. Where it is taken,
+	 * the bar is given one colour for both states, which is what it is
+	 * after - the system draws the bar of the window that has the focus in
+	 * one shade and the bar of a window that does not in another.
+	 *
+	 * The colour the system draws is 0xFFFFFFFF, DWMWA_COLOR_DEFAULT, which
+	 * puts the bar back to it when the bright theme comes on again.
+	 */
+	const COLORREF caption = dark ? RGB(0x2a, 0x2a, 0x2a) :
+		static_cast<COLORREF>(0xFFFFFFFF);
+	(void)DwmSetWindowAttribute(hwnd, 35, &caption, sizeof(caption));
+
 	MARGINS margins = {0, 0, 0, dark ? 1 : 0};
 	DwmExtendFrameIntoClientArea(hwnd, &margins);
 #else
