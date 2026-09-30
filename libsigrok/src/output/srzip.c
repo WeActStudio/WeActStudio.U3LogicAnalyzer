@@ -33,6 +33,8 @@
 struct out_context {
 	gboolean zip_created;
 	uint64_t samplerate;
+	/* Bytes per logic sample as the data actually arrives, 0 until seen. */
+	size_t logic_unitsize;
 	char *filename;
 	size_t first_analog_index;
 	size_t analog_ch_count;
@@ -135,6 +137,34 @@ static int zip_create(const struct sr_output *o)
 				enabled_analog_channels++;
 			break;
 		}
+	}
+
+	/*
+	 * The reader derives how many bytes make up a sample from the probe
+	 * count, so the count has to describe the data as it was handed
+	 * over, not the channels the device happens to have. A device that
+	 * was put into its narrow mode ships one byte per sample; claiming
+	 * 16 probes for that would make every read-back sample straddle two
+	 * of the ones that were stored.
+	 *
+	 * Only narrow it as far as every enabled channel still fits, so
+	 * that no channel would be named outside the file's own width.
+	 */
+	if (outc->logic_unitsize > 0 &&
+			outc->logic_unitsize * 8 < logic_channels) {
+		size_t stored_channels = outc->logic_unitsize * 8;
+		gboolean fits = TRUE;
+
+		for (l = o->sdi->channels; l; l = l->next) {
+			ch = l->data;
+			if (ch->type == SR_CHANNEL_LOGIC && ch->enabled &&
+					(size_t)ch->index >= stored_channels) {
+				fits = FALSE;
+				break;
+			}
+		}
+		if (fits)
+			logic_channels = stored_channels;
 	}
 
 	/* When reading the file, the first index of the analog channels
@@ -707,12 +737,19 @@ static int receive(const struct sr_output *o, const struct sr_datafeed_packet *p
 		}
 		break;
 	case SR_DF_LOGIC:
+		logic = packet->payload;
 		if (!outc->zip_created) {
+			/*
+			 * The archive is written on the first logic packet, so
+			 * the width of the samples is known by the time the
+			 * metadata that describes them is put together.
+			 */
+			if (logic->unitsize)
+				outc->logic_unitsize = logic->unitsize;
 			if ((ret = zip_create(o)) != SR_OK)
 				return ret;
 			outc->zip_created = TRUE;
 		}
-		logic = packet->payload;
 		ret = zip_append_queue(o,
 			logic->data, logic->unitsize, logic->length,
 			FALSE);
