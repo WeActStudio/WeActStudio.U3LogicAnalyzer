@@ -441,6 +441,14 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 		voltage_level_spinbox_->setDecimals(1);
 		voltage_level_spinbox_->setSuffix("V");
 		/*
+		 * The level the threshold is set to has to go with the signal
+		 * that is measured: the level of every sample is decided against
+		 * it, so a signal that reaches further than the setting is read
+		 * at the level of the setting, and one that does not reach it
+		 * can be read as if it never changed.
+		 */
+		voltage_level_spinbox_->setToolTip(tr("Always match this to the level of the signal being measured, or the samples will be read at the wrong level."));
+		/*
 		 * No style sheet here. A style sheet of its own hands a widget over
 		 * to the style sheet style, which then measures and draws it instead
 		 * of asking the style in use: a spin box that carried one stayed the

@@ -1374,6 +1374,11 @@ Please check the device connection and firmware file.</source>
         <translation>输入电平</translation>
     </message>
     <message>
+        <location filename="../pv/popups/channels.cpp" line="450"/>
+        <source>Always match this to the level of the signal being measured, or the samples will be read at the wrong level.</source>
+        <translation>请务必与被测信号的电平保持一致，否则采样得到的电平会判错。</translation>
+    </message>
+    <message>
         <location filename="../pv/popups/channels.cpp" line="379"/>
         <source>Threshold Level</source>
         <translation>阈值电平</translation>
