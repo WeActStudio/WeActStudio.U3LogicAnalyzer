@@ -425,6 +425,18 @@ static void dev_clear_private(void *priv)
 /* Clear devices */
 static int dev_clear(const struct sr_dev_driver *di)
 {
+	/*
+	 * Wait for the read threads before the instances are freed: they use
+	 * both the device context and the device instance, neither of which
+	 * may be released while a thread is still running.
+	 */
+	struct drv_context *drvc = (struct drv_context *)di->context;
+	if (drvc) {
+		GSList *l;
+		for (l = drvc->instances; l; l = l->next)
+			ch32h417_libusb_join_read_thread(l->data);
+	}
+
 	return std_dev_clear_with_callback(di, dev_clear_private);
 }
 

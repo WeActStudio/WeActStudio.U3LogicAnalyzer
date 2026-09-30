@@ -203,6 +203,14 @@ struct dev_context {
 SR_PRIV extern const uint64_t logic_samplerates_usb3[25];
 SR_PRIV extern const uint64_t logic_samplerates_usb2_16ch[6];
 SR_PRIV extern const uint64_t logic_samplerates_usb2_8ch[8];
+
+/*
+ * Stop the data read thread and wait for it to be gone. Has to be called
+ * before the device context and the device instance are freed: the thread
+ * uses both, and neither may go away while it is still running. Safe to
+ * call when there is no thread.
+ */
+SR_PRIV void ch32h417_join_read_thread(struct sr_dev_inst *sdi);
 SR_PRIV extern const uint64_t adc_samplerates[5];
 
 /* Protocol function declarations */

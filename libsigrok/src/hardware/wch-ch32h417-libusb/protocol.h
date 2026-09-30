@@ -248,4 +248,12 @@ SR_PRIV int ch32h417_libusb_acquisition_start(const struct sr_dev_inst *sdi);
 SR_PRIV int ch32h417_libusb_acquisition_stop(const struct sr_dev_inst *sdi);
 SR_PRIV int ch32h417_libusb_enter_iap(const struct sr_dev_inst *sdi);
 
+/*
+ * Stop the data read thread and wait for it to be gone. Has to be called
+ * before the device context and the device instance are freed: the thread
+ * uses both, and neither may go away while it is still running. Safe to
+ * call when there is no thread.
+ */
+SR_PRIV void ch32h417_libusb_join_read_thread(struct sr_dev_inst *sdi);
+
 #endif /* LIBSIGROK_HARDWARE_WCH_CH32H417_PROTOCOL_H */

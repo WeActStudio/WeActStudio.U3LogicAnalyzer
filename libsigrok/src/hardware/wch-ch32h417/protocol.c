@@ -1063,6 +1063,28 @@ static void finish_acquisition(struct sr_dev_inst *sdi)
 	sr_dbg("finish_acquisition function done");
 }
 
+/*
+ * Stop the data read thread and wait for it to be gone. Used on teardown:
+ * the thread uses both the device context and the device instance, so
+ * neither may be freed while it is still running. Safe when there is no
+ * thread, and safe after finish_acquisition(), which clears the pointer.
+ */
+SR_PRIV void ch32h417_join_read_thread(struct sr_dev_inst *sdi)
+{
+	struct dev_context *devc;
+
+	if (!sdi)
+		return;
+
+	devc = sdi->priv;
+	if (!devc || !devc->read_thread)
+		return;
+
+	acquisition_set_aborted(devc, TRUE);
+	g_thread_join(devc->read_thread);
+	devc->read_thread = NULL;
+}
+
 static void ch32h417_flush_cmd_endpoint(unsigned long index)
 {
 	uint8_t buffer[PACKET_SIZE_IN];
