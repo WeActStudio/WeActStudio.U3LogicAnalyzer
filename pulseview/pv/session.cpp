@@ -1115,11 +1115,18 @@ double Session::get_samplerate() const
 
 uint32_t Session::get_highest_segment_id() const
 {
+	lock_guard<recursive_mutex> lock(data_mutex_);
 	return highest_segment_id_;
 }
 
 uint64_t Session::get_segment_sample_count(uint32_t segment_id) const
 {
+	/*
+	 * The vector is written by the sampling thread when a segment is added
+	 * or grows, so it is read under the same lock to keep a resize from
+	 * happening while the bounds and the element are being looked at.
+	 */
+	lock_guard<recursive_mutex> lock(data_mutex_);
 	if (segment_id < segment_sample_count_.size())
 		return segment_sample_count_[segment_id];
 	else
@@ -1128,6 +1135,8 @@ uint64_t Session::get_segment_sample_count(uint32_t segment_id) const
 
 vector<util::Timestamp> Session::get_triggers(uint32_t segment_id) const
 {
+	// Written by the sampling thread on every trigger, see above.
+	lock_guard<recursive_mutex> lock(data_mutex_);
 	vector<util::Timestamp> result;
 
 	for (const pair<uint32_t, util::Timestamp>& entry : trigger_list_)
@@ -1596,7 +1605,16 @@ void Session::sample_thread_proc(function<void (const QString)> error_handler)
 	} catch (Error& e) {
 		mainwindow_show_error(e.what());
 		is_repeat_acquisition_ = false;
-		capture_state_ = Running;
+		{
+			/*
+			 * Deliberately not done through set_capture_state(): that one
+			 * would emit a Running state to the GUI on the way to the
+			 * Stopped state set below. The lock is taken anyway, the state
+			 * is read under it.
+			 */
+			lock_guard<mutex> lock(sampling_mutex_);
+			capture_state_ = Running;
+		}
 		goto Stopped;
 	}
 
@@ -1670,7 +1688,12 @@ void Session::on_notify_acq_done()
 
 void Session::free_unused_memory()
 {
-	// lock_guard<recursive_mutex> lock(data_mutex_);
+	/*
+	 * The containers walked here are filled by the sampling thread, so the
+	 * lock has to be held: without it this can iterate a vector or a set
+	 * that is being reallocated underneath it.
+	 */
+	lock_guard<recursive_mutex> lock(data_mutex_);
 	for (const shared_ptr<data::SignalData>& data : all_signal_data_) {
 		const vector< shared_ptr<data::Segment> > segments = data->segments();
 
@@ -1681,6 +1704,9 @@ void Session::free_unused_memory()
 
 void Session::signal_new_segment()
 {
+	// Grows the counters that the GUI reads, see get_segment_sample_count().
+	lock_guard<recursive_mutex> lock(data_mutex_);
+
 	int new_segment_id = 0;
 
 	if ((cur_logic_segment_ != nullptr) || !cur_analog_segments_.empty()) {
