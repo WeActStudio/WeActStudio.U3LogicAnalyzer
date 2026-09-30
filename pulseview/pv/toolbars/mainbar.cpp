@@ -186,6 +186,17 @@ namespace pv
 				"QToolBar QToolButton:pressed {"
 				"    background: rgba(150, 150, 150, 80);"
 				"}"
+				// A button that stands for a mode - whether the cursors are
+				// shown, whether the view follows the capture - has to show
+				// that it is on, and the style leaves the checked state as
+				// little more than a hairline. MainBar sets a style sheet of
+				// its own, which is what takes the place of the one the
+				// StandardBar it derives from had set, so the rule has to be
+				// here as well as there.
+				"QToolBar QToolButton:checked {"
+				"    background: rgba(150, 150, 150, 110);"
+				"    border: 1px solid rgba(140, 140, 140, 160);"
+				"}"
 				"QToolBar QToolButton#device_status_icon {"
 				"}"
 				"QToolBar QToolButton#device_status_icon:disabled {"

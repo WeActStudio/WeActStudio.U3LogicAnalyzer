@@ -58,6 +58,37 @@ StandardBar::StandardBar(Session &session, QWidget *parent,
 {
 	setObjectName(QString::fromUtf8("StandardBar"));
 	setIconSize(QSize(32, 32));
+
+	/*
+	 * A button that stands for a mode - whether the cursors are shown,
+	 * whether the view follows the capture - has to show that it is on. The
+	 * style leaves the checked state as little more than a hairline, which
+	 * is easy to miss, so the checked button is filled here. The rules match
+	 * the ones MainBar puts on the bar of the main view, where the same
+	 * buttons live, so both bars look alike.
+	 */
+	setStyleSheet(QStringLiteral(
+		"QToolBar#StandardBar {"
+		"    border: none;"
+		"    spacing: 2px;"
+		"}"
+		"QToolBar#StandardBar QToolButton {"
+		"    padding: 2px;"
+		"    border: 1px solid transparent;"
+		"    border-radius: 2px;"
+		"}"
+		"QToolBar#StandardBar QToolButton:hover {"
+		"    background: rgba(180, 180, 180, 60);"
+		"    border: 1px solid rgba(120, 120, 120, 100);"
+		"}"
+		"QToolBar#StandardBar QToolButton:pressed {"
+		"    background: rgba(150, 150, 150, 80);"
+		"}"
+		"QToolBar#StandardBar QToolButton:checked {"
+		"    background: rgba(150, 150, 150, 110);"
+		"    border: 1px solid rgba(140, 140, 140, 160);"
+		"}"));
+
 	// Actions
 	action_view_zoom_in_->setIcon(QIcon(":/icons/zoom-in.png"));
 	// simply using Qt::Key_Plus shows no + in the menu
