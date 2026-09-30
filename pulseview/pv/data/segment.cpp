@@ -566,12 +566,33 @@ void Segment::set_channel_numner(uint16_t channel_num)
 {
 	channel_num_ = channel_num;
 	unit_size_temp = (8.0 / channel_num_);
+
+	/*
+	 * The zoom buffer is sized after the number of channels, and the code
+	 * that packs samples into it writes chunk_size_ * unit_size_temp bytes,
+	 * so a buffer left at the size of an earlier layout would be written
+	 * past its end. Replace it whenever the size it is meant to have
+	 * changes, and remember a failed allocation instead of a stale pointer.
+	 */
+	const size_t wanted = (size_t)chunk_size_ * unit_size_temp;
+	if (data_zoom != NULL && data_zoom_size_ == wanted)
+		return;
+
+	if (data_zoom != NULL) {
+		delete[] data_zoom;
+		data_zoom = NULL;
+		data_zoom_size_ = 0;
+	}
+
+	if (wanted == 0)
+		return;
+
+	data_zoom = new(std::nothrow) uint8_t[wanted];
 	if (data_zoom == NULL) {
-		data_zoom = new(std::nothrow) uint8_t[chunk_size_ * unit_size_temp];
-		if (data_zoom == NULL) {
-			qDebug() << __FILE__ << " :" << __LINE__ << ":MALLOC MEMORY FAILED";
-			// data_zoom is auxiliary buffer, not critical
-		}
+		qDebug() << __FILE__ << " :" << __LINE__ << ":MALLOC MEMORY FAILED";
+		// data_zoom is auxiliary buffer, not critical
+	} else {
+		data_zoom_size_ = wanted;
 	}
 }
 

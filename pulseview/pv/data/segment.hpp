@@ -101,7 +101,7 @@ public:
 	void set_channel_numner(uint16_t channel_num);
 	void set_unit_size(uint16_t unit_size);
 	uint16_t channel_num_ = 16;
-	unsigned int unit_size_temp;
+	unsigned int unit_size_temp = 1;
 
 Q_SIGNALS:
 	void completed();
@@ -142,6 +142,9 @@ protected:
 	bool is_complete_;
 
 	uint8_t* data_zoom = NULL;
+	// The size the buffer above was allocated with, so a change of the number
+	// of channels can be noticed and the buffer replaced.
+	size_t data_zoom_size_ = 0;
 
 	friend struct SegmentTest::SmallSize8Single;
 	friend struct SegmentTest::MediumSize8Single;

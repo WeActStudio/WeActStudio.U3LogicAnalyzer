@@ -96,23 +96,13 @@ LogicSegment::LogicSegment(pv::data::Logic& owner, uint32_t segment_id,
 				break;
 		}
 	} else {
-		for (unsigned int i = 0; i < ScaleStepCount; i++) {
-			if (i == 0)
-				mip_map_[i].data = malloc(MB(500));
-			else
-				mip_map_[i].data = malloc(MB(100));
-			if (mip_map_[i].data != nullptr) {
-				if (i == 0) {
-					mipmapAppendLength_[i] = MB(500);
-					mip_map_[i].data_length = MB(500);
-				} else {
-					mip_map_[i].data_length = MB(100);
-					mipmapAppendLength_[i] = MB(100);
-				}
-			} else {
-				qDebug() << "malloc failed!";
-			}
-		}
+		/*
+		 * No sample count to size the levels from. Leave them empty rather
+		 * than reserving a fixed 500 MB for the first level and 100 MB for
+		 * each of the others, which is what used to happen here: the mip
+		 * map is only an optimisation, and the code that reads it falls
+		 * back to walking the samples wherever a level has no data.
+		 */
 	}
 }
 
@@ -1106,11 +1096,20 @@ void LogicSegment::append_payload_to_mipmap()
 	uint64_t len_sample = end_sample - start_sample;
 	uint8_t* data_zoom_ptr = NULL;
 	uint64_t count = 0;
-	if (channel_num_ >= 8){
+	/*
+	 * The zoom buffer is only for the two layouts that are packed into it
+	 * below, and only when it is actually there: it is an auxiliary buffer,
+	 * so a failed allocation leaves it null and the packing below would
+	 * write through that null. channel_num_ values that do not pack into
+	 * it, 16 for instance, take the plain path.
+	 */
+	const bool use_zoom =
+		(channel_num_ == 2 || channel_num_ == 4) && (data_zoom != NULL);
+	if (!use_zoom){
 		it = begin_sample_iteration(start_sample);
 		count = 0;
 	}else{
-		memset(data_zoom, 0, chunk_size_ * unit_size_temp * sizeof(uint8_t));
+		memset(data_zoom, 0, data_zoom_size_);
 		data_zoom_ptr = data_zoom;
 		it = begin_sample_iteration_Ex(start_sample, len_sample, data_zoom_ptr);
 	}
@@ -1118,13 +1117,11 @@ void LogicSegment::append_payload_to_mipmap()
 		count = get_iterator_valid_length(it);
 		uint64_t count_temp = count;
 		uint8_t *src_ptr = get_iterator_value(it);
-		if (channel_num_ < 8){	
-			if (channel_num_ == 4){
+		if (use_zoom){
+			if (channel_num_ == 4)
 				channel_switch_4(src_ptr, count, data_zoom_ptr);
-			}
-			else{
+			else
 				channel_switch_2(src_ptr, count, data_zoom_ptr);
-			}
 			src_ptr = data_zoom;
 			count *= unit_size_temp;
 		}
