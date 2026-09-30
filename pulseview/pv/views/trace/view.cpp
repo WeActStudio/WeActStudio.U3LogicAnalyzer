@@ -2445,9 +2445,35 @@ void View::update_scale_offset(bool is_set)
 {
 	//set max scale
 	int w = viewport_->width();
-	std::shared_ptr<pv::toolbars::MainBar> mainbar = session_.main_bar();
-	current_max_offset_ = mainbar->get_sample_count() / (double)mainbar->get_sample_rate();
-	current_max_scale_= current_max_offset_ / w;
+	if (w <= 0)
+		return;
+
+	double max_offset = 0;
+
+	if (session_.using_file_device()) {
+		/* The sample count and sample rate of the main bar belong to a
+		 * hardware device and have nothing to do with the data of a file
+		 * we loaded, so the zoom/pan limit has to be taken from the data
+		 * itself. While the file is still being read the extents are
+		 * empty - in that case we keep the limit we already have. */
+		const pair<Timestamp, Timestamp> extents = get_time_extents();
+		max_offset = (extents.second - extents.first).convert_to<double>();
+		if (!(max_offset > 0))
+			return;
+	} else {
+		std::shared_ptr<pv::toolbars::MainBar> mainbar = session_.main_bar();
+		if (!mainbar)
+			return;
+
+		const double rate = (double)mainbar->get_sample_rate();
+		if (rate <= 0)
+			return;
+
+		max_offset = mainbar->get_sample_count() / rate;
+	}
+
+	current_max_offset_ = max_offset;
+	current_max_scale_ = current_max_offset_ / w;
 
 	if (scale_ > current_max_scale_ || is_set) {
 		set_scale_offset(current_max_scale_, 0);	
@@ -2488,6 +2514,12 @@ void View::capture_state_updated(int state)
 	}
 
 	if (state == Session::Stopped) {
+		/* For file devices the amount of data is only known once the file
+		 * has been read completely, so the zoom/pan limits - and with them
+		 * the initial view - are derived now instead of at capture start. */
+		if (session_.using_file_device())
+			update_scale_offset(false);
+
 		// After acquisition has stopped we need to re-calculate the ticks once
 		// as it's otherwise done when the user pans or zooms, which is too late
 		calculate_tick_spacing();
