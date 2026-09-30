@@ -398,7 +398,14 @@ void Segment::append_samples(void* data, uint64_t samples)
 
 const uint8_t* Segment::get_raw_sample(uint64_t sample_num) const
 {
-	assert(sample_num <= sample_count_);
+	/*
+	 * Returns null for a sample that is not there rather than leaning on the
+	 * assertion, which a release build drops. The caller has to hold the
+	 * lock for as long as it uses the pointer; get_raw_samples() is the
+	 * copying alternative that needs no such care.
+	 */
+	if (sample_num >= sample_count_)
+		return nullptr;
 
 	uint64_t chunk_num = (sample_num * unit_size_) / chunk_size_;
 	uint64_t chunk_offs = (sample_num * unit_size_) % chunk_size_;
@@ -417,13 +424,21 @@ const uint8_t* Segment::get_raw_sample(uint64_t sample_num) const
 
 void Segment::get_raw_samples(uint64_t start, uint64_t count, uint8_t* dest) const
 {
-	assert(start < sample_count_);
-	assert(start + count <= sample_count_);
-	assert(count > 0);
-	assert(dest != nullptr);
+	/*
+	 * The assertions are for development; a release build drops them, so the
+	 * range is clamped for real here. Reading less than was asked for beats
+	 * walking off the end of the chunks.
+	 */
+	if (dest == nullptr || count == 0)
+		return;
 
 	lock_guard<recursive_mutex> lock(mutex_);  // Because of free_unused_memory()
-	
+
+	if (start >= sample_count_)
+		return;
+	if (count > sample_count_ - start)
+		count = sample_count_ - start;
+
 	uint8_t* dest_ptr = dest;
 	if (channel_num_ >= 8) {
 		uint64_t chunk_num = (start * unit_size_) / chunk_size_;

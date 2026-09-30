@@ -300,7 +300,13 @@ void LogicSignal::paint_mid(QPainter &p, ViewItemPaintParams &pp)
 
 	segment->get_subsampled_edges(edges, start_sample, end_sample,
 		samples_per_pixel / Oversampling, base_->logic_bit_index());
-	assert(edges.size() >= 2);
+	/*
+	 * Every step below works with at least two edges; a segment without
+	 * samples in this range has none. Painting has nothing to do then, and
+	 * nothing has been allocated yet at this point.
+	 */
+	if (edges.size() < 2)
+		return;
 
 	const float first_sample_x =
 		pp.left() + (edges.front().first / samples_per_pixel - pixels_offset);

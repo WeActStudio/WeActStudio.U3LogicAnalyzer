@@ -605,9 +605,21 @@ void LogicSegment::get_subsampled_edges(
 
 	lock_guard<recursive_mutex> lock(mutex_);
 
-	// Make sure we only process as many samples as we have
-	if (end > get_sample_count())
-		end = get_sample_count();
+	/*
+	 * Make sure we only process as many samples as we have. The last sample
+	 * is at count - 1, so an end clamped to the count itself would be read
+	 * past the end by get_unpacked_sample() below -- the check inside that
+	 * one is an assertion, and a release build drops it.
+	 */
+	const uint64_t sample_count = get_sample_count();
+	if (sample_count == 0)
+		return;
+	if (start >= sample_count)
+		start = sample_count - 1;
+	if (end > sample_count - 1)
+		end = sample_count - 1;
+	if (end < start)
+		end = start;
 
 	const uint64_t block_length = (uint64_t)max(min_length, 1.0f);
 	const unsigned int min_level = max((int)floorf(logf(min_length) /
