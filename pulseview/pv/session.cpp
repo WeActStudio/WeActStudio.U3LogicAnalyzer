@@ -973,7 +973,16 @@ void Session::start_capture(function<void (const QString)> error_handler)
 		for (const shared_ptr<data::SignalData>& d : all_signal_data_)
 			d->clear();
 		trigger_list_.clear();
+		/*
+		 * The data is gone, so the segments start over at id 0 and the
+		 * counter that is indexed by that id has to start over with them.
+		 * Keeping the old id would make the next segment look like one that
+		 * is already there, so the vector would not be grown for it and the
+		 * by-id lookups further down would address an entry that is not
+		 * there.
+		 */
 		segment_sample_count_.clear();
+		highest_segment_id_ = -1;
 	}
 
 	is_first_trigger_ = true;
@@ -1577,8 +1586,9 @@ void Session::sample_thread_proc(function<void (const QString)> error_handler)
 		if(device_->session()->trigger() == nullptr)
 			for (shared_ptr<data::SignalBase> sb : signalbases_)
 				sb->clear_sample_data();
+		// Read by the GUI through get_highest_segment_id().
+		highest_segment_id_ = -1;
 	}
-	highest_segment_id_ = -1;
 	frame_began_ = false;
 
 	try {
@@ -1695,7 +1705,16 @@ void Session::signal_new_segment()
 
 	if (new_segment_id > highest_segment_id_) {
 		highest_segment_id_ = new_segment_id;
-		segment_sample_count_.emplace_back(0);
+		/*
+		 * The vector is indexed by segment id, so it has to be grown far
+		 * enough to reach that id, and not just by one element: a trigger
+		 * clears it while the segments themselves are kept, so the ids that
+		 * follow carry on where the ones before left off.
+		 */
+		if (segment_sample_count_.size() <=
+		    static_cast<size_t>(highest_segment_id_))
+			segment_sample_count_.resize(
+				static_cast<size_t>(highest_segment_id_) + 1, 0);
 		new_segment(highest_segment_id_);
 	}
 }
@@ -1787,13 +1806,32 @@ void Session::feed_in_meta(shared_ptr<Meta> meta)
 
 void Session::feed_in_trigger(uint64_t trigger_offs)
 {
+	/*
+	 * Read the sample rate before taking the lock: the call goes out to the
+	 * device, and waiting for the answer with the lock held would block the
+	 * GUI and the memory cleanup for as long as the device takes to reply.
+	 */
+	const uint64_t samplerate =
+		device_->read_config<uint64_t>(ConfigKey::SAMPLERATE);
+
+	/*
+	 * Written by this thread, read by the GUI through get_triggers(),
+	 * get_segment_sample_count() and get_highest_segment_id().
+	 *
+	 * The segments themselves are kept across a trigger, so their ids carry
+	 * on where they left off; the counter is grown far enough to reach them
+	 * again in signal_new_segment(). The highest id is deliberately left
+	 * alone here: the trigger is placed in the segment it landed in, which
+	 * is the one that id names.
+	 */
+	lock_guard<recursive_mutex> lock(data_mutex_);
+
 	trigger_list_.clear();
-	
 	segment_sample_count_.clear();
 
 	// The channel containing most samples should be most accurate
 	uint64_t sample_count = 0;
-	cur_samplerate_ = device_->read_config<uint64_t>(ConfigKey::SAMPLERATE);
+	cur_samplerate_ = samplerate;
 	{
 		for (const shared_ptr<pv::data::SignalData>& d : all_signal_data_) {
 			assert(d);
@@ -1987,8 +2025,20 @@ void Session::feed_in_logic(shared_ptr<sigrok::Logic> logic)
 		connect(cur_logic_segment_.get(), SIGNAL(memoryError()), this, SLOT(on_show_Error()));
 	}
 	cur_logic_segment_->append_payload(logic);
-	segment_sample_count_[highest_segment_id_] =
-		max(segment_sample_count_[highest_segment_id_], cur_logic_segment_->get_sample_count());
+	/*
+	 * Both bounds are checked rather than trusted: the id and the vector are
+	 * grown together in signal_new_segment(), and an index past the end of
+	 * the vector would corrupt the heap instead of failing loudly.
+	 */
+	{
+		// Read by the GUI through get_segment_sample_count().
+		lock_guard<recursive_mutex> lock(data_mutex_);
+		if (highest_segment_id_ >= 0 &&
+		    static_cast<size_t>(highest_segment_id_) < segment_sample_count_.size())
+			segment_sample_count_[highest_segment_id_] =
+				max(segment_sample_count_[highest_segment_id_],
+					cur_logic_segment_->get_sample_count());
+	}
 
 	data_received();
 }
@@ -2058,8 +2108,15 @@ void Session::feed_in_analog(shared_ptr<sigrok::Analog> analog)
 		segment->append_interleaved_samples(channel_data++, analog->num_samples(),
 			channels.size());
 
-		segment_sample_count_[highest_segment_id_] =
-			max(segment_sample_count_[highest_segment_id_], segment->get_sample_count());
+		{
+			// Read by the GUI through get_segment_sample_count().
+			lock_guard<recursive_mutex> lock(data_mutex_);
+			if (highest_segment_id_ >= 0 &&
+			    static_cast<size_t>(highest_segment_id_) < segment_sample_count_.size())
+				segment_sample_count_[highest_segment_id_] =
+					max(segment_sample_count_[highest_segment_id_],
+						segment->get_sample_count());
+		}
 	}
 
 	if (sweep_beginning) {
