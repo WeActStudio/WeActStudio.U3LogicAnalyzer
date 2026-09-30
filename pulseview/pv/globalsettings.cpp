@@ -472,6 +472,20 @@ bool GlobalSettings::current_theme_is_dark()
 	return is_dark_theme_;
 }
 
+QStyle *GlobalSettings::create_style()
+{
+	const QString style_name = value(Key_General_Style).toString();
+	QStyle *style = nullptr;
+
+	if (style_name == Style_Fluent) {
+		register_fluentui_resources();
+		style = new FluentUI3Style;
+	} else if (!style_name.isEmpty())
+		style = QStyleFactory::create(style_name);
+
+	return style ? style : QStyleFactory::create(Style_Fusion);
+}
+
 void GlobalSettings::apply_theme()
 {
 	const int theme = qBound(0, value(Key_General_Theme).toInt(),
@@ -514,17 +528,7 @@ void GlobalSettings::apply_theme()
 	 * takes its two palettes from the property above, so it still follows
 	 * the light and dark of this setting.
 	 */
-	const QString style_name = value(Key_General_Style).toString();
-	QStyle *base_style = nullptr;
-
-	if (style_name == Style_Fluent) {
-		register_fluentui_resources();
-		base_style = new FluentUI3Style;
-	} else if (!style_name.isEmpty())
-		base_style = QStyleFactory::create(style_name);
-
-	if (!base_style)
-		base_style = QStyleFactory::create(Style_Fusion);
+	QStyle *const base_style = create_style();
 	if (base_style)
 		qApp->setStyle(base_style);
 

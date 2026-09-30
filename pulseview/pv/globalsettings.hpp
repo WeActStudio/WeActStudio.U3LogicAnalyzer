@@ -34,6 +34,8 @@
 
 #include "util.hpp"
 
+class QStyle;
+
 using std::map;
 using std::pair;
 using std::vector;
@@ -122,6 +124,15 @@ public:
 
 	static bool current_theme_is_dark();
 	void apply_theme();
+
+	/*
+	 * Makes a style of the one the setting names, in the way the style of
+	 * the application is made. A window that needs a style of its own has
+	 * to have one made: handing over the style of the application hands
+	 * over its ownership as well, and the one it is handed to deletes it
+	 * along with itself, leaving the application without a style.
+	 */
+	QStyle *create_style();
 
 	void apply_language();
 

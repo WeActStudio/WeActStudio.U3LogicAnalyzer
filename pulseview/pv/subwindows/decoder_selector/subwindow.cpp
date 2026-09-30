@@ -33,6 +33,7 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 
+#include "pv/globalsettings.hpp"
 #include "pv/session.hpp"
 #include "pv/subwindows/decoder_selector/subwindow.hpp"
 
@@ -194,10 +195,15 @@ SubWindow::SubWindow(Session& session, QWidget* parent) :
 	tree_view_->setModel(sort_filter_model_);
 
 	// The branch arrows of the view are drawn and clicked through the
-	// style, so the nudge is applied there.
+	// style, so the nudge is applied there, in a style of the view's own.
+	// The style it wraps is made rather than taken from the application:
+	// a proxy takes over the style it is handed and deletes it along with
+	// itself, and the style of the application is the one every other
+	// widget in the window is drawn with.
 	{
+		GlobalSettings settings;
 		NudgedBranchStyle *branch_style =
-			new NudgedBranchStyle(tree_view_->style());
+			new NudgedBranchStyle(settings.create_style());
 		branch_style->setParent(tree_view_);
 		tree_view_->setStyle(branch_style);
 	}
