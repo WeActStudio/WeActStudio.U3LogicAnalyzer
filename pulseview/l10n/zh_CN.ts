@@ -1833,7 +1833,7 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1555"/>
         <source>%1 files </source>
-        <translation>%1 个文件 </translation>
+        <translation>%1 文件 </translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1560"/>
@@ -1855,7 +1855,7 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1609"/>
         <source>%1 files</source>
-        <translation>%1 个文件</translation>
+        <translation>%1 文件</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="1619"/>
