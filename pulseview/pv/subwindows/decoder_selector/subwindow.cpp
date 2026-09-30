@@ -27,6 +27,7 @@
 #include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QProxyStyle>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QScrollArea>
@@ -71,6 +72,48 @@ bool QCustomSortFilterProxyModel::filterAcceptsRow(int source_row,
 
 	return false;
 }
+
+
+/*
+ * The disclosure arrow of a branch sits right against the left edge of the
+ * view, where it reads as part of the border. Nudge it a few pixels to the
+ * right, together with the area that a click on it reacts in: the view asks
+ * the style where that area is, so both have to move by the same amount or
+ * the arrow would no longer be where it can be clicked.
+ */
+class NudgedBranchStyle : public QProxyStyle
+{
+public:
+	static const int Nudge = 5;
+
+	explicit NudgedBranchStyle(QStyle *style) : QProxyStyle(style) {}
+
+	QRect subElementRect(SubElement element,
+		const QStyleOption *option, const QWidget *widget) const override
+	{
+		const QRect rect =
+			QProxyStyle::subElementRect(element, option, widget);
+
+		if (element != SE_TreeViewDisclosureItem)
+			return rect;
+
+		return rect.translated(Nudge, 0);
+	}
+
+	void drawPrimitive(PrimitiveElement element,
+		const QStyleOption *option, QPainter *painter,
+		const QWidget *widget) const override
+	{
+		if (element != PE_IndicatorBranch) {
+			QProxyStyle::drawPrimitive(element, option, painter, widget);
+			return;
+		}
+
+		QStyleOption nudged(*option);
+		nudged.rect = option->rect.translated(Nudge, 0);
+		QProxyStyle::drawPrimitive(element, &nudged, painter, widget);
+	}
+};
 
 
 void QCustomTreeView::currentChanged(const QModelIndex& current,
@@ -149,6 +192,15 @@ SubWindow::SubWindow(Session& session, QWidget* parent) :
 	sort_filter_model_->setFilterKeyColumn(-1);
 
 	tree_view_->setModel(sort_filter_model_);
+
+	// The branch arrows of the view are drawn and clicked through the
+	// style, so the nudge is applied there.
+	{
+		NudgedBranchStyle *branch_style =
+			new NudgedBranchStyle(tree_view_->style());
+		branch_style->setParent(tree_view_);
+		tree_view_->setStyle(branch_style);
+	}
 	tree_view_->setRootIsDecorated(true);
 	// A category is opened and closed with a single click (see
 	// QCustomTreeView), so the double click must not do it a second time.
