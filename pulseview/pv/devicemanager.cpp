@@ -23,11 +23,14 @@
 #include "session.hpp"
 
 #include <cassert>
+#include <chrono>
 #include <functional>
+#include <future>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 #include <libsigrokcxx/libsigrokcxx.hpp>
 
@@ -54,10 +57,21 @@ using std::vector;
 using Glib::VariantBase;
 
 using sigrok::ConfigKey;
+
+/*
+ * How long a driver is given to answer a scan. A scan of a healthy link
+ * takes a fraction of a second, so this is far beyond it and only a link
+ * that has stopped answering reaches it.
+ */
+static const int ScanTimeoutMs = 5000;
+
 using sigrok::Context;
 using sigrok::Driver;
 
 namespace pv {
+
+std::set<std::string> DeviceManager::stalled_drivers_;
+std::vector<std::string> DeviceManager::stalled_reports_;
 
 DeviceManager::DeviceManager(shared_ptr<Context> context,
 	std::string driver, bool do_scan) :
@@ -252,14 +266,64 @@ DeviceManager::driver_scan(
 		return driver_devices;
 	}
 
+	const string name = driver->name();
+
+	/*
+	 * A driver that ran into the timeout before is not asked again. Its
+	 * scan is still waiting somewhere inside the driver, and a second
+	 * request would either queue behind that one or hang in the same place
+	 * - either way the device list would stall on every pass from now on.
+	 */
+	if (DeviceManager::scan_is_stalled(name)) {
+		qWarning() << "Skipping a driver whose scan is stuck:"
+			<< QString::fromStdString(name);
+		return driver_devices;
+	}
+
 	// Remove any device instances from this driver from the device
 	// list. They will not be valid after the scan.
 	devices_.remove_if([&](shared_ptr<devices::HardwareDevice> device) {
 		return device->hardware_device()->driver() == driver; });
 	
+	/*
+	 * The scan runs on a thread of its own so that a driver that never
+	 * answers - a board wedged in its vendor DLL, a port that went away
+	 * without saying so - cannot hold up the program. The driver is held by
+	 * the thread itself, so it stays alive even when this returns first.
+	 */
+	/* Driver::scan() hands back a vector, not a list. */
+	typedef std::vector< std::shared_ptr<sigrok::HardwareDevice> > ScannedDevices;
+	auto promise = std::make_shared< std::promise<ScannedDevices> >();
+	std::future<ScannedDevices> answer = promise->get_future();
+
+	std::thread([driver, drvopts, promise]() {
+		try {
+			promise->set_value(driver->scan(drvopts));
+		} catch (...) {
+			/*
+			 * Also where set_value() lands when this side already gave up
+			 * and its future is gone - there is nobody left to tell.
+			 */
+			try {
+				promise->set_exception(std::current_exception());
+			} catch (...) {
+			}
+		}
+	}).detach();
+
+	if (answer.wait_for(std::chrono::milliseconds(ScanTimeoutMs)) !=
+		std::future_status::ready) {
+		qWarning() << "Driver" << QString::fromStdString(name)
+			<< "did not answer its scan within" << ScanTimeoutMs
+			<< "ms; carrying on without it";
+		stalled_drivers_.insert(name);
+		stalled_reports_.push_back(name);
+		return driver_devices;
+	}
+
 	try {
-		// Do the scan
-		auto devices = driver->scan(drvopts);
+		// Take the devices the scan found.
+		ScannedDevices devices = answer.get();
 
 		// Add the scanned devices to the main list, set display names and sort.
 		for (shared_ptr<sigrok::HardwareDevice>& device : devices) {
@@ -276,10 +340,22 @@ DeviceManager::driver_scan(
 
 	} catch (const sigrok::Error &e) {
 		qWarning() << QApplication::tr("Error when scanning device driver '%1': %2").
-			arg(QString::fromStdString(driver->name()), e.what());
+			arg(QString::fromStdString(name), e.what());
 	}
 
 	return driver_devices;
+}
+
+bool DeviceManager::scan_is_stalled(const std::string &driver_name)
+{
+	return stalled_drivers_.count(driver_name) > 0;
+}
+
+std::vector<std::string> DeviceManager::take_stalled_drivers()
+{
+	std::vector<std::string> names;
+	names.swap(stalled_reports_);
+	return names;
 }
 
 const map<string, string> DeviceManager::get_device_info(

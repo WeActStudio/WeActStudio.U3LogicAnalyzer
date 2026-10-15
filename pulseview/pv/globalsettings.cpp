@@ -269,6 +269,7 @@ const QString GlobalSettings::Key_View_CursorShowSamples = "View_CursorShowSampl
 const QString GlobalSettings::Key_Dec_InitialStateConfigurable = "Dec_InitialStateConfigurable";
 const QString GlobalSettings::Key_Dec_ExportFormat = "Dec_ExportFormat";
 const QString GlobalSettings::Key_Dec_AlwaysShowAllRows = "Dec_AlwaysShowAllRows";
+const QString GlobalSettings::Key_Dec_ColoredAnnotations = "Dec_ColoredAnnotations";
 const QString GlobalSettings::Key_Log_BufferSize = "Log_BufferSize";
 const QString GlobalSettings::Key_Log_NotifyOfStacktrace = "Log_NotifyOfStacktrace";
 const QString GlobalSettings::Key_ThresholdLevel = "ThresholdLevel";
@@ -403,6 +404,10 @@ void GlobalSettings::set_defaults_where_needed()
 
 	if (!contains(Key_View_CursorShowFrequency))
 		setValue(Key_View_CursorShowFrequency, true);
+
+	// The colours are what tells the annotation rows apart.
+	if (!contains(Key_Dec_ColoredAnnotations))
+		setValue(Key_Dec_ColoredAnnotations, true);
 
 	// %c was used for the row name in the past so we need to transition such users
 	if (!contains(Key_Dec_ExportFormat) ||

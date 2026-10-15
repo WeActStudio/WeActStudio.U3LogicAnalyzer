@@ -26,13 +26,15 @@ const char* MetadataObjectNames[MetadataObjectTypeCount] = {
 	"main_view_range",
 	"selection",
 	"time_marker",
+	"current_segment",
 	"mouse_pos"
 };
 
 const char* MetadataValueNames[MetadataValueTypeCount] = {
 	"start_sample",
-	"end_sample"
-	"text"
+	"end_sample",
+	"text",
+	"segment_id"
 };
 
 

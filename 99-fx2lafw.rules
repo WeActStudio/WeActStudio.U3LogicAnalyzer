@@ -1,0 +1,21 @@
+# FX2 based logic analyzer (sigrok fx2lafw) - udev access rules
+#
+# Install once:
+#
+#   sudo cp 99-fx2lafw.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger --subsystem-match=usb
+#   # (unplug and replug the device afterwards)
+#
+# Without these rules /dev/bus/usb/xxx/yyy nodes are owned by root:root and
+# libusb_open() fails with LIBUSB_ERROR_ACCESS, so the analyzer is enumerated
+# by lsusb but invisible to PulseView unless it runs as root.
+#
+# 608c : sigrok FX2 LA (8 channel)
+# 608d : sigrok FX2 LA (16 channel)
+#
+# The boards re-enumerate under these IDs after the fx2lafw firmware has been
+# downloaded into them, which is what the device is normally found as.
+
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="608c", MODE="0666", GROUP="plugdev", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="608d", MODE="0666", GROUP="plugdev", TAG+="uaccess"

@@ -2,9 +2,9 @@
 # ============================================================================
 # build.sh - CH32H417 U3LogicAnalyzer Build + Package
 # Usage:
-#   ./build.sh              # Build only (Qt 5)
-#   ./build.sh --qt5        # Build against Qt 5 (default)
-#   ./build.sh --qt6        # Build against Qt 6
+#   ./build.sh              # Build only (Qt 6)
+#   ./build.sh --qt6        # Build against Qt 6 (default)
+#   ./build.sh --qt5        # Build against Qt 5
 #   ./build.sh --package    # Build + create dist/U3LogicAnalyzer/ package
 #   ./build.sh --clean      # Clean build
 # ============================================================================
@@ -20,9 +20,9 @@ PACKAGE=0
 IS_WINDOWS=0
 IS_MACOS=0
 
-# Qt version: 5 (default) or 6. Scanned before the platform detection,
+# Qt version: 6 (default) or 5. Scanned before the platform detection,
 # which needs it to locate the Qt installation.
-QT_MAJOR=5
+QT_MAJOR=6
 for arg in "$@"; do
     case "$arg" in
         --qt5) QT_MAJOR=5 ;;
@@ -246,6 +246,13 @@ if [ $IS_WINDOWS -eq 1 ]; then
     for dll in $SYSTEM_DLLS "$PYDLL"; do
         cp "/mingw64/bin/$dll" "$PVDIR/" 2>/dev/null || true
     done
+    # Override the system libusb: the stock one cannot stream an FX2 above
+    # 12 MHz (see driver/libusb/README.md).
+    LIBUSB_VENDORED="$SCRIPT_DIR/driver/libusb/libusb-1.0.dll"
+    if [ -f "$LIBUSB_VENDORED" ]; then
+        cp -f "$LIBUSB_VENDORED" "$PVDIR/"
+        echo "  libusb-1.0.dll (vendored)"
+    fi
 #     cat > "$PVDIR/run.bat" << 'RBEOF'
 # @echo off
 # cd /d "%~dp0"
@@ -296,6 +303,13 @@ if [ $PACKAGE -eq 1 ]; then
         for dll in $SYSTEM_DLLS "$PYDLL"; do
             cp "/mingw64/bin/$dll" "$DIST_DIR/" 2>/dev/null || true
         done
+        # Override the system libusb: the stock one cannot stream an FX2
+        # above 12 MHz (see driver/libusb/README.md).
+        LIBUSB_VENDORED="$SCRIPT_DIR/driver/libusb/libusb-1.0.dll"
+        if [ -f "$LIBUSB_VENDORED" ]; then
+            cp -f "$LIBUSB_VENDORED" "$DIST_DIR/"
+            echo "    libusb-1.0.dll (vendored)"
+        fi
 
 	# 4. Copy Python standard library (needed for protocol decoders)
         echo "  Python standard library..."
@@ -338,6 +352,16 @@ if [ $PACKAGE -eq 1 ]; then
             cp -r "$DECODERS_SRC" "$DIST_DIR/decoders"
             echo "    $(ls "$DIST_DIR/decoders" | wc -l) decoders"
         fi
+
+	# Firmware: an FX2 based analyzer has no flash of its own, so the driver
+	# downloads the firmware into it every time the board is scanned.
+	FIRMWARE_SRC="$PREFIX/share/sigrok-firmware"
+	if [ -d "$FIRMWARE_SRC" ]; then
+		echo "  Firmware..."
+		mkdir -p "$DIST_DIR/share"
+		cp -r "$FIRMWARE_SRC" "$DIST_DIR/share/sigrok-firmware"
+		echo "    $(ls "$DIST_DIR/share/sigrok-firmware" | wc -l) firmware files"
+	fi
 
 	# 6. Create run.bat
 #         cat > "$DIST_DIR/run.bat" << 'EOF'
@@ -701,6 +725,13 @@ PLIST
             echo "    $(ls "$RES_DIR/decoders" | wc -l) decoders"
         fi
 
+        FIRMWARE_SRC="$PREFIX/share/sigrok-firmware"
+        if [ -d "$FIRMWARE_SRC" ]; then
+            echo "  Firmware..."
+            cp -r "$FIRMWARE_SRC" "$RES_DIR/sigrok-firmware"
+            echo "    $(ls "$RES_DIR/sigrok-firmware" | wc -l) firmware files"
+        fi
+
         macos_sign_app "$APP"
 
         cat > "$DIST_DIR/run.sh" << 'EOF'
@@ -735,6 +766,13 @@ EOF
             mkdir -p "$DIST_DIR/share/libsigrokdecode"
             cp -r "$DECODERS_SRC" "$DIST_DIR/share/libsigrokdecode/decoders"
             echo "    $(ls "$DIST_DIR/share/libsigrokdecode/decoders" | wc -l) decoders"
+        fi
+
+        echo "  Firmware..."
+        FIRMWARE_SRC="$PREFIX/share/sigrok-firmware"
+        if [ -d "$FIRMWARE_SRC" ]; then
+            cp -r "$FIRMWARE_SRC" "$DIST_DIR/share/sigrok-firmware"
+            echo "    $(ls "$DIST_DIR/share/sigrok-firmware" | wc -l) firmware files"
         fi
 
         echo "  Qt translations..."

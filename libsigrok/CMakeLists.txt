@@ -194,6 +194,12 @@ set(LIBSIGROK_SOURCES
     src/hardware/wch-ch32h417-libusb/libusb_wrapper.c
     src/hardware/demo/api.c
     src/hardware/demo/protocol.c
+    # The FX2 based logic analyzers that run the open source fx2lafw
+    # firmware, over libusb. The driver takes the samples its bulk endpoint
+    # hands over, so it is the one to use where the device is on USB 2.0 high
+    # speed; the firmware itself is not part of this repository (see README).
+    src/hardware/fx2lafw/api.c
+    src/hardware/fx2lafw/protocol.c
     # --- End of driver list ---
     src/driver_list_stop.c
 
@@ -363,3 +369,17 @@ set(includedir "\${prefix}/include")
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/libsigrok.pc.in ${CMAKE_CURRENT_BINARY_DIR}/libsigrok.pc @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libsigrok.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+
+# ============================================================================
+# Firmware
+# ============================================================================
+# The firmware an FX2 based device is given when it is scanned: it has no flash
+# of its own, so the driver downloads it into the board every time. It is data
+# rather than source, and it is installed from here because the lookup is
+# libsigrok's - this is where sr_resourcepaths_get() looks for it.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../firmware")
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../firmware/"
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/sigrok-firmware
+        FILES_MATCHING PATTERN "*.fw"
+    )
+endif()

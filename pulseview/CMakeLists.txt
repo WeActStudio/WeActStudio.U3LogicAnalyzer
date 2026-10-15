@@ -105,11 +105,11 @@ set(CMAKE_AUTOMOC TRUE)
 
 #===============================================================================
 #= Qt version
-#= The application builds against Qt 5 or Qt 6; pick one with
-#= -DQT_VERSION_MAJOR=6 (build.sh does it for you with --qt6).
+#= The application builds against Qt 6 by default; pick Qt 5 with
+#= -DQT_VERSION_MAJOR=5 (build.sh does it for you with --qt5).
 #-------------------------------------------------------------------------------
 
-set(QT_VERSION_MAJOR "5" CACHE STRING "Qt major version to build against (5 or 6)")
+set(QT_VERSION_MAJOR "6" CACHE STRING "Qt major version to build against (5 or 6)")
 set_property(CACHE QT_VERSION_MAJOR PROPERTY STRINGS "5" "6")
 
 if(QT_VERSION_MAJOR STREQUAL "6")

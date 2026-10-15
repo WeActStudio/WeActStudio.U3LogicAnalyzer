@@ -329,8 +329,20 @@ void DecodeTrace::paint_mid(QPainter &p, ViewItemPaintParams &pp)
 		r.currently_visible = !annotations.empty();
 		if (!r.currently_visible) {
 			size_t ann_count = decode_signal_->get_annotation_count(r.decode_row, current_segment_);
-			r.currently_visible = ((always_show_all_rows_ || r.has_hidden_classes) &&
-				(ann_count > 0) && (samples_per_pixel < 0.25)) || r.expanded;
+			const bool has_annotations = (ann_count > 0);
+
+			/*
+			 * A row whose annotation classes were all switched off keeps
+			 * its title at any zoom level: the switches live behind that
+			 * title, so dropping it would leave no way of switching them
+			 * back on. Rows that merely have nothing to show in the
+			 * visible range still follow the zoom rule that keeps empty
+			 * rows out of the way.
+			 */
+			r.currently_visible = r.expanded ||
+				(has_annotations && r.has_hidden_classes) ||
+				(has_annotations && always_show_all_rows_ &&
+					(samples_per_pixel < 0.25));
 		}
 
 		if (r.currently_visible) {

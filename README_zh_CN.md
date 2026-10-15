@@ -4,14 +4,16 @@
 
 该工程仅支持项目对应的 **WeAct Studio CH32H417 逻辑分析仪**，主程序名为 **U3LogicAnalyzer**
 （基于 sigrok PulseView）。自带 132 个协议解码器（I²C / SPI / UART 等），
-sigrok 的硬件驱动已裁剪到只剩本项目相关的两个（PulseView 自带的 `demo` 驱动保留），
-纯 CMake 一键构建。
+sigrok 的硬件驱动已裁剪到只剩本项目相关的两个（PulseView 自带的 `demo` 驱动保留，
+另外保留了给 FX2 方案逻辑分析仪用的 `fx2lafw` 驱动），纯 CMake 一键构建。
 
 > **来源**：本软件是在 **Q2H2** 的项目上修改而来。CH375 驱动
 > （`libsigrok/src/hardware/wch-ch32h417/`）、`demo` 驱动以及 libsigrok /
 > libsigrokdecode 中未改动的源文件仍保留 `Copyright (C) 2026 Q2H2` 声明，
 > 本项目未对其署名作任何更改；新增的 libusb 驱动
-> （`wch-ch32h417-libusb/`）版权归 WeAct Studio。
+> （`wch-ch32h417-libusb/`）版权归 WeAct Studio；`fx2lafw` 驱动
+> （`libsigrok/src/hardware/fx2lafw/`）取自上游 sigrok，保留其作者
+> Bert Vermeulen 与 Joel Holdsworth 的署名。
 
 ## 快速开始
 
@@ -54,12 +56,12 @@ sudo ./install_udev_rules.sh      # 免 root 打开设备（只需一次）
 pacman -S --needed --noconfirm \
     mingw-w64-x86_64-{gcc,cmake,ninja,pkgconf,gdb} \
     mingw-w64-x86_64-{glib2,glibmm,libusb,hidapi,libzip} \
-    mingw-w64-x86_64-{boost,qt5-static,python}
+    mingw-w64-x86_64-{boost,qt6-static,python}
 ```
 
 > 在 Windows 上必须用 **MSYS2 MINGW64** shell（开始菜单 → MSYS2 MINGW64）。
 > Linux 用普通 shell 即可，`build.sh` 会自动识别平台（macOS 未适配）。
-> Qt 版本由 `--qt5` / `--qt6` 选择，Windows 上对应 `qt5-static` / `qt6-static`，
+> 默认 Qt 6，`--qt5` 可改用 Qt 5；Windows 上对应 `qt6-static` / `qt5-static`，
 > Linux 上用系统自带的 Qt。
 
 ## 设备访问与驱动后端
@@ -69,6 +71,7 @@ pacman -S --needed --noconfirm \
 | 整体支持 | ✅ | ✅ | ❌ 未适配 |
 | `wch-ch32h417`（CH375DLL） | ✅ 默认绑定 | ❌ 不参与构建 | ❌ 不参与构建 |
 | `wch-ch32h417-libusb`（libusb） | ✅ 需先用 Zadig 改绑 WinUSB | ✅ | 未验证 |
+| `fx2lafw`（libusb，FX2 方案设备） | ✅ 需先用 Zadig 改绑 WinUSB | ✅ | 未验证 |
 | 热插拔 | CH375 回调 + libusb 轮询 | libusb 轮询 | 未验证 |
 | 固件升级（IAP） | 两个后端都行 | 仅 libusb 后端 | 未验证 |
 
@@ -76,6 +79,25 @@ Windows 上设备默认绑在 `CH375WDM.sys`（走 `wch-ch32h417` 驱动），
 想用 libusb 后端需先用 Zadig 改绑 WinUSB。非 Windows 平台只有 libusb 后端，
 CH375 驱动的源文件会在 CMake 配置阶段被移除（`libsigrok/CMakeLists.txt` 中
 `if(NOT WIN32)` 的 `list(REMOVE_ITEM ...)`）。其中 Linux 已实机验证，macOS 未适配。
+
+**fx2lafw** 是给「跑开源 fx2lafw 固件的 Cypress FX2 方案」逻辑分析仪用的驱动：
+Saleae Logic 及其克隆、USBee AX/DX 系列、sigrok fx2grok 等。它和上面的 libusb
+后端同类，Windows 上同样要先用 Zadig 把板子改绑到 WinUSB。
+
+FX2 是 USB 2.0 高速（High Speed）器件，驱动给出的采样率（8 通道最高 24 MHz、
+16 通道最高 12 MHz）就是它的批量端点在高速链路下能跟上的速率。驱动打开设备时会
+打印实际协商到的链路速率：若只跑到全速（Full Speed，比如经过慢速 HUB，或线缆只通了
+四根线），它能用的就只有较低的采样率 —— 会明确报出来，而不是悄悄返回并不存在的采样。
+
+FX2 自身没有 flash，固件并不存留在板子上：它由驱动下载进 FX2 的 RAM（最晚在扫描
+设备时完成），板子随即重新枚举成 `fx2lafw` 的 ID，驱动等着它出现然后打开。**一断电
+就没了**，所以固件文件每次都要在 —— 没有这些文件，FX2 方案的逻辑分析仪根本用不起来。
+
+这些文件就在本仓库的 `firmware/` 目录里（即 sigrok-firmware-fx2lafw 软件包里的
+`fx2lafw-*.fw`），构建时会安装到安装树的 `share/sigrok-firmware/` —— 这是 libsigrok
+会查找的位置之一；程序自己也会把 `SIGROK_FIRMWARE_DIR` 指向它（和解码器目录一个做法），
+环境变量里的值优先。若板子已经跑着固件（同一次上电里刚被扫描烧录过），会以
+`sigrok fx2lafw` 的身份被直接打开，不会再下载一次。
 
 **Linux 免 root 访问**：默认 `/dev/bus/usb/*` 归 root 所有，libusb 打开设备会报
 `LIBUSB_ERROR_ACCESS`（`lsusb` 能看到设备，但软件里扫描不到）。
@@ -85,18 +107,19 @@ sudo ./install_udev_rules.sh            # 安装
 sudo ./install_udev_rules.sh --remove   # 移除
 ```
 
-规则文件是 `99-weact-ch32h417.rules`，覆盖两个 USB ID：
+规则文件有两个，每种分析仪一个：
 
-- `1a86:5537` — 运行时接口（命令 / 逻辑数据 / ADC 数据）
-- `1a86:fe17` — IAP 固件升级用的 HID 接口（同时给 hidraw 节点授权）
+- `99-weact-ch32h417.rules` — `1a86:5537`（运行时接口：命令 / 逻辑数据 / ADC 数据）
+  与 `1a86:fe17`（IAP 固件升级用的 HID 接口，含 hidraw 节点）
+- `99-fx2lafw.rules` — `1d50:608c` 与 `1d50:608d`，FX2 方案的 8 / 16 通道板
 
 装完需重新插拔设备。用 deb 安装时规则会随包一起装到 `/etc/udev/rules.d/`，无需手动执行。
 
 ## 构建
 
 ```bash
-./build.sh                 # 增量编译（默认 Qt 5）
-./build.sh --qt6           # 用 Qt 6 编译
+./build.sh                 # 增量编译（默认 Qt 6）
+./build.sh --qt5           # 用 Qt 5 编译
 ./build.sh --clean         # 全量重编
 ./build.sh --package       # 编译 + 打包到 dist/U3LogicAnalyzer/
 ./build.sh --prefix <dir>  # 指定 install 前缀（默认 ./install）
@@ -170,6 +193,7 @@ cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer
 ├── package_installer.sh         # 安装包（NSIS / deb+tar.gz+AppImage）
 ├── install_udev_rules.sh        # Linux udev 规则安装
 ├── 99-weact-ch32h417.rules      # 设备免 root 访问规则
+├── 99-fx2lafw.rules             # FX2 板免 root 访问规则
 ├── start_pv.sh                  # 带环境变量启动（-l 5）
 ├── start_pv_debug.sh            # 启动 debug 构建（-l 5）
 ├── install/                     # libsigrok / libsigrokcxx / libsigrokdecode
@@ -198,8 +222,8 @@ cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer
 ### Linux
 
 ```bash
-./package_installer.sh              # 构建 + 打包（Qt 5）
-./package_installer.sh --qt6        # 同上，用 Qt 6 构建
+./package_installer.sh              # 构建 + 打包（Qt 6）
+./package_installer.sh --qt5        # 同上，用 Qt 5 构建
 ./package_installer.sh --skip-build # 跳过构建，直接打包现有 dist/
 ./package_installer.sh --no-clean   # 复用已有构建目录
 ```

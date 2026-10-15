@@ -107,9 +107,18 @@ QString Logging::get_log() const
 	return buffer_.join("<br />\n");
 }
 
+QString Logging::last_sr_message() const
+{
+	lock_guard<mutex> log_lock(log_mutex_);
+	return last_sr_message_;
+}
+
 void Logging::log(const QString &text, int source)
 {
 	lock_guard<mutex> log_lock(log_mutex_);
+
+	if (source == LogSource_sr)
+		last_sr_message_ = text;
 
 	if (buffer_.size() >= buffer_size_)
 		buffer_.removeFirst();

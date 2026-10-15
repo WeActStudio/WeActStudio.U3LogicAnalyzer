@@ -1,2 +1,7 @@
 # Shell scripts must use LF so shebangs work on macOS/Linux CI
 *.sh text eol=lf
+
+# Read by udev and by patch, on Linux: a CR would be part of the rule or
+# of the context line.
+*.rules text eol=lf
+*.patch text eol=lf

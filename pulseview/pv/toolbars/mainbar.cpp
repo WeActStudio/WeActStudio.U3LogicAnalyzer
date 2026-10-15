@@ -398,6 +398,11 @@ namespace pv
 			connect(&device_selector_, SIGNAL(refresh_requested()),
 					this, SIGNAL(device_attached()), Qt::QueuedConnection);
 
+			/* A change that does not involve the device in use only needs the
+			 * list rebuilt. Queued: the scan may not run on the poll thread. */
+			connect(this, SIGNAL(refresh_device_list()),
+					this, SLOT(on_refresh_device_list()), Qt::QueuedConnection);
+
 			// Setup the decoder button
 #ifdef ENABLE_DECODE
 			add_decoder_button_->setIcon(QIcon(":/icons/add-decoder.png"));
@@ -490,7 +495,8 @@ namespace pv
 		for (QAction *action : menu_new_view_->actions()) {
 			const int type = action->data().toInt();
 			if (type > 0 && type < views::ViewTypeCount)
-				action->setText(tr(views::ViewTypeNames[type]));
+				action->setText(QCoreApplication::translate(
+					"pv::views", views::ViewTypeNames[type]));
 		}
 
 		action_single_->setText(tr("Single"));
@@ -570,6 +576,18 @@ namespace pv
 			return m_vendorName;
 		}
 
+		void MainBar::set_device_driver(QString driver)
+		{
+			std::lock_guard<std::mutex> lock(vendorName_mutex);
+			m_device_driver = driver;
+		}
+
+		QString MainBar::get_device_driver()
+		{
+			std::lock_guard<std::mutex> lock(vendorName_mutex);
+			return m_device_driver;
+		}
+
 		uint16_t MainBar::get_channel_number() const
 		{
 			return channel_number_;
@@ -586,6 +604,29 @@ namespace pv
 				devs.push_back(selected_device);
 			device_selector_.set_device_list(devs, selected_device);
 			update_device_config_widgets();
+		}
+
+		void MainBar::on_refresh_device_list()
+		{
+			DeviceManager *manager = session_.device_manager_ptr();
+			if (!manager)
+				return;
+
+			/*
+			 * Only the drivers that are not in use are scanned again. A change
+			 * in one of them cannot have touched the analyzer the session
+			 * holds, and rescanning its driver would close it - and stop a
+			 * capture running on it - for nothing.
+			 */
+			const QString in_use = get_device_driver();
+			const auto drivers = manager->context()->drivers();
+			for (const auto &entry : drivers)
+				if (in_use.isEmpty() ||
+					QString::fromStdString(entry.first) != in_use)
+					manager->driver_scan(entry.second,
+						map<const sigrok::ConfigKey *, Glib::VariantBase>());
+
+			update_device_list();
 		}
 
 		void MainBar::set_capture_state(pv::Session::capture_state state)
@@ -1197,21 +1238,29 @@ namespace pv
 			const shared_ptr<sigrok::Device> sr_dev = device->device();
 			QString vendor = QString::fromStdString(sr_dev->vendor());
 
-			if (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]) {
-				bool is_usb2 = false;
-				if (sr_dev->config_check(ConfigKey::USB_VERSION, Capability::GET)) {
-					try {
-						auto gvar = sr_dev->config_get(ConfigKey::USB_VERSION);
-						if (gvar.gobj()) {
-							uint64_t usb_version = Glib::VariantBase::cast_dynamic<Glib::Variant<guint64>>(gvar).get();
-							is_usb2 = (usb_version == 2);
-						}
-					} catch (Error &error) {
-						// Default to USB 3.0
+			/*
+			 * Ask the device which USB version it is on: every real device
+			 * answers this, so the icon follows the link in use rather than the
+			 * driver behind it.
+			 */
+			bool have_usb_version = false;
+			uint64_t usb_version = 0;
+			if (sr_dev->config_check(ConfigKey::USB_VERSION, Capability::GET)) {
+				try {
+					auto gvar = sr_dev->config_get(ConfigKey::USB_VERSION);
+					if (gvar.gobj()) {
+						usb_version = Glib::VariantBase::cast_dynamic<Glib::Variant<guint64>>(gvar).get();
+						have_usb_version = true;
 					}
+				} catch (Error &error) {
+					// Default to USB 3.0
+					have_usb_version = true;
+					usb_version = 3;
 				}
+			}
 
-				if (is_usb2) {
+			if (have_usb_version) {
+				if (usb_version == 2) {
 					device_status_icon_->setIcon(QIcon(":/icons/USB20.png"));
 					device_status_icon_->setText(tr("USB2.0"));
 					device_status_icon_->setToolTip(tr("Device Status: USB 2.0"));
@@ -1928,20 +1977,34 @@ namespace pv
 
 		void MainBar::hot_plug_listen()
 		{
-			uint16_t vid = WCH_VID;
-			uint16_t pid_ch569 = WCH_PID_CH569;
-			uint16_t pid_ch32h417 = WCH_PID_CH32H417;
-
 			/*
-			 * Track the attach state of CH569 devices. The CH32H417 is polled
-			 * here too: the CH375SetDeviceNotify callback only ever reports the
-			 * device when the vendor driver owns it, so a CH32H417 reached
-			 * through the libusb driver would otherwise never be announced.
+			 * The boards this poll watches. A board that is not listed here is
+			 * one whose arrival and departure the device list never notices,
+			 * so a new driver means a line here.
+			 *
+			 * wch_type is what the WCH boards are matched by - it covers both
+			 * CH32H417 back ends, the vendor driver and libusb - and driver
+			 * what every other board is matched by. The CH375SetDeviceNotify
+			 * callback only reports devices the vendor driver owns, so polling
+			 * is the only source for the rest.
 			 */
-			bool ch569_attached = false;
-			bool ch569_attached_pre = false;
-			bool ch32h417_attached = false;
-			bool ch32h417_attached_pre = false;
+			struct HotPlugId {
+				uint16_t vid;
+				uint16_t pid;
+				WchDeviceType wch_type;
+				const char *driver;
+			};
+
+			const HotPlugId hot_plug_ids[] = {
+				{ WCH_VID, WCH_PID_CH32H417, WchDeviceType::CH32H417, nullptr },
+				{ WCH_VID, WCH_PID_CH569, WchDeviceType::CH569, nullptr },
+				{ 0x1d50, 0x608c, WchDeviceType::None, "fx2lafw" },
+				{ 0x1d50, 0x608d, WchDeviceType::None, "fx2lafw" },
+			};
+			const size_t hot_plug_count = G_N_ELEMENTS(hot_plug_ids);
+
+			bool present[G_N_ELEMENTS(hot_plug_ids)] = { false };
+			bool present_pre[G_N_ELEMENTS(hot_plug_ids)] = { false };
 
 			libusb_device **devlist = NULL;
 			libusb_context *libusb_ctx = NULL;
@@ -1960,8 +2023,9 @@ namespace pv
 			while (hot_plug_listen_)
 			{
 				device_count = libusb_get_device_list(libusb_ctx, &devlist);
-				ch569_attached = false;
-				ch32h417_attached = false;
+
+				for (size_t i = 0; i < hot_plug_count; i++)
+					present[i] = false;
 
 				for (index = 0; index < device_count; index++)
 				{
@@ -1969,12 +2033,10 @@ namespace pv
 
 					if (libusb_get_device_descriptor(devlist[index], &des) != 0)
 						continue;
-					if (des.idVendor != vid)
-						continue;
-					if (des.idProduct == pid_ch569)
-						ch569_attached = true;
-					else if (des.idProduct == pid_ch32h417)
-						ch32h417_attached = true;
+					for (size_t i = 0; i < hot_plug_count; i++)
+						if (des.idVendor == hot_plug_ids[i].vid &&
+							des.idProduct == hot_plug_ids[i].pid)
+							present[i] = true;
 				}
 				if (device_count >= 0)
 					libusb_free_device_list(devlist, 1);
@@ -1986,37 +2048,6 @@ namespace pv
 				}
 				else
 				{
-					// Get the currently selected device type
-					QString currentVendorName = get_vendorName();
-					bool is_using_ch569 = (currentVendorName == "USB3.0(CH569)");
-					bool is_using_ch32h417 =
-						(currentVendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]);
-
-					// Check for a CH569 state change
-					if (ch569_attached != ch569_attached_pre)
-					{
-						if (ch569_attached)
-						{
-							// CH569 plugged in: refresh the device list only, do not switch automatically
-							device_attached();
-						}
-						else if (is_using_ch569)
-						{
-							// The CH569 currently in use was unplugged
-							set_vendorName("");
-							session_.stop_capture();
-							divice_detached();
-						}
-						index_time = 0;
-					}
-
-					/*
-					 * Check for a CH32H417 state change. Devices owned by the
-					 * vendor driver are already reported by the CH375 notify
-					 * callback, and MainWindow drops an arrival that comes in
-					 * while another one is still being processed, so this only
-					 * adds coverage for the libusb driver.
-					 */
 					/*
 					 * Safety net: the upgrade flag is cleared by the device
 					 * coming back, and a device that never does would leave
@@ -2031,60 +2062,143 @@ namespace pv
 						iap_upgrading_ = false;
 					}
 
-					if (ch32h417_attached != ch32h417_attached_pre)
+					/*
+					 * Which device the session holds, told apart by the
+					 * driver it came from. That stays put while a board is
+					 * away, unlike the name the tool bar shows, and the WCH
+					 * boards are matched by type so that both of their back
+					 * ends count.
+					 */
+					const QString current_driver = get_device_driver();
+					const WchDeviceType current_type =
+						get_wch_device_type_by_driver(current_driver.toStdString());
+
+					/*
+					 * What changed, and does it involve the device in use?
+					 * A change of anything else is a list refresh: the session
+					 * does not hold it, so it neither stops a capture nor moves
+					 * the selection.
+					 */
+					bool arrived_in_use = false;
+					bool left_in_use = false;
+					bool ch32h417_arrived_in_use = false;
+					bool ch32h417_left_in_use = false;
+					bool other_changed = false;
+
+					for (size_t i = 0; i < hot_plug_count; i++)
 					{
-						if (ch32h417_attached)
-						{
-							if (iap_upgrading_)
-							{
-								/*
-								 * The device is back from a firmware upgrade.
-								 * Hand it to the same slot the CH375 notify
-								 * callback uses: that is what clears the
-								 * upgrade flag, reports success and refreshes
-								 * the device list, and it has to run on the
-								 * main thread. Without this the libusb backend
-								 * would never announce the device again after
-								 * an upgrade, because the CH375 callback only
-								 * fires for devices the vendor driver owns.
-								 */
-								QMetaObject::invokeMethod(this, "on_ch32h417_device_event",
-														  Qt::QueuedConnection,
-														  Q_ARG(unsigned long, CH375_DEVICE_ARRIVAL));
-							}
-							else
-							{
-								device_attached();
-							}
+						if (present[i] == present_pre[i])
+							continue;
+
+						const HotPlugId &id = hot_plug_ids[i];
+						bool in_use = false;
+						if (id.wch_type != WchDeviceType::None)
+							in_use = (current_type == id.wch_type);
+						else
+							in_use = (!current_driver.isEmpty() &&
+								current_driver == QString::fromLatin1(id.driver));
+
+						if (!in_use) {
+							other_changed = true;
+							continue;
 						}
-						else if (!iap_upgrading_ && is_using_ch32h417)
+
+						if (present[i]) {
+							arrived_in_use = true;
+							if (id.wch_type == WchDeviceType::CH32H417)
+								ch32h417_arrived_in_use = true;
+						} else {
+							left_in_use = true;
+							if (id.wch_type == WchDeviceType::CH32H417)
+								ch32h417_left_in_use = true;
+						}
+					}
+
+					/*
+					 * An upgrade makes the CH32H417 re-enumerate as a HID
+					 * (PID 0xFE17); that window is ignored, the same way the
+					 * CH375 notify callback does.
+					 */
+					const bool upgrade_window =
+						iap_upgrading_ && ch32h417_left_in_use;
+
+					if (left_in_use && !upgrade_window)
+					{
+						/*
+						 * The board in use went away: ask for the pass an
+						 * arrival asks for instead of acting on the report
+						 * alone. That pass reads the bus first, so a report
+						 * that is repeated - the vendor driver does that -
+						 * does not end in a question about a board that is
+						 * still there.
+						 */
+						set_vendorName("");
+						device_attached();
+						index_time = 0;
+					}
+					else if (arrived_in_use)
+					{
+						if (iap_upgrading_ && ch32h417_arrived_in_use)
 						{
 							/*
-							 * The device re-enumerates as a HID (PID 0xFE17)
-							 * while an upgrade runs; ignore that window, the
-							 * same way the CH375 notify callback does.
+							 * The device is back from a firmware upgrade. Hand
+							 * it to the same slot the CH375 notify callback
+							 * uses: that is what clears the upgrade flag,
+							 * reports success and refreshes the device list,
+							 * and it has to run on the main thread. Without
+							 * this the libusb backend would never announce the
+							 * device again after an upgrade, because the CH375
+							 * callback only fires for devices the vendor
+							 * driver owns.
 							 */
-							set_vendorName("");
-							session_.stop_capture();
-							divice_detached();
+							QMetaObject::invokeMethod(this, "on_ch32h417_device_event",
+													  Qt::QueuedConnection,
+													  Q_ARG(unsigned long, CH375_DEVICE_ARRIVAL));
 						}
+						else
+						{
+							/* Refresh the device list only, do not switch
+							 * automatically. */
+							device_attached();
+						}
+						index_time = 0;
+					}
+					else if (other_changed)
+					{
+						refresh_device_list();
 						index_time = 0;
 					}
 				}
 
 				g_usleep(100000);
-				ch569_attached_pre = ch569_attached;
-				ch32h417_attached_pre = ch32h417_attached;
+				for (size_t i = 0; i < hot_plug_count; i++)
+					present_pre[i] = present[i];
 			}
 			libusb_exit(libusb_ctx);
 		}
 
 		void MainBar::on_device_changed()
 		{
+			const shared_ptr<devices::HardwareDevice> hw_device =
+				dynamic_pointer_cast<devices::HardwareDevice>(session_.device());
+			set_device_driver(hw_device ?
+				QString::fromStdString(
+					hw_device->hardware_device()->driver()->name()) : QString());
+
 			update_device_list();
 			update_device_config_widgets();
 			update_device_status_icon();
 			renew_setting_default();
+
+			/*
+			 * The zoom and pan limits are derived from the sample rate and
+			 * sample count of the device, so they belong to the device that
+			 * just went away. Recalculate them here, otherwise the view
+			 * keeps the range of the previous device until the next
+			 * acquisition starts.
+			 */
+			if (view_)
+				view_->update_scale_offset(false);
 		}
 
 		void MainBar::hot_plug_start()
@@ -2645,9 +2759,6 @@ namespace pv
 		/* CH32H417 device event handler - runs on the main thread */
 		void MainBar::on_ch32h417_device_event(unsigned long eventStatus)
 		{
-			QString currentVendorName = get_vendorName();
-			bool is_using_ch32h417 = (currentVendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]);
-
 			if (eventStatus == CH375_DEVICE_ARRIVAL)
 			{
 				if (iap_upgrading_)
@@ -2667,12 +2778,13 @@ namespace pv
 				{
 					return;
 				}
-				if (is_using_ch32h417)
-				{
-					set_vendorName("");
-					session_.stop_capture();
-					divice_detached();
-				}
+
+				/*
+				 * Same request as an arrival: read the bus and let that
+				 * decide. Acting on the report alone would turn a repeat of
+				 * it into a question about a board that is still there.
+				 */
+				device_attached();
 		}
 	}
 

@@ -32,6 +32,7 @@
 #include <QApplication>
 
 #include "devicemanager.hpp"
+#include "logging.hpp"
 #include "mainwindow.hpp"
 
 #include <pv/dialogs/decoder_channel_dialog.hpp>
@@ -568,14 +569,31 @@ void Session::restore_settings(QSettings &settings)
 			device_manager_.load()->devices();
 
 		shared_ptr<devices::HardwareDevice> connected_device;
+		bool saved_setup_applies = false;
 		for (auto dev : devices) {
 			WchDeviceType dev_type = get_wch_device_type_by_driver(
 				dev->hardware_device()->driver()->name());
 			if (dev_type == WchDeviceType::CH569) {
 				connected_device = dev;
+				saved_setup_applies = true;
 				break;
 			} else if (dev_type == WchDeviceType::CH32H417 && !connected_device) {
 				connected_device = dev;
+				saved_setup_applies = true;
+			}
+		}
+
+		/*
+		 * Anything that is not the demo device is real hardware. A session
+		 * that was saved while a WCH device was attached must not drag a
+		 * freshly selected fx2lafw back to the demo device.
+		 */
+		if (!connected_device) {
+			for (auto dev : devices) {
+				if (string(dev->hardware_device()->driver()->name()) != "demo") {
+					connected_device = dev;
+					break;
+				}
 			}
 		}
 
@@ -609,7 +627,15 @@ void Session::restore_settings(QSettings &settings)
 			}
 		}
 
-		if (!is_demo) {
+		/*
+		 * The saved setup belongs to a WCH device: its sample rate and
+		 * sample count are that device's, and the tool bar has to keep
+		 * quoting what the device in use is really doing - the zoom and
+		 * pan limits are derived from those numbers. Applying them to
+		 * other hardware would leave the view scaled to a sample rate
+		 * the device never got.
+		 */
+		if (!is_demo && saved_setup_applies) {
 			restore_setup(settings);
 		}
 	}
@@ -740,11 +766,37 @@ void Session::set_device(shared_ptr<devices::Device> device)
 
 	device_ = move(device);
 
+	/* Remember the log line so the message below can tell the driver's
+	 * own line from the ones the device scan wrote before it. */
+	const QString prior_log = logging.last_sr_message();
+
 	try {
 		device_->open();
-	} catch (const QString &e) {
+	} catch (const QString &) {
+		/*
+		 * A driver names the reason in its log line - an access failure is
+		 * what a device held by another program looks like - while the
+		 * exception itself only carries a generic error code.
+		 */
+		const bool is_hw_device =
+			dynamic_pointer_cast<devices::HardwareDevice>(device_) != nullptr;
 		device_.reset();
-		// MainWindow::show_session_error(tr("Failed to open device"), e);
+
+		if (is_hw_device && !shutting_down_) {
+			QString detail = logging.last_sr_message();
+			if (detail == prior_log)
+				detail.clear();
+
+			QString message = detail.contains("ACCESS") ?
+				tr("The device is already in use, or this user has no "
+				   "access to it. Close the program that holds it, then "
+				   "try again.") :
+				tr("The device could not be opened.");
+			if (!detail.isEmpty())
+				message += "\n\n" + detail;
+			MainWindow::show_session_error(tr("Failed to open device"),
+				message, main_bar_.get());
+		}
 	}
 	
 	if (device_) {
@@ -774,6 +826,17 @@ void Session::set_default_device()
 				break;
 			} else if (dev_type == WchDeviceType::CH32H417 && default_device == devices.front()) {
 				default_device = dev;
+			}
+		}
+
+		/* Any other device is real hardware and beats the demo device. */
+		if (string(devices.front()->hardware_device()->driver()->name()) == "demo" &&
+			default_device == devices.front()) {
+			for (auto dev : devices) {
+				if (string(dev->hardware_device()->driver()->name()) != "demo") {
+					default_device = dev;
+					break;
+				}
 			}
 		}
 	}

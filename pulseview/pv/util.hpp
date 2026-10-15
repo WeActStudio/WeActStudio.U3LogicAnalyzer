@@ -279,18 +279,27 @@ void show_message(QWidget *parent, const QString &title, const QString &text,
 uint64_t available_memory();
 
 /**
- * Whether the udev access rules of the CH32H417 are installed.
+ * The udev rule files the application ships that are not installed yet.
  *
  * Without them the /dev/bus/usb nodes stay owned by root and libusb_open()
  * fails with LIBUSB_ERROR_ACCESS: the device shows up in lsusb but is
- * invisible to the application. Always true where udev does not exist.
+ * invisible to the application. Both fields are empty where udev does not
+ * exist, or when every rule file is already in place.
  */
-bool udev_rules_installed();
+struct MissingUdevRules {
+	QString devices;  //!< one "what it is for" line per missing file
+	QString paths;    //!< one path per missing file, for the dialog
+};
 
 /**
- * Install those rules as root, authenticating with @a password, which is
- * fed to "sudo -S" on stdin. An empty password works when the process
- * already runs as root or when sudo does not ask for one.
+ * Which of those rule files are missing.
+ */
+MissingUdevRules udev_rules_missing();
+
+/**
+ * Install every missing rule file as root, authenticating with @a password,
+ * which is fed to "sudo -S" on stdin. An empty password works when the
+ * process already runs as root or when sudo does not ask for one.
  *
  * @param[in] password The user's password, never passed on a command line.
  * @param[out] error_out Human readable reason on failure.

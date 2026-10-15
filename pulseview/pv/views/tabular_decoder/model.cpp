@@ -50,7 +50,7 @@ AnnotationCollectionModel::AnnotationCollectionModel(QObject* parent) :
 	prev_segment_(0),
 	prev_last_row_(0),
 	had_highlight_before_(false),
-	hide_hidden_(false)
+	colored_annotations_(true)
 {
 	// Note: when adding entries, consider ViewVisibleFilterProxyModel::filterAcceptsRow()
 
@@ -64,6 +64,7 @@ AnnotationCollectionModel::AnnotationCollectionModel(QObject* parent) :
 
 	first_hidden_column_ = i;
 	header_data_.emplace_back(tr("End Sample"));         // Column #6, hidden
+	header_data_.emplace_back(tr("Duration"));           // Column #7, hidden
 }
 
 int AnnotationCollectionModel::get_hierarchy_level(const Annotation* ann) const
@@ -95,7 +96,36 @@ QVariant AnnotationCollectionModel::data_from_ann(const Annotation* ann, int ind
 	case 4: return QVariant(ann->ann_class_description());     // Column #4, Ann Class
 	case 5: return QVariant(ann->longest_annotation());        // Column #5, Value
 	case 6: return QVariant((qulonglong)ann->end_sample());    // Column #6, End Sample
+	case 7: {                                                  // Column #7, Duration
+			// Without a sample rate the numbers are sample counts, the
+			// same way the Start Time column reads.
+			const double samplerate = signal_->get_samplerate();
+			const uint64_t samples = ann->end_sample() - ann->start_sample();
+			const Timestamp t = samplerate ? (samples / samplerate) : samples;
+			const QString unit = samplerate ? tr("s") : tr("sa");
+			QString s;
+			if ((t < 60) || (samplerate == 0))
+				s = format_time_si(t, SIPrefix::unspecified, 3, unit, false);
+			else
+				s = format_time_minutes(t, 3, false);
+			return QVariant(s);
+		}
 	default: return QVariant();
+	}
+}
+
+QVariant AnnotationCollectionModel::sort_key_from_ann(const Annotation* ann, int index) const
+{
+	switch (index) {
+	case 0:  // Start Sample
+	case 1:  // Start Time - ordered by the sample it was made from
+		return QVariant((qulonglong)ann->start_sample());
+	case 6:  // End Sample
+		return QVariant((qulonglong)ann->end_sample());
+	case 7:  // Duration
+		return QVariant((qulonglong)(ann->end_sample() - ann->start_sample()));
+	default:
+		return data_from_ann(ann, index);
 	}
 }
 
@@ -107,14 +137,37 @@ QVariant AnnotationCollectionModel::data(const QModelIndex& index, int role) con
 	const Annotation* ann =
 		static_cast<const Annotation*>(index.internalPointer());
 
-	if (role == Qt::DisplayRole)
+	// The cells elide long text, so the tooltip carries the whole value.
+	if ((role == Qt::DisplayRole) || (role == Qt::ToolTipRole))
 		return data_from_ann(ann, index.column());
 
-	if (role == Qt::ForegroundRole)
-		return QApplication::palette().brush(QPalette::WindowText);
+	if (role == SortRole)
+		return sort_key_from_ann(ann, index.column());
 
-	if (role == Qt::BackgroundRole)
-		return QVariant();
+	// The row the mouse points at in the main view is drawn in the colour the
+	// trace uses for this annotation, with the text flipped so it stays
+	// readable on it. Columns left of a stacked decoder's level stay plain.
+	const bool must_highlight = (highlight_sample_num_ > 0) &&
+		((int64_t)ann->start_sample() <= highlight_sample_num_) &&
+		((int64_t)ann->end_sample() >= highlight_sample_num_);
+	const bool colored = colored_annotations_ &&
+		(index.column() >= get_hierarchy_level(ann));
+
+	if (role == Qt::ForegroundRole) {
+		if (colored && must_highlight)
+			return QApplication::palette().brush(
+				GlobalSettings::current_theme_is_dark() ?
+					QPalette::Window : QPalette::WindowText);
+
+		return QApplication::palette().brush(QPalette::WindowText);
+	}
+
+	if (role == Qt::BackgroundRole) {
+		if (colored)
+			return QBrush(must_highlight ? ann->color() :
+				(GlobalSettings::current_theme_is_dark() ?
+					ann->dark_color() : ann->bright_color()));
+	}
 
 	return QVariant();
 }
@@ -127,9 +180,26 @@ Qt::ItemFlags AnnotationCollectionModel::flags(const QModelIndex& index) const
 	return Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemNeverHasChildren;
 }
 
+void AnnotationCollectionModel::set_colored_annotations(bool colored)
+{
+	colored_annotations_ = colored;
+}
+
 uint8_t AnnotationCollectionModel::first_hidden_column() const
 {
 	return first_hidden_column_;
+}
+
+bool AnnotationCollectionModel::is_filterable_column(int column)
+{
+	// Decoder, Ann Row and Ann Class, see the column comments above.
+	return (column == 2) || (column == 3) || (column == 4);
+}
+
+bool AnnotationCollectionModel::is_text_column(int column)
+{
+	// Decoder, Ann Row, Ann Class and Value, see the column comments.
+	return (column >= 2) && (column <= 5);
 }
 
 QVariant AnnotationCollectionModel::headerData(int section, Qt::Orientation orientation,
@@ -138,8 +208,15 @@ QVariant AnnotationCollectionModel::headerData(int section, Qt::Orientation orie
 	if ((section < 0) || (section >= (int)header_data_.size()))
 		return QVariant();
 
-	if ((orientation == Qt::Horizontal) && (role == Qt::DisplayRole))
-		return header_data_[section];
+	if (orientation == Qt::Horizontal) {
+		if (role == Qt::DisplayRole)
+			return header_data_[section];
+
+		// The funnel at the end of such a column is a small mark, so
+		// the whole section says what it is for.
+		if ((role == Qt::ToolTipRole) && is_filterable_column(section))
+			return tr("Filter this column");
+	}
 
 	return QVariant();
 }
@@ -210,14 +287,21 @@ void AnnotationCollectionModel::set_signal_and_segment(data::DecodeSignal* signa
 		connect(dec.get(), SIGNAL(annotation_visibility_changed()),
 			this, SLOT(on_annotation_visibility_changed()));
 
-	if (hide_hidden_) {
-		update_annotations_without_hidden();
-		dataset_ = &all_annotations_without_hidden_;
-	} else
-		dataset_ = all_annotations_;
+	// The table follows the rows and classes that were switched off
+	// in the main view, so the filtered set is the one on show.
+	update_annotations_without_hidden();
+	dataset_ = &all_annotations_without_hidden_;
 
 	if (!dataset_ || dataset_->empty()) {
+		// An empty set is a change like any other: without telling the
+		// view, it keeps showing what the previous segment held.
+		if ((prev_segment_ != current_segment) || (prev_last_row_ != 0)) {
+			dataChanged(QModelIndex(), QModelIndex());
+			layoutChanged();
+		}
+
 		prev_segment_ = current_segment;
+		prev_last_row_ = 0;
 		return;
 	}
 
@@ -237,28 +321,6 @@ void AnnotationCollectionModel::set_signal_and_segment(data::DecodeSignal* signa
 
 	prev_segment_ = current_segment;
 	prev_last_row_ = new_row_count;
-}
-
-void AnnotationCollectionModel::set_hide_hidden(bool hide_hidden)
-{
-	layoutAboutToBeChanged();
-
-	hide_hidden_ = hide_hidden;
-
-	if (hide_hidden_) {
-		dataset_ = &all_annotations_without_hidden_;
-		update_annotations_without_hidden();
-	} else {
-		dataset_ = all_annotations_;
-		all_annotations_without_hidden_.clear();  // To conserve memory
-	}
-
-	if (dataset_)
-		dataChanged(index(0, 0), index(dataset_->size() - 1, 0));
-	else
-		dataChanged(QModelIndex(), QModelIndex());
-
-	layoutChanged();
 }
 
 void AnnotationCollectionModel::update_annotations_without_hidden()
@@ -326,9 +388,6 @@ QModelIndex AnnotationCollectionModel::update_highlighted_rows(QModelIndex first
 
 void AnnotationCollectionModel::on_annotation_visibility_changed()
 {
-	if (!hide_hidden_)
-		return;
-
 	layoutAboutToBeChanged();
 
 	update_annotations_without_hidden();

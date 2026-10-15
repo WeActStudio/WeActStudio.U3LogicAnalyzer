@@ -82,7 +82,24 @@ public:
 	const shared_ptr<devices::HardwareDevice> find_device_from_info(
 		const map<string, string> search_info);
 
+	/*
+	 * A driver that does not answer a scan in time is left alone from then
+	 * on: the call that is stuck still holds it, so asking again would
+	 * either queue behind it or hang in the same place, and every later
+	 * device pass would stall again. This is process wide for the same
+	 * reason the problem is - the driver is.
+	 */
+	static bool scan_is_stalled(const std::string &driver_name);
+
+	/* The drivers that hit the timeout since the last call, taken off the
+	 * list so the caller can tell the user about each one once. */
+	static std::vector<std::string> take_stalled_drivers();
+
 private:
+	/* The drivers that ran into the timeout, and the ones not reported */
+	static std::set<std::string> stalled_drivers_;
+	static std::vector<std::string> stalled_reports_;
+
 	bool compare_devices(shared_ptr<devices::Device> a,
 		shared_ptr<devices::Device> b);
 

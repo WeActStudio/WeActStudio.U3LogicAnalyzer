@@ -29,6 +29,7 @@
 #include <climits>
 #include <cstdint>
 #include <iterator>
+#include <map>
 
 #include <QAction>
 #include <QApplication>
@@ -49,7 +50,8 @@
 #include <QSettings>
 #include <QShortcut>
 #include <QWidget>
-#include <QString>
+#include <QString>
+#include <QStringList>
 #include <QTime>
 #include <QTimer>
 #include <QEventLoop>
@@ -215,7 +217,8 @@ bool MainWindow::checkUdevRules()
 #ifndef __linux__
 	return true;
 #else
-	if (pv::util::udev_rules_installed())
+	const pv::util::MissingUdevRules missing = pv::util::udev_rules_missing();
+	if (missing.paths.isEmpty())
 		return true;
 
 	/* Already root: no password needed. */
@@ -226,11 +229,11 @@ bool MainWindow::checkUdevRules()
 	}
 
 	const QString intro = MainWindow::tr(
-		"No udev access rules were found for the CH32H417. Without them the "
-		"device (VID 1a86 / PID 5537) cannot be opened by an unprivileged "
-		"user, so the logic analyzer will not be detected.\n\n"
-		"Enter your administrator password to install:\n"
-		"/etc/udev/rules.d/99-weact-ch32h417.rules");
+		"No udev access rules were found for:\n%1\n\n"
+		"Without them the device cannot be opened by an unprivileged user, "
+		"so it will not be detected.\n\n"
+		"Enter your administrator password to install:\n%2")
+		.arg(missing.devices, missing.paths);
 
 	/* Allow a couple of typos before giving up. */
 	for (int attempt = 0; attempt < 3; ++attempt) {
@@ -263,7 +266,7 @@ bool MainWindow::checkUdevRules()
 		MainWindow::tr("Skipped installing access rules"),
 		MainWindow::tr("The udev rules are not installed, so the device may "
 			"not be detected.\n\nYou can run this application as root "
-			"later, or copy 99-weact-ch32h417.rules from the repository to "
+			"later, or copy the rule files from the repository to "
 			"/etc/udev/rules.d/ and replug the device."),
 		QMessageBox::Warning);
 
@@ -378,7 +381,8 @@ shared_ptr<views::ViewBase> MainWindow::add_view(views::ViewType type,
 	// Only use the view type in the name if it's not the main view
 	QString title;
 	if (main_bar) {
-		title = QString("%1").arg(tr(views::ViewTypeNames[type]));
+		title = QString("%1").arg(QCoreApplication::translate(
+			"pv::views", views::ViewTypeNames[type]));
 	}
 	else
 		title = session.name();
@@ -450,8 +454,6 @@ shared_ptr<views::ViewBase> MainWindow::add_view(views::ViewType type,
 			main_bar = make_shared<MainBar>(session, this, tv);
 			dock_main->addToolBar(main_bar.get());
 			main_bar->setMovable(false);
-			// connect(main_bar.get(), SIGNAL(divice_detached()), &session, SLOT(on_device_detach()));
-			connect(main_bar.get(), SIGNAL(divice_detached()), this, SLOT(show_device_detach()));
 			connect(main_bar.get(), SIGNAL(device_attached()), this, SLOT(on_device_attached()));
 			connect(this, SIGNAL(save_session()), main_bar.get(), SLOT(on_actionSave_triggered()));
 			connect(main_bar.get(), SIGNAL(new_view(Session*, int)),
@@ -710,9 +712,32 @@ void MainWindow::do_device_detach_switch()
 	}
 }
 
+/*
+ * Carries out what the answer to the detach question asks for: the device that
+ * was in use is gone, so the list is read again and the session moves to what
+ * is there. Device events are let through again, but the one that was held
+ * back is not replayed - the rescan just done covers it, and a second pass
+ * would only ask about the session again while the board is still coming up.
+ */
+void MainWindow::apply_device_detach()
+{
+	detach_dialog_ = nullptr;
+	do_device_detach_switch();
+	resume_device_events(false);
+	report_stalled_devices();
+}
+
 void MainWindow::show_device_detach()
 {
 	if (!last_focused_session_ || !last_focused_session_->main_bar()) {
+		return;
+	}
+
+	/* Already asking. Raising the question is all that is left to do; a
+	 * second copy would have to be answered for the same thing. */
+	if (detach_dialog_) {
+		detach_dialog_->raise();
+		detach_dialog_->activateWindow();
 		return;
 	}
 
@@ -780,18 +805,17 @@ void MainWindow::show_device_detach()
 		qDebug() << last_focused_session_->main_bar()->channels_;
 		
 		last_focused_session_->main_bar()->action_save()->triggered();
-		do_device_detach_switch();
-		attach_process_done = true;
+		apply_device_detach();
 		dialog->deleteLater();
 	});
 
 	connect(cancelBtn, &QPushButton::clicked, [=](){
-		do_device_detach_switch();
-		attach_process_done = true;
+		apply_device_detach();
 		dialog->deleteLater();
 	});
 
 	dialog->show();
+	detach_dialog_ = dialog;
 }
 
 void sleep_ex(unsigned int msec)
@@ -805,11 +829,37 @@ void sleep_ex(unsigned int msec)
 
 void MainWindow::on_device_attached()
 {
-	if (!attach_process_done)
+	/*
+	 * A board arrived or went away. A pass has to finish before the next one
+	 * starts, but a change that comes in meanwhile must not be dropped: a
+	 * board that was plugged and unplugged quickly would otherwise be missed
+	 * for good. Remember it and handle it in one more pass instead.
+	 */
+	if (!attach_process_done) {
+		device_event_pending_ = true;
 		return;
+	}
 	attach_process_done = false;
 
-	if (last_focused_session_ && last_focused_session_->device()) {
+	const shared_ptr<devices::Device> previous = last_focused_session_ ?
+		last_focused_session_->device() : nullptr;
+	const shared_ptr<devices::HardwareDevice> previous_hw =
+		dynamic_pointer_cast<devices::HardwareDevice>(previous);
+
+	/*
+	 * What is in use has to be identified before the scan, while the driver
+	 * still knows the device: the scan frees the instances, so afterwards it
+	 * can only be looked up again by the identity it reports.
+	 */
+	std::map<string, string> previous_info;
+	string previous_driver;
+	if (previous_hw) {
+		previous_driver = previous_hw->hardware_device()->driver()->name();
+		if (device_manager_)
+			previous_info = device_manager_.load()->get_device_info(previous);
+	}
+
+	if (previous) {
 		last_focused_session_->stop_capture();
 		/*
 		 * The previous device may already be gone, and libsigrok reports that
@@ -817,7 +867,7 @@ void MainWindow::on_device_attached()
 		 * application, so swallow it: we are about to rescan anyway.
 		 */
 		try {
-			last_focused_session_->device()->close();
+			previous->close();
 		} catch (const sigrok::Error &e) {
 			qWarning() << "Error closing the previous device:" << e.what();
 		} catch (const QString &msg) {
@@ -840,90 +890,116 @@ void MainWindow::on_device_attached()
 	list< shared_ptr<devices::HardwareDevice> > devices =
 		device_manager->devices();
 
-	QString currentVendorName = last_focused_session_->main_bar()->get_vendorName();
-	bool is_using_ch569 = (currentVendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH569)]);
-	bool is_using_ch32h417 = (currentVendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]);
+	/*
+	 * Look for what is in use again. It comes back as a new instance, so it
+	 * is the identity that has to match, not the pointer. Finding it means
+	 * nothing was unplugged: the selection stays where the user put it, an
+	 * arrival never moves it.
+	 */
+	const shared_ptr<devices::HardwareDevice> same_device =
+		previous_info.empty() ? nullptr :
+			device_manager->find_device_from_info(previous_info);
 
-	bool current_device_still_exists = false;
-	if (is_using_ch569) {
-		for (const shared_ptr<devices::HardwareDevice>& dev : devices) {
-			WchDeviceType dev_type = get_wch_device_type_by_driver(
-				dev->hardware_device()->driver()->name());
-			if (dev_type == WchDeviceType::CH569) {
-				current_device_still_exists = true;
-				break;
-			}
-		}
-	} else if (is_using_ch32h417) {
-		for (const shared_ptr<devices::HardwareDevice>& dev : devices) {
-			WchDeviceType dev_type = get_wch_device_type_by_driver(
-				dev->hardware_device()->driver()->name());
-			if (dev_type == WchDeviceType::CH32H417) {
-				current_device_still_exists = true;
-				break;
-			}
-		}
+	/* Only a board on a bus can go away; the demo device and an open file
+	 * cannot, and an empty identity is how that shows here. */
+	if (previous_hw && !previous_info.empty() && !same_device) {
+		/*
+		 * The device in use is gone: ask about the session the way the detach
+		 * flow does. That is also what picks the replacement, and it lets the
+		 * device events through again once the question is answered.
+		 */
+		show_device_detach();
+		return;
 	}
 
-	if (current_device_still_exists) {
-		shared_ptr<devices::Device> current_type_device = nullptr;
-		WchDeviceType target_type = is_using_ch569 ? WchDeviceType::CH569 : WchDeviceType::CH32H417;
-
-		for (const shared_ptr<devices::HardwareDevice>& dev : devices) {
-			WchDeviceType dev_type = get_wch_device_type_by_driver(
-				dev->hardware_device()->driver()->name());
-			if (dev_type == target_type) {
-				current_type_device = dev;
-				break;
-			}
-		}
-
-		if (current_type_device) {
-			last_focused_session_->select_device(current_type_device);
-		}
-		last_focused_session_->main_bar()->update_device_list();
+	if (same_device) {
+		last_focused_session_->select_device(same_device);
 		restore_sessions();
-	} else if (!devices.empty()) {
-		shared_ptr<devices::Device> default_device = nullptr;
-		WchDeviceType found_device_type = WchDeviceType::None;
-
-		for (const shared_ptr<devices::HardwareDevice>& dev : devices) {
-			WchDeviceType dev_type = get_wch_device_type_by_driver(
-				dev->hardware_device()->driver()->name());
-			if (dev_type != WchDeviceType::None) {
-				found_device_type = dev_type;
-				default_device = dev;
+	} else if (!previous) {
+		/*
+		 * Nothing was in use yet - started without a device, or the one that
+		 * was there could not be opened. Pick one in the order the start-up
+		 * path uses: the driver that was in use, then any other real
+		 * hardware, then whatever is left.
+		 */
+		shared_ptr<devices::HardwareDevice> pick = nullptr;
+		for (const auto &dev : devices)
+			if (dev->hardware_device()->driver()->name() == previous_driver) {
+				pick = dev;
 				break;
 			}
-		}
+		if (!pick)
+			for (const auto &dev : devices)
+				if (dev->hardware_device()->driver()->name() != "demo") {
+					pick = dev;
+					break;
+				}
+		if (!pick && !devices.empty())
+			pick = devices.front();
 
-		if (default_device) {
-			last_focused_session_->select_device(default_device);
-			QString device_name = DeviceModelNames[static_cast<int>(found_device_type)];
-			QString vendor_name = device_name;
-			last_focused_session_->main_bar()->set_device_selector_name(device_name);
-			last_focused_session_->main_bar()->set_vendorName(vendor_name);
-			restore_sessions();
-		} else {
-			/*
-			 * Only the demo device is left. The device that was in use has
-			 * just been closed, so select the demo device again to keep the
-			 * session usable. This is where a manual rescan without any
-			 * hardware attached ends up.
-			 */
-			const shared_ptr<devices::Device> previous =
-				last_focused_session_->device();
-			const shared_ptr<devices::HardwareDevice> previous_hw =
-				dynamic_pointer_cast<devices::HardwareDevice>(previous);
-
-			/* Leave a file device that is in use alone. */
-			if (!previous || (previous_hw &&
-					previous_hw->hardware_device()->driver()->name() == "demo"))
-				last_focused_session_->select_device(nullptr);
+		if (pick) {
+			last_focused_session_->select_device(pick);
+			const WchDeviceType type = get_wch_device_type_by_driver(
+				pick->hardware_device()->driver()->name());
+			const QString name = (type != WchDeviceType::None) ?
+				DeviceModelNames[static_cast<int>(type)] :
+				QString::fromStdString(pick->device()->model());
+			if (!name.isEmpty()) {
+				last_focused_session_->main_bar()->set_device_selector_name(name);
+				last_focused_session_->main_bar()->set_vendorName(name);
+			}
 		}
 	}
 
+	last_focused_session_->main_bar()->update_device_list();
+	resume_device_events();
+	report_stalled_devices();
+}
+
+void MainWindow::report_stalled_devices()
+{
+	const vector<string> names = DeviceManager::take_stalled_drivers();
+	if (names.empty())
+		return;
+
+	/*
+	 * Name the board where the driver is one of ours, so the message talks
+	 * about the analyzer the user is holding rather than about a driver.
+	 */
+	QStringList boards;
+	for (const string &name : names) {
+		const WchDeviceType type = get_wch_device_type_by_driver(name);
+		boards << ((type != WchDeviceType::None) ?
+			DeviceModelNames[static_cast<int>(type)] :
+			QString::fromStdString(name));
+	}
+
+	pv::util::show_message(this, tr("Device scan timed out"),
+		tr("Scanning these drivers took too long, so the software started "
+			"without waiting for them:") + "\n\n" + boards.join("\n") +
+			"\n\n" + tr("Their devices are not in the list. Unplug and replug "
+			"the analyzer - or close whatever else is using it - and scan "
+			"again."),
+		pv::util::message_box_icon(QMessageBox::Warning),
+		460, false, false, false);
+}
+
+void MainWindow::resume_device_events(bool replay_pending)
+{
 	attach_process_done = true;
+
+	if (!device_event_pending_)
+		return;
+
+	device_event_pending_ = false;
+
+	/* The pass that just ran read the whole device list, so a change it
+	 * swallowed is already accounted for and must not be replayed. */
+	if (!replay_pending)
+		return;
+
+	/* A change arrived while the previous pass was running: handle it now. */
+	QTimer::singleShot(0, this, &MainWindow::on_device_attached);
 }
 
 void MainWindow::update_sessions_device_manager(pv::DeviceManager *device_manager)
@@ -1079,8 +1155,23 @@ void MainWindow::add_default_session()
 				break;
 			}
 		}
-		// If no WCH device found and demo exists, use demo
-		if (!wch_device && demo_device)
+		/*
+		 * Anything that is not the demo device is real hardware, so it is
+		 * the better choice: fx2lafw and drivers added later have to reach
+		 * a session the same way the WCH ones do.
+		 */
+		bool found_real_device = false;
+		if (!wch_device) {
+			for (const shared_ptr<devices::HardwareDevice>& dev : devices) {
+				if (string(dev->hardware_device()->driver()->name()) != "demo") {
+					default_device = dev;
+					found_real_device = true;
+					break;
+				}
+			}
+		}
+		// The demo device keeps the session usable when nothing else is there.
+		if (!wch_device && !found_real_device && demo_device)
 			default_device = demo_device;
 	}
 	session->select_device(default_device);
@@ -1128,7 +1219,20 @@ void MainWindow::add_default_session()
 			session->main_bar()->show_hardware_version();
 		else
 			qDebug() << "session->main_bar() == nullptr";
+	} else if (session->device()) {
+		/*
+		 * Any other hardware device: name it after the model it reports,
+		 * so the tool bar shows what is actually being sampled.
+		 */
+		const shared_ptr<sigrok::Device> sr_dev = session->device()->device();
+		const string model = sr_dev ? sr_dev->model() : string();
+		if (session->main_bar() && !model.empty()) {
+			session->main_bar()->set_vendorName(QString::fromStdString(model));
+			session->main_bar()->set_device_selector_name(QString::fromStdString(model));
+		}
 	}
+
+	report_stalled_devices();
 }
 void MainWindow::save_sessions()
 {
@@ -1216,7 +1320,8 @@ void MainWindow::retranslate_ui()
 	/* Dock titles are chosen when the dock is created and are never
 	 * looked at again, so give them the text of the new language. */
 	for (auto &entry : view_dock_types_)
-		entry.first->setWindowTitle(tr(views::ViewTypeNames[entry.second]));
+		entry.first->setWindowTitle(QCoreApplication::translate(
+			"pv::views", views::ViewTypeNames[entry.second]));
 
 	for (auto &entry : sub_window_types_) {
 		QString title;

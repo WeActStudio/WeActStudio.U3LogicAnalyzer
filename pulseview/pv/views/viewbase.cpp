@@ -25,7 +25,9 @@
 #endif
 
 #include <libsigrokcxx/libsigrokcxx.hpp>
+#include <QCoreApplication>
 
+#include "pv/metadata_obj.hpp"
 #include "pv/session.hpp"
 #include "pv/util.hpp"
 #include "pv/data/segment.hpp"
@@ -35,11 +37,12 @@ using std::shared_ptr;
 namespace pv {
 namespace views {
 
+/* Marked for extraction here; the call sites translate in this context. */
 const char* ViewTypeNames[ViewTypeCount] = {
-	"Trace View",
+	QT_TRANSLATE_NOOP("pv::views", "Trace View"),
 #ifdef ENABLE_DECODE
-	"Binary Decoder Output View",
-	"Tabular Decoder Output View"
+	QT_TRANSLATE_NOOP("pv::views", "Binary Decoder Output View"),
+	QT_TRANSLATE_NOOP("pv::views", "Tabular Decoder Output View")
 #endif
 };
 
@@ -69,6 +72,14 @@ ViewBase::ViewBase(Session &session, bool is_main_view, QMainWindow *parent) :
 bool ViewBase::is_main_view() const
 {
 	return is_main_view_;
+}
+
+uint32_t ViewBase::main_view_segment() const
+{
+	const MetadataObject* const obj = session_.metadata_obj_manager()->
+		find_object_by_type(MetadataObjCurrentSegment);
+
+	return obj ? obj->value(MetadataValueSegmentId).toUInt() : current_segment_;
 }
 
 void ViewBase::reset_view_state()

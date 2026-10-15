@@ -188,9 +188,9 @@ void IAPDialog::on_start_clicked()
     file_edit_->setEnabled(false);
     cancel_btn_->setText(tr("Cancel"));
 
-    log(tr("Start firmware update..."));
-    log(tr("Device index: %1").arg(device_index_));
-    log(tr("IAP VID: 0x%1, PID: 0x%2").arg(iap_vid_, 4, 16, QChar('0')).arg(iap_pid_, 4, 16, QChar('0')));
+    log(QStringLiteral("Start firmware update..."));
+    log(QStringLiteral("Device index: %1").arg(device_index_));
+    log(QStringLiteral("IAP VID: 0x%1, PID: 0x%2").arg(iap_vid_, 4, 16, QChar('0')).arg(iap_pid_, 4, 16, QChar('0')));
 
     /* Create the worker thread */
     worker_ = new IAPWorker(device_index_, firmware_path_, iap_vid_, iap_pid_);
@@ -212,7 +212,7 @@ void IAPDialog::on_cancel_clicked()
 {
     if (is_upgrading_ && worker_) {
         worker_->cancel();
-        log(tr("Canceling firmware update..."));
+        log(QStringLiteral("Canceling firmware update..."));
     } else {
         reject();
     }
@@ -241,11 +241,11 @@ void IAPDialog::on_upgrade_finished(bool success)
 
     if (success) {
         update_progress(100, tr("Update Success"));
-        log(tr("Firmware Update Success!"));
+        log(QStringLiteral("Firmware Update Success!"));
         QMessageBox::information(this, tr("Success"), tr("Firmware Update Success!\nDevice will restart."));
     } else {
         update_progress(0, tr("Update Failed"));
-        log(tr("Firmware Update Failed!"));
+        log(QStringLiteral("Firmware Update Failed!"));
         QMessageBox::critical(this, tr("Fail"), tr("Firmware Update Failed!\nPlease check the device connection and firmware file."));
     }
 }
@@ -298,7 +298,7 @@ bool IAPWorker::init_hid()
     static bool hid_initialized = false;
     if (!hid_initialized) {
         if (::hid_init() != 0) {
-            log(tr("Could not initialise hidapi"));
+            log(QStringLiteral("Could not initialise hidapi"));
             return false;
         }
         hid_initialized = true;
@@ -306,13 +306,13 @@ bool IAPWorker::init_hid()
 
     hid_handle_ = ::hid_open(iap_vid_, iap_pid_, NULL);
     if (!hid_handle_) {
-        log(tr("IAP device not found (VID=0x%1, PID=0x%2)")
+        log(QStringLiteral("IAP device not found (VID=0x%1, PID=0x%2)")
             .arg(iap_vid_, 4, 16, QChar('0'))
             .arg(iap_pid_, 4, 16, QChar('0')));
         return false;
     }
 
-    log(tr("IAP device found"));
+    log(QStringLiteral("IAP device found"));
     return true;
 }
 
@@ -332,7 +332,7 @@ bool IAPWorker::hid_write(const uint8_t *data, size_t len)
     ::hid_set_nonblocking((hid_device*)hid_handle_, 1);
 
     if (len > (HID_PACKET_LEN - 1)) {
-        log(tr("HID write too long (%1 > %2), rejected")
+        log(QStringLiteral("HID write too long (%1 > %2), rejected")
             .arg(static_cast<qulonglong>(len)).arg(HID_PACKET_LEN - 1));
         return false;
     }
@@ -352,7 +352,7 @@ bool IAPWorker::hid_write(const uint8_t *data, size_t len)
         {
             QMutexLocker locker(&mutex_);
             if (cancelled_) {
-                log(tr("Write cancelled"));
+                log(QStringLiteral("Write cancelled"));
                 ::hid_set_nonblocking((hid_device*)hid_handle_, 0);
                 return false;
             }
@@ -368,13 +368,13 @@ bool IAPWorker::hid_write(const uint8_t *data, size_t len)
             elapsed += check_interval;
             continue;
         }
-        log(tr("HID write failed"));
+        log(QStringLiteral("HID write failed"));
         ::hid_set_nonblocking((hid_device*)hid_handle_, 0);
         return false;
     }
 
     ::hid_set_nonblocking((hid_device*)hid_handle_, 0);
-    log(tr("HID write timed out (%1 ms)").arg(timeout_ms));
+    log(QStringLiteral("HID write timed out (%1 ms)").arg(timeout_ms));
     return false;
 }
 
@@ -391,7 +391,7 @@ bool IAPWorker::hid_read(uint8_t *data, size_t len, int timeout_ms)
         {
             QMutexLocker locker(&mutex_);
             if (cancelled_) {
-                log(tr("Read cancelled"));
+                log(QStringLiteral("Read cancelled"));
                 return false;
             }
         }
@@ -407,11 +407,11 @@ bool IAPWorker::hid_read(uint8_t *data, size_t len, int timeout_ms)
             elapsed += check_interval;
             continue;
         }
-        log(tr("HID read error"));
+        log(QStringLiteral("HID read error"));
         return false;
     }
 
-    log(tr("HID read timed out (%1 ms)").arg(timeout_ms));
+    log(QStringLiteral("HID read timed out (%1 ms)").arg(timeout_ms));
     return false;
 }
 
@@ -420,12 +420,12 @@ bool IAPWorker::enter_iap_mode()
     {
         QMutexLocker locker(&mutex_);
         if (cancelled_) {
-            log(tr("Upgrade cancelled by the user"));
+            log(QStringLiteral("Upgrade cancelled by the user"));
             return false;
         }
     }
 
-    log(tr("Sending the enter-IAP-mode command..."));
+    log(QStringLiteral("Sending the enter-IAP-mode command..."));
 
     uint8_t cmd[64] = {0};
     cmd[0] = 0xAE;  /* CMD_ENTER_IAP */
@@ -450,32 +450,32 @@ bool IAPWorker::enter_iap_mode()
         ch32h417_libusb_set_buf_upload_ex(device_index_, 0, 3, 0);
 
         if (!ch32h417_libusb_write_endpoint(device_index_, 1, cmd, &io_length)) {
-            log(tr("Failed to send the IAP command"));
+            log(QStringLiteral("Failed to send the IAP command"));
             return false;
         }
 
-        log(tr("IAP command sent, closing the libusb device..."));
+        log(QStringLiteral("IAP command sent, closing the libusb device..."));
 
         ch32h417_libusb_close_device(device_index_);
 
-        log(tr("libusb device closed, waiting for the mode switch..."));
+        log(QStringLiteral("libusb device closed, waiting for the mode switch..."));
 #ifdef _WIN32
     } else {
         if (!ch375_write_endpoint(device_index_, 1, cmd, &io_length)) {
-            log(tr("Failed to send the IAP command"));
+            log(QStringLiteral("Failed to send the IAP command"));
             return false;
         }
 
-        log(tr("IAP command sent, closing the CH375 device..."));
+        log(QStringLiteral("IAP command sent, closing the CH375 device..."));
 
         ch375_close_device(device_index_);
 
-        log(tr("CH375 device closed, waiting for the mode switch..."));
+        log(QStringLiteral("CH375 device closed, waiting for the mode switch..."));
     }
 #else
     } else {
         /* No CH375DLL here, so libusb is the only way out. */
-        log(tr("On this platform the IAP command can only be sent through libusb"));
+        log(QStringLiteral("On this platform the IAP command can only be sent through libusb"));
         return false;
     }
 #endif
@@ -485,7 +485,7 @@ bool IAPWorker::enter_iap_mode()
         {
             QMutexLocker locker(&mutex_);
             if (cancelled_) {
-                log(tr("Upgrade cancelled by the user"));
+                log(QStringLiteral("Upgrade cancelled by the user"));
                 return false;
             }
         }
@@ -499,12 +499,12 @@ bool IAPWorker::erase_flash(uint32_t start_addr)
     {
         QMutexLocker locker(&mutex_);
         if (cancelled_) {
-            log(tr("Upgrade cancelled by the user"));
+            log(QStringLiteral("Upgrade cancelled by the user"));
             return false;
         }
     }
 
-    log(tr("Erasing flash... address: 0x%1").arg(start_addr, 8, 16, QChar('0')));
+    log(QStringLiteral("Erasing flash... address: 0x%1").arg(start_addr, 8, 16, QChar('0')));
     update_progress(20, tr("Erasing flash..."));
 
     uint8_t cmd[64] = {0};
@@ -516,28 +516,35 @@ bool IAPWorker::erase_flash(uint32_t start_addr)
     cmd[5] = (start_addr >> 24) & 0xFF;
 
     if (!hid_write(cmd, 6)) {
-        log(tr("Failed to send the erase command"));
+        log(QStringLiteral("Failed to send the erase command"));
         return false;
     }
 
     uint8_t resp[64] = {0};
     if (!hid_read(resp, 2, 5000)) {
-        log(tr("Erase response timed out"));
+        log(QStringLiteral("Erase response timed out"));
         return false;
     }
 
     if (resp[0] != 0x00 || resp[1] != 0x00) {
-        log(tr("Erase failed, error code: %1").arg(resp[1]));
+        log(QStringLiteral("Erase failed, error code: %1").arg(resp[1]));
+        log(QStringLiteral("Address sent: 0x%1. The bootloader only erases an APP slot, "
+                           "so a file that does not start at one of the slot bases "
+                           "0x%2 / 0x%3 / 0x%4 is refused.")
+            .arg(start_addr, 8, 16, QChar('0'))
+            .arg((uint)IAP_SLOT0_BASE, 8, 16, QChar('0'))
+            .arg((uint)IAP_SLOT1_BASE, 8, 16, QChar('0'))
+            .arg((uint)IAP_SLOT2_BASE, 8, 16, QChar('0')));
         return false;
     }
 
-    log(tr("Erase succeeded"));
+    log(QStringLiteral("Erase succeeded"));
     return true;
 }
 
 bool IAPWorker::program_flash(const uint8_t *data, size_t len)
 {
-    log(tr("Programming flash... data length: %1 bytes").arg(len));
+    log(QStringLiteral("Programming flash... data length: %1 bytes").arg(len));
     update_progress(30, tr("Programming flash..."));
 
     size_t offset = 0;
@@ -549,7 +556,7 @@ bool IAPWorker::program_flash(const uint8_t *data, size_t len)
         {
             QMutexLocker locker(&mutex_);
             if (cancelled_) {
-                log(tr("Upgrade cancelled by the user"));
+                log(QStringLiteral("Upgrade cancelled by the user"));
                 return false;
             }
         }
@@ -563,7 +570,7 @@ bool IAPWorker::program_flash(const uint8_t *data, size_t len)
 
         size_t cmd_len = 2 + chunk_size;
         if (!hid_write(cmd, cmd_len)) {
-            log(tr("Failed to write data, offset: %1").arg(offset));
+            log(QStringLiteral("Failed to write data, offset: %1").arg(offset));
             retry_count++;
             if (retry_count > 3) {
                 return false;
@@ -574,7 +581,7 @@ bool IAPWorker::program_flash(const uint8_t *data, size_t len)
 
         uint8_t resp[64] = {0};
         if (!hid_read(resp, 2, HID_TIMEOUT_MS)) {
-            log(tr("Program response timed out, offset: %1").arg(offset));
+            log(QStringLiteral("Program response timed out, offset: %1").arg(offset));
             retry_count++;
             if (retry_count > 3) {
                 return false;
@@ -584,7 +591,7 @@ bool IAPWorker::program_flash(const uint8_t *data, size_t len)
         }
 
         if (resp[0] != 0x00 || resp[1] != 0x00) {
-            log(tr("Programming failed, error code: %1, offset: %2").arg(resp[1]).arg(offset));
+            log(QStringLiteral("Programming failed, error code: %1, offset: %2").arg(resp[1]).arg(offset));
             retry_count++;
             if (retry_count > 3) {
                 return false;
@@ -609,13 +616,13 @@ bool IAPWorker::program_flash(const uint8_t *data, size_t len)
     uint8_t resp[64] = {0};
     hid_read(resp, 2, HID_TIMEOUT_MS);
 
-    log(tr("Programming complete"));
+    log(QStringLiteral("Programming complete"));
     return true;
 }
 
 bool IAPWorker::verify_flash(uint32_t start_addr, const uint8_t *data, size_t len)
 {
-    log(tr("Verifying flash..."));
+    log(QStringLiteral("Verifying flash..."));
     update_progress(70, tr("Verifying flash..."));
 
     size_t offset = 0;
@@ -628,7 +635,7 @@ bool IAPWorker::verify_flash(uint32_t start_addr, const uint8_t *data, size_t le
         {
             QMutexLocker locker(&mutex_);
             if (cancelled_) {
-                log(tr("Upgrade cancelled by the user"));
+                log(QStringLiteral("Upgrade cancelled by the user"));
                 return false;
             }
         }
@@ -646,7 +653,7 @@ bool IAPWorker::verify_flash(uint32_t start_addr, const uint8_t *data, size_t le
 
         size_t cmd_len = 6 + chunk_size;  /* Command header (2) + address (4) + data length */
         if (!hid_write(cmd, cmd_len)) {
-            log(tr("Failed to send the verify command, offset: %1").arg(offset));
+            log(QStringLiteral("Failed to send the verify command, offset: %1").arg(offset));
             retry_count++;
             if (retry_count > 3) {
                 return false;
@@ -657,7 +664,7 @@ bool IAPWorker::verify_flash(uint32_t start_addr, const uint8_t *data, size_t le
 
         uint8_t resp[64] = {0};
         if (!hid_read(resp, 2, HID_TIMEOUT_MS)) {
-            log(tr("Verify response timed out, offset: %1").arg(offset));
+            log(QStringLiteral("Verify response timed out, offset: %1").arg(offset));
             retry_count++;
             if (retry_count > 3) {
                 return false;
@@ -667,7 +674,7 @@ bool IAPWorker::verify_flash(uint32_t start_addr, const uint8_t *data, size_t le
         }
 
         if (resp[0] != 0x00 || resp[1] != 0x00) {
-            log(tr("Verify failed, error code: %1, address: 0x%2")
+            log(QStringLiteral("Verify failed, error code: %1, address: 0x%2")
                 .arg(resp[1])
                 .arg(verify_addr, 8, 16, QChar('0')));
             retry_count++;
@@ -687,13 +694,13 @@ bool IAPWorker::verify_flash(uint32_t start_addr, const uint8_t *data, size_t le
         update_progress(progress, tr("Verifying flash... %1%").arg(offset * 100 / total));
     }
 
-    log(tr("Verify succeeded"));
+    log(QStringLiteral("Verify succeeded"));
     return true;
 }
 
 bool IAPWorker::end_upgrade()
 {
-    log(tr("Sending the finish-upgrade command..."));
+    log(QStringLiteral("Sending the finish-upgrade command..."));
     update_progress(95, tr("Finishing the upgrade..."));
 
     uint8_t cmd[64] = {0};
@@ -701,19 +708,19 @@ bool IAPWorker::end_upgrade()
     cmd[1] = 0;
 
     if (!hid_write(cmd, 2)) {
-        log(tr("Failed to send the finish command"));
+        log(QStringLiteral("Failed to send the finish command"));
         return false;
     }
 
-    log(tr("Finish-upgrade command sent"));
+    log(QStringLiteral("Finish-upgrade command sent"));
 
     uint8_t resp[64] = {0};
     if (hid_read(resp, 2, 8000)) {
         if (resp[0] == CMD_IAP_SUCC) {
-            log(tr("Device confirmed the upgrade"));
+            log(QStringLiteral("Device confirmed the upgrade"));
         }
     } else {
-        log(tr("Device restarted (no response is expected)"));
+        log(QStringLiteral("Device restarted (no response is expected)"));
     }
 
     return true;
@@ -723,7 +730,7 @@ bool IAPWorker::read_firmware_file(QByteArray &out_data, uint32_t &start_addr)
 {
     QFile file(firmware_path_);
     if (!file.open(QIODevice::ReadOnly)) {
-        log(tr("Could not open the firmware file: %1").arg(firmware_path_));
+        log(QStringLiteral("Could not open the firmware file: %1").arg(firmware_path_));
         return false;
     }
 
@@ -731,21 +738,68 @@ bool IAPWorker::read_firmware_file(QByteArray &out_data, uint32_t &start_addr)
     file.close();
 
     if (firmware_path_.toLower().endsWith(".hex")) {
-        log(tr("HEX file detected, converting..."));
+        log(QStringLiteral("HEX file detected, converting..."));
         if (!hex_to_bin(file_data, out_data, start_addr)) {
-            log(tr("HEX conversion failed"));
+            log(QStringLiteral("HEX conversion failed"));
             return false;
         }
-        log(tr("HEX conversion succeeded, start address: 0x%1, size: %2 bytes")
+        log(QStringLiteral("HEX conversion succeeded, start address: 0x%1, size: %2 bytes")
             .arg(start_addr, 8, 16, QChar('0'))
             .arg(out_data.size()));
     } else {
         out_data = file_data;
-        start_addr = 0;
-        log(tr("Reading the BIN file, size: %1 bytes").arg(out_data.size()));
+        /*
+         * A .bin carries no address of its own. The one an upgrade sends is
+         * the slot it programs, and slot 0 is this program.
+         */
+        start_addr = IAP_SLOT0_BASE;
+        log(QStringLiteral("Reading the BIN file, size: %1 bytes, base address: 0x%2")
+            .arg(out_data.size())
+            .arg(start_addr, 8, 16, QChar('0')));
+    }
+
+    /*
+     * Find the slot the image belongs to, and stop here when it belongs to
+     * none. The bootloader refuses an address that is not a slot base, and it
+     * says so with an error code that names nothing - a file's own link
+     * address looks perfectly reasonable until then, so it is worth checking
+     * while the device is still untouched.
+     */
+    if (!(start_addr >= IAP_FLASH_BASE)) {
+        /* Linked against the alias at 0x00000000. */
+        start_addr += IAP_FLASH_BASE;
+        log(QStringLiteral("Address was linked against the flash alias, using 0x%1")
+            .arg(start_addr, 8, 16, QChar('0')));
+    }
+
+    if (!is_slot_base(start_addr)) {
+        log(QStringLiteral("The file starts at 0x%1, which is not one of the APP slots.")
+            .arg(start_addr, 8, 16, QChar('0')));
+        log(QStringLiteral("Slots: 0x%1 (logic analyzer), 0x%2 (USB to UART), 0x%3 (example)")
+            .arg((uint)IAP_SLOT0_BASE, 8, 16, QChar('0'))
+            .arg((uint)IAP_SLOT1_BASE, 8, 16, QChar('0'))
+            .arg((uint)IAP_SLOT2_BASE, 8, 16, QChar('0')));
+        log(QStringLiteral("A single core's image (the .hex the build writes per core) is a "
+                           "part of a slot and cannot be flashed on its own; use the "
+                           "merged CH32H417_Logic_Analyzer_APP.bin."));
+        return false;
+    }
+
+    /* The bootloader only erases inside the slot it was told about. */
+    if (out_data.size() > (int)IAP_SLOT_SIZE) {
+        log(QStringLiteral("The image is %1 bytes, larger than one slot (%2)")
+            .arg(out_data.size()).arg((uint)IAP_SLOT_SIZE));
+        return false;
     }
 
     return true;
+}
+
+bool IAPWorker::is_slot_base(uint32_t addr)
+{
+    return (addr == IAP_SLOT0_BASE) ||
+           (addr == IAP_SLOT1_BASE) ||
+           (addr == IAP_SLOT2_BASE);
 }
 
 bool IAPWorker::hex_to_bin(const QByteArray &hex_data, QByteArray &bin_data, uint32_t &start_addr)
@@ -754,7 +808,14 @@ bool IAPWorker::hex_to_bin(const QByteArray &hex_data, QByteArray &bin_data, uin
     bin_data.reserve(hex_data.size() / 2);
 
     QList<QByteArray> lines = hex_data.split('\n');
-    uint32_t base_addr = 0;
+    /*
+     * Two ways of carrying the upper address bits, and the images here use the
+     * older one: 0x02 gives a segment (shifted left by 4), 0x04 a linear base.
+     * Handling only 0x04 put every byte of such an image 0x20000 too low and
+     * left the start address at 0.
+     */
+    uint32_t segment_addr = 0;
+    uint32_t upper_addr = 0;
     uint32_t first_data_addr = 0xFFFFFFFF;
     bool ok;
 
@@ -776,7 +837,7 @@ bool IAPWorker::hex_to_bin(const QByteArray &hex_data, QByteArray &bin_data, uin
         if (!ok) continue;
 
         if (record_type == 0x00) {
-            uint32_t full_addr = base_addr + addr_offset;
+            uint32_t full_addr = segment_addr + upper_addr + addr_offset;
 
             if (first_data_addr == 0xFFFFFFFF) {
                 first_data_addr = full_addr;
@@ -795,8 +856,14 @@ bool IAPWorker::hex_to_bin(const QByteArray &hex_data, QByteArray &bin_data, uin
             }
         } else if (record_type == 0x01) {
             break;
+        } else if (record_type == 0x02) {
+            segment_addr = line_str.mid(8, 4).toUInt(&ok, 16) << 4;
+        } else if (record_type == 0x03) {
+            /* Start segment address (CS:IP): nothing to load. */
         } else if (record_type == 0x04) {
-            base_addr = line_str.mid(8, 4).toUInt(&ok, 16) << 16;
+            upper_addr = line_str.mid(8, 4).toUInt(&ok, 16) << 16;
+        } else if (record_type == 0x05) {
+            /* Start linear address (EIP): nothing to load. */
         }
     }
 
@@ -820,13 +887,13 @@ void IAPWorker::do_work()
     }
 
     if (firmware_data.isEmpty()) {
-        log(tr("Firmware data is empty"));
+        log(QStringLiteral("Firmware data is empty"));
         Q_EMIT finished(false);
         return;
     }
 
     if (already_in_hid_mode_) {
-        log(tr("Device already in HID/IAP mode, skipping the mode switch"));
+        log(QStringLiteral("Device already in HID/IAP mode, skipping the mode switch"));
         update_progress(10, tr("Device already in IAP mode..."));
     } else {
         update_progress(10, tr("Entering IAP mode..."));
@@ -843,7 +910,7 @@ void IAPWorker::do_work()
         {
             QMutexLocker locker(&mutex_);
             if (cancelled_) {
-                log(tr("Upgrade cancelled by the user"));
+                log(QStringLiteral("Upgrade cancelled by the user"));
                 close_hid();
                 Q_EMIT finished(false);
                 return;
@@ -856,7 +923,7 @@ void IAPWorker::do_work()
         {
             QMutexLocker locker(&mutex_);
             if (cancelled_) {
-                log(tr("Upgrade cancelled by the user"));
+                log(QStringLiteral("Upgrade cancelled by the user"));
                 close_hid();
                 Q_EMIT finished(false);
                 return;
@@ -867,12 +934,12 @@ void IAPWorker::do_work()
             break;
         }
         retry_count++;
-        log(tr("Waiting for the HID device... (%1/10)").arg(retry_count));
+        log(QStringLiteral("Waiting for the HID device... (%1/10)").arg(retry_count));
         QThread::msleep(500);
     }
 
     if (!hid_handle_) {
-        log(tr("Could not find the IAP HID device"));
+        log(QStringLiteral("Could not find the IAP HID device"));
         Q_EMIT finished(false);
         return;
     }

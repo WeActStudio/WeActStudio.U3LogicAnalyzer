@@ -50,6 +50,23 @@
 #define IAP_ERR_WRITE_FAIL     6   /* Write failed */
 #define IAP_ERR_VERIFY         7   /* Verification failed */
 
+/*
+ * The flash is aliased at 0x00000000, so an image links its code at the
+ * aliased address while the bootloader names flash through FLASH_BASE.
+ * An upgrade has to send the second form.
+ */
+#define IAP_FLASH_BASE         0x08000000u
+
+/*
+ * APP slot bases, and the only addresses the bootloader accepts in the erase
+ * command - it refuses anything else rather than guess (IAP_SlotOfBase in the
+ * bootloader's iap.c). Slot 0 holds this program.
+ */
+#define IAP_SLOT0_BASE         0x08006000u  /* logic analyzer */
+#define IAP_SLOT1_BASE         0x08052000u  /* USB to UART */
+#define IAP_SLOT2_BASE         0x0809E000u  /* example */
+#define IAP_SLOT_SIZE          0x0004C000u  /* one slot, for the bounds check */
+
 #define IAP_DATA_LEN           64  /* IAP packet length */
 #define HID_PACKET_LEN         65  /* HID packet length (including the report ID) */
 #define HID_REPORT_ID          0   /* HID Report ID */
@@ -187,6 +204,10 @@ private:
 
     /* File handling */
     bool read_firmware_file(QByteArray &out_data, uint32_t &start_addr);
+
+    /* True when the address is one of the APP slot bases the bootloader
+     * accepts in the erase command. */
+    static bool is_slot_base(uint32_t addr);
     bool hex_to_bin(const QByteArray &hex_data, QByteArray &bin_data, uint32_t &start_addr);
 
     /* Logging helpers */

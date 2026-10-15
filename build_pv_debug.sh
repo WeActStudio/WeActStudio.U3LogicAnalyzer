@@ -56,7 +56,7 @@ fi
 if ls "${SCRIPT_DIR}/pulseview/l10n/"*.ts >/dev/null 2>&1; then
     echo "  Generating translations..."
     if [ $IS_WINDOWS -eq 1 ]; then
-        export PATH="/mingw64/qt5-static/bin:$PATH"
+        export PATH="/mingw64/qt6-static/bin:$PATH"
     fi
     for ts in "${SCRIPT_DIR}/pulseview/l10n/"*.ts; do
         [ -f "$ts" ] && lrelease "$ts" -qm "${ts%.ts}.qm" 2>/dev/null || true

@@ -17,7 +17,7 @@
 #
 # Usage:
 #   ./package_installer.sh               # Build + package + create installer
-#   ./package_installer.sh --qt6         # Same, built against Qt 6
+#   ./package_installer.sh --qt5         # Same, built against Qt 5
 #   ./package_installer.sh --skip-build  # Skip the build, package existing dist/
 # ============================================================================
 set -e
@@ -29,9 +29,9 @@ SETUP_NAME="U3LogicAnalyzer_Setup"
 SKIP_BUILD=0
 CLEAN=1
 
-# Qt version: 5 (default) or 6. It decides which build.sh runs and, on
+# Qt version: 6 (default) or 5. It decides which build.sh runs and, on
 # Linux, which Qt libraries the deb has to depend on.
-QT_MAJOR=5
+QT_MAJOR=6
 for arg in "$@"; do
     case "$arg" in
         --qt5) QT_MAJOR=5 ;;
@@ -327,11 +327,14 @@ if [ -f "$DIR/U3LogicAnalyzer.metainfo.xml" ]; then
     echo ">>> Installed the AppStream metadata"
 fi
 
-if [ -n "$UDEV_DIR" ] && [ -f "$DIR/99-weact-ch32h417.rules" ]; then
-    cp "$DIR/99-weact-ch32h417.rules" "$UDEV_DIR/"
+if [ -n "$UDEV_DIR" ]; then
+    for rules in 99-weact-ch32h417.rules 99-fx2lafw.rules; do
+        [ -f "$DIR/$rules" ] || continue
+        cp "$DIR/$rules" "$UDEV_DIR/"
+        echo ">>> Installed $rules"
+    done
     udevadm control --reload-rules 2>/dev/null || true
     udevadm trigger --subsystem-match=usb 2>/dev/null || true
-    echo ">>> Installed the udev access rules"
 fi
 
 update-desktop-database "$APP_DIR" 2>/dev/null || true
@@ -360,7 +363,7 @@ else
     UDEV_DIR="$HOME/.local/share/udev"
 fi
 
-rm -rf "$PREFIX" "$UDEV_DIR/99-weact-ch32h417.rules"
+rm -rf "$PREFIX" "$UDEV_DIR"/99-weact-ch32h417.rules "$UDEV_DIR"/99-fx2lafw.rules
 rm -f "$APP_DIR/U3LogicAnalyzer.desktop"
 rm -f "$ICON_ROOT/48x48/apps/U3LogicAnalyzer.png" "$ICON_ROOT/scalable/apps/U3LogicAnalyzer.svg"
 rm -f "$ICON_ROOT/256x256/apps/U3LogicAnalyzer.png" "$META_DIR/U3LogicAnalyzer.metainfo.xml"
@@ -377,7 +380,9 @@ mkdir -p "${STAGE}"
 cp -r "${DIST_DIR}/." "${STAGE}/"
 cp "${SCRIPT_DIR}/dist/install.sh" "${SCRIPT_DIR}/dist/uninstall.sh" \
    "${METAINFO}" "${STAGE}/"
-cp "${SCRIPT_DIR}/99-weact-ch32h417.rules" "${STAGE}/" 2>/dev/null || true
+for rules in 99-weact-ch32h417.rules 99-fx2lafw.rules; do
+    cp "${SCRIPT_DIR}/${rules}" "${STAGE}/" 2>/dev/null || true
+done
 chmod +x "${STAGE}/install.sh" "${STAGE}/uninstall.sh"
 tar czf "${TARBALL}" -C "${SCRIPT_DIR}/dist" "${BASENAME}"
 echo "  ${TARBALL}"
@@ -413,8 +418,10 @@ if command -v dpkg-deb >/dev/null 2>&1; then
     cp -r "${ICON_TREE}/." "${DEB_ROOT}/usr/share/icons/hicolor/" 2>/dev/null || true
     cp "${DIST_DIR}/share/icons/${APP_NAME}.png" \
        "${DEB_ROOT}/usr/share/pixmaps/" 2>/dev/null || true
-    cp "${SCRIPT_DIR}/99-weact-ch32h417.rules" \
-       "${DEB_ROOT}/etc/udev/rules.d/" 2>/dev/null || true
+    for rules in 99-weact-ch32h417.rules 99-fx2lafw.rules; do
+        cp "${SCRIPT_DIR}/${rules}" \
+           "${DEB_ROOT}/etc/udev/rules.d/" 2>/dev/null || true
+    done
 
     # AppStream metadata is what an app centre reads the name, the icon
     # and the description from; without it the entry stays a placeholder.

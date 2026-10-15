@@ -2,6 +2,7 @@
 	<qresource prefix="/">
 		<file>l10n/de_DE.qm</file>
 		<file>l10n/es_MX.qm</file>
+		<file>l10n/ru_RU.qm</file>
 		<file>l10n/zh_CN.qm</file>
 	</qresource>
 </RCC>

@@ -51,11 +51,12 @@ namespace pv {
 namespace views {
 namespace decoder_binary {
 
+/* Marked for extraction here, which is where tr() looks them up. */
 const char* SaveTypeNames[SaveTypeCount] = {
-	"Binary",
-	"Hex Dump, plain",
-	"Hex Dump, with offset",
-	"Hex Dump, canonical"
+	QT_TRANSLATE_NOOP("pv::views::decoder_binary::View", "Binary"),
+	QT_TRANSLATE_NOOP("pv::views::decoder_binary::View", "Hex Dump, plain"),
+	QT_TRANSLATE_NOOP("pv::views::decoder_binary::View", "Hex Dump, with offset"),
+	QT_TRANSLATE_NOOP("pv::views::decoder_binary::View", "Hex Dump, canonical")
 };
 
 
@@ -315,6 +316,9 @@ void View::update_data()
 	if (!signal_)
 		return;
 
+	// The chunks on show come from the segment the main view is on.
+	current_segment_ = main_view_segment();
+
 	const DecodeBinaryClass* bin_class =
 		signal_->get_binary_data_class(current_segment_, decoder_, bin_class_id_);
 
@@ -553,6 +557,11 @@ void View::on_actionSave_triggered(QAction* action)
 void View::on_metadata_object_changed(MetadataObject* obj,
 	MetadataValueType value_type)
 {
+	// The main view moved to another segment: read the new one.
+	if ((obj->type() == MetadataObjCurrentSegment) &&
+		(value_type == MetadataValueSegmentId))
+		update_data();
+
 	// Check if we need to update the model's data range. We only work on the
 	// end sample value because the start sample value is updated first and
 	// we need both

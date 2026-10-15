@@ -248,6 +248,7 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 	// Set up metadata objects and event handlers
 	if (is_main_view) {
 		session_.metadata_obj_manager()->create_object(MetadataObjMainViewRange);
+		session_.metadata_obj_manager()->create_object(MetadataObjCurrentSegment);
 		session_.metadata_obj_manager()->create_object(MetadataObjMousePos);
 	}
 
@@ -829,6 +830,13 @@ void View::set_time_unit(pv::util::TimeUnit time_unit)
 void View::set_current_segment(uint32_t segment_id)
 {
 	current_segment_ = segment_id;
+
+	// The decode views read their data from this segment, so they are
+	// told which one is on show.
+	MetadataObject* const obj = session_.metadata_obj_manager()->
+		find_object_by_type(MetadataObjCurrentSegment);
+	if (obj)
+		obj->set_value(MetadataValueSegmentId, (uint)current_segment_);
 
 	for (const shared_ptr<Signal>& signal : signals_)
 		signal->set_current_segment(current_segment_);
@@ -2466,10 +2474,21 @@ void View::update_scale_offset(bool is_set)
 			return;
 
 		const double rate = (double)mainbar->get_sample_rate();
-		if (rate <= 0)
-			return;
+		if (rate > 0)
+			max_offset = mainbar->get_sample_count() / rate;
 
-		max_offset = mainbar->get_sample_count() / rate;
+		/*
+		 * The tool bar states the plan, the data is the truth. When the
+		 * plan adds up to nothing, the limit has to come from what was
+		 * actually captured - otherwise every zoom step is free and the
+		 * ruler ends up showing a range no acquisition ever covered.
+		 */
+		if (!(max_offset > 0)) {
+			const pair<Timestamp, Timestamp> extents = get_time_extents();
+			max_offset = (extents.second - extents.first).convert_to<double>();
+			if (!(max_offset > 0))
+				return;
+		}
 	}
 
 	current_max_offset_ = max_offset;

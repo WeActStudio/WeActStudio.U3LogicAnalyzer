@@ -299,6 +299,30 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	/*
+	 * SIGROK_FIRMWARE_DIR: where libsigrok looks for the firmware a device
+	 * needs loaded into it. The FX2 analyzers are the ones that want it -
+	 * an FX2 has no flash, so the driver downloads fx2lafw into its RAM
+	 * every time the board is powered and scanned, out of these files.
+	 * Same idea as the decoders above: shipped next to the executable,
+	 * and a value from the environment always wins.
+	 */
+	{
+		const QStringList firmware_paths = QStringList()
+			<< QDir(exeDir).filePath("share/sigrok-firmware")
+			<< QDir(exeDir).filePath("sigrok-firmware")
+			<< QDir(exeDir).filePath("../Resources/sigrok-firmware")
+			<< QDir(exeDir).filePath("../../install/share/sigrok-firmware")
+			<< QDir(exeDir).filePath("../../../install/share/sigrok-firmware");
+
+		for (const QString &path : firmware_paths) {
+			if (QFileInfo(path).isDir()) {
+				setEnvIfNotExist("SIGROK_FIRMWARE_DIR", path);
+				break;
+			}
+		}
+	}
+
 	#ifdef _WIN32
     // Set the process working directory (equivalent to cd /d %~dp0)
     // SetCurrentDirectoryW(reinterpret_cast<const wchar_t*>(exeDir.utf16()));

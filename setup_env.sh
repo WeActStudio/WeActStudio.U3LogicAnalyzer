@@ -15,7 +15,7 @@ echo ">>> Installing the build environment..."
 pacman -S --needed --noconfirm \
     mingw-w64-x86_64-{gcc,cmake,ninja,pkgconf,gdb} \
     mingw-w64-x86_64-{glib2,glibmm,libusb,hidapi,libzip} \
-    mingw-w64-x86_64-{boost,qt5-static,python}
+    mingw-w64-x86_64-{boost,qt6-static,python}
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 

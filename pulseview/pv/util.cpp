@@ -47,6 +47,8 @@
 #include <QAbstractNativeEventFilter>
 #include <QApplication>
 #include <QDebug>
+#include <QDir>
+#include <QFile>
 #include <QTextStream>
 #include <QCoreApplication>
 #include <QDialog>
@@ -495,56 +497,197 @@ void show_message(QWidget *parent, const QString &title, const QString &text,
 
 namespace {
 
-const char *kUdevRulesPath = "/etc/udev/rules.d/99-weact-ch32h417.rules";
+/* Where udev reads its rules from; ours goes into the first one. */
+const char *kUdevRulesDirs[] = {
+	"/etc/udev/rules.d",
+	"/run/udev/rules.d",
+	"/usr/lib/udev/rules.d",
+	"/lib/udev/rules.d",
+};
 
-/* Kept here so no extra file has to be shipped next to the binary. */
-const char *kUdevRulesText =
-	"# WeAct Studio CH32H417 Logic Analyzer - udev access rules\n"
-	"# 5537: runtime interfaces (command / logic data / ADC data)\n"
-	"# fe17: HID interface used for the IAP firmware upgrade\n"
-	"SUBSYSTEM==\"usb\", ATTRS{idVendor}==\"1a86\", ATTRS{idProduct}==\"5537\", MODE=\"0666\", GROUP=\"plugdev\", TAG+=\"uaccess\"\n"
-	"SUBSYSTEM==\"usb\", ATTRS{idVendor}==\"1a86\", ATTRS{idProduct}==\"fe17\", MODE=\"0666\", GROUP=\"plugdev\", TAG+=\"uaccess\"\n"
-	"SUBSYSTEM==\"hidraw\", ATTRS{idVendor}==\"1a86\", ATTRS{idProduct}==\"fe17\", MODE=\"0666\", GROUP=\"plugdev\", TAG+=\"uaccess\"\n";
+struct UdevRuleId {
+	const char *vid;
+	const char *pid;
+};
+
+struct UdevRuleSet {
+	const char *label;      /* what it is for, named in the install dialog */
+	const char *path;       /* where our copy of the file belongs */
+	const char *text;       /* the file itself, so nothing has to be shipped */
+	const UdevRuleId *ids;  /* the devices it opens up */
+	int id_count;
+};
+
+const UdevRuleId kCh32h417Ids[] = {
+	{ "1a86", "5537" },
+	{ "1a86", "fe17" },
+};
+
+const UdevRuleId kFx2lafwIds[] = {
+	{ "1d50", "608c" },
+	{ "1d50", "608d" },
+};
+
+/* One file per analyzer family: the CH32H417 and the FX2 based boards. */
+const UdevRuleSet kUdevRuleSets[] = {
+	{
+		"WeAct Studio CH32H417 logic analyzer (VID 1a86 / PID 5537)",
+		"/etc/udev/rules.d/99-weact-ch32h417.rules",
+		"# WeAct Studio CH32H417 Logic Analyzer - udev access rules\n"
+		"# 5537: runtime interfaces (command / logic data / ADC data)\n"
+		"# fe17: HID interface used for the IAP firmware upgrade\n"
+		"SUBSYSTEM==\"usb\", ATTRS{idVendor}==\"1a86\", ATTRS{idProduct}==\"5537\", MODE=\"0666\", GROUP=\"plugdev\", TAG+=\"uaccess\"\n"
+		"SUBSYSTEM==\"usb\", ATTRS{idVendor}==\"1a86\", ATTRS{idProduct}==\"fe17\", MODE=\"0666\", GROUP=\"plugdev\", TAG+=\"uaccess\"\n"
+		"SUBSYSTEM==\"hidraw\", ATTRS{idVendor}==\"1a86\", ATTRS{idProduct}==\"fe17\", MODE=\"0666\", GROUP=\"plugdev\", TAG+=\"uaccess\"\n",
+		kCh32h417Ids, 2,
+	},
+	{
+		"FX2 based logic analyzer (VID 1d50 / PID 608c, 608d)",
+		"/etc/udev/rules.d/99-fx2lafw.rules",
+		"# FX2 based logic analyzer (sigrok fx2lafw) - udev access rules\n"
+		"# 608c: 8 channel, 608d: 16 channel\n"
+		"SUBSYSTEM==\"usb\", ATTRS{idVendor}==\"1d50\", ATTRS{idProduct}==\"608c\", MODE=\"0666\", GROUP=\"plugdev\", TAG+=\"uaccess\"\n"
+		"SUBSYSTEM==\"usb\", ATTRS{idVendor}==\"1d50\", ATTRS{idProduct}==\"608d\", MODE=\"0666\", GROUP=\"plugdev\", TAG+=\"uaccess\"\n",
+		kFx2lafwIds, 2,
+	},
+};
+
+/*
+ * Whether a rule for this USB ID is installed somewhere already. Any file in
+ * the rules directories counts, whatever it is called: somebody else's file,
+ * or an older copy of ours under another name, opens the device just as
+ * well, and installing ours next to it would only duplicate it. Quotes and
+ * spacing are stripped, so only the two IDs matter.
+ */
+bool udev_id_is_covered(const UdevRuleId &id)
+{
+	const QString want_vendor = QString("idVendor}==") + id.vid;
+	const QString want_product = QString("idProduct}==") + id.pid;
+
+	for (const char *dir : kUdevRulesDirs) {
+		const QDir rules_dir(dir);
+		const QStringList names =
+			rules_dir.entryList(QStringList("*.rules"), QDir::Files);
+
+		for (const QString &name : names) {
+			QFile file(rules_dir.filePath(name));
+			if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+				continue;
+
+			QString text = QString::fromUtf8(file.readAll());
+			text.remove('"');
+			text.remove(' ');
+			text.remove('\t');
+
+			for (const QString &line : text.split('\n')) {
+				if (line.contains(want_vendor) &&
+				    line.contains(want_product))
+					return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+/*
+ * One device of the set being covered is enough: that is what the application
+ * needs to find the analyzer. The other entries are for things a user may not
+ * have - the IAP interface, the 16 channel board.
+ */
+bool udev_rule_set_is_installed(const UdevRuleSet &set)
+{
+	if (access(set.path, F_OK) == 0)
+		return true;
+
+	for (int i = 0; i < set.id_count; ++i)
+		if (udev_id_is_covered(set.ids[i]))
+			return true;
+
+	return false;
+}
 
 } // namespace
 
-bool udev_rules_installed()
+MissingUdevRules udev_rules_missing()
 {
-	return access(kUdevRulesPath, F_OK) == 0;
+	MissingUdevRules missing;
+
+	for (const UdevRuleSet &set : kUdevRuleSets) {
+		if (udev_rule_set_is_installed(set))
+			continue;
+		if (!missing.devices.isEmpty())
+			missing.devices += "\n";
+		missing.devices += QString::fromUtf8(set.label);
+		if (!missing.paths.isEmpty())
+			missing.paths += "\n";
+		missing.paths += QString::fromUtf8(set.path);
+	}
+
+	return missing;
 }
 
 bool install_udev_rules(const std::string &password, std::string &error_out)
 {
 	error_out.clear();
 
-	/* Stage the file in /tmp first: sudo only copies it into place. */
-	char tmp_path[] = "/tmp/ch32h417-udev-XXXXXX";
-	int fd = mkstemp(tmp_path);
-	if (fd < 0) {
-		error_out = "Failed to create a temporary file";
-		return false;
-	}
-	FILE *f = fdopen(fd, "w");
-	if (!f) {
-		close(fd);
-		unlink(tmp_path);
-		error_out = "Failed to write the temporary rules file";
-		return false;
-	}
-	fputs(kUdevRulesText, f);
-	fclose(f);
-
-	const std::string err_path = std::string(tmp_path) + ".err";
+	/* Every missing file is staged in /tmp first: sudo only copies them into
+	 * place, and the password travels on stdin, never on a command line. */
+	std::vector<std::string> staged;
 	std::string cmd = "sudo -S -p '' sh -c '";
-	cmd += "cp " + std::string(tmp_path) + " " + kUdevRulesPath;
-	cmd += std::string(" && chmod 0644 ") + kUdevRulesPath;
-	cmd += " && (udevadm control --reload-rules || true)";
+
+	for (const UdevRuleSet &set : kUdevRuleSets) {
+		if (udev_rule_set_is_installed(set))
+			continue;
+
+		char tmp_path[] = "/tmp/udev-rules-XXXXXX";
+		const int fd = mkstemp(tmp_path);
+		if (fd < 0) {
+			error_out = "Failed to create a temporary file";
+			break;
+		}
+		FILE *f = fdopen(fd, "w");
+		if (!f) {
+			close(fd);
+			unlink(tmp_path);
+			error_out = "Failed to write the temporary rules file";
+			break;
+		}
+		fputs(set.text, f);
+		fclose(f);
+
+		staged.push_back(tmp_path);
+		cmd += "cp " + staged.back() + " " + set.path;
+		cmd += std::string(" && chmod 0644 ") + set.path + " && ";
+	}
+
+	if (!error_out.empty()) {
+		for (const std::string &path : staged)
+			unlink(path.c_str());
+		return false;
+	}
+	if (staged.empty())
+		return true;  /* everything is in place already */
+
+	char err_path[] = "/tmp/udev-rules-err-XXXXXX";
+	const int err_fd = mkstemp(err_path);
+	if (err_fd >= 0)
+		close(err_fd);
+	else
+		err_path[0] = '\0';
+
+	cmd += "(udevadm control --reload-rules || true)";
 	cmd += " && (udevadm trigger --subsystem-match=usb || true)";
-	cmd += "' 2>" + err_path;
+	cmd += "'";
+	if (err_path[0])
+		cmd += std::string(" 2>") + err_path;
 
 	FILE *p = popen(cmd.c_str(), "w");
 	if (!p) {
-		unlink(tmp_path);
+		for (const std::string &path : staged)
+			unlink(path.c_str());
+		if (err_path[0])
+			unlink(err_path);
 		error_out = "Failed to run sudo";
 		return false;
 	}
@@ -553,34 +696,35 @@ bool install_udev_rules(const std::string &password, std::string &error_out)
 		fwrite(password.data(), 1, password.size(), p);
 	fputc('\n', p);
 	const int rc = pclose(p);
-	unlink(tmp_path);
+	for (const std::string &path : staged)
+		unlink(path.c_str());
 
 	if (rc != 0) {
-		if (FILE *ef = fopen(err_path.c_str(), "r")) {
-			char line[512];
-			bool any = false;
-			while (fgets(line, sizeof(line), ef)) {
-				error_out += line;
-				any = true;
+		error_out = "sudo rejected the password, or sudo is not available";
+		if (err_path[0]) {
+			if (FILE *ef = fopen(err_path, "r")) {
+				char line[512];
+				std::string captured;
+				while (fgets(line, sizeof(line), ef))
+					captured += line;
+				fclose(ef);
+				if (!captured.empty())
+					error_out = captured;
 			}
-			fclose(ef);
-			if (!any)
-				error_out = "sudo rejected the password, or sudo is not available";
-		} else {
-			error_out = "sudo rejected the password, or sudo is not available";
+			unlink(err_path);
 		}
-		unlink(err_path.c_str());
 		return false;
 	}
-	unlink(err_path.c_str());
+	if (err_path[0])
+		unlink(err_path);
 	return true;
 }
 
 #else
 
-bool udev_rules_installed()
+MissingUdevRules udev_rules_missing()
 {
-	return true;
+	return MissingUdevRules();
 }
 
 bool install_udev_rules(const std::string &password, std::string &error_out)

@@ -123,6 +123,7 @@ const QString Application::get_language_editors(const QString& language) const
 	if (language == "de_DE") return "Sören Apel, Uwe Hermann";
 	if (language == "es_MX") return "Carlos Diaz, Ulices Avila Hernandez";
 	if (language == "zh_CN") return "ZtyPro, WeAct Studio";
+	if (language == "ru_RU") return "WeAct Studio";
 
 	return QString();
 }

@@ -33,6 +33,13 @@
 
 #define LOG_PREFIX "usb"
 
+/*
+ * Upper bound (in milliseconds) for the blocking libusb event wait used
+ * when the platform does not expose pollable libusb event sources (see
+ * usb_source_new() below).
+ */
+#define USB_SOURCE_POLL_INTERVAL_MS 1
+
 #if !HAVE_LIBUSB_OS_HANDLE
 typedef int libusb_os_handle;
 #endif
@@ -63,6 +70,16 @@ static gboolean usb_source_prepare(GSource *source, int *timeout)
 	int ret;
 
 	usource = (struct usb_source *)source;
+
+	/*
+	 * Without pollable libusb event sources there is nothing the main
+	 * loop could wait for, so report the source as ready right away.
+	 * usb_source_dispatch() blocks in libusb instead.
+	 */
+	if (usource->pollfds->len == 0) {
+		*timeout = 0;
+		return TRUE;
+	}
 
 	ret = libusb_get_next_timeout(usource->usb_ctx, &usb_timeout);
 	if (G_UNLIKELY(ret < 0)) {
@@ -103,6 +120,9 @@ static gboolean usb_source_check(GSource *source)
 	usource = (struct usb_source *)source;
 	revents = 0;
 
+	if (usource->pollfds->len == 0)
+		return TRUE;
+
 	for (i = 0; i < usource->pollfds->len; i++) {
 		pollfd = g_ptr_array_index(usource->pollfds, i);
 		revents |= pollfd->revents;
@@ -124,6 +144,21 @@ static gboolean usb_source_dispatch(GSource *source,
 
 	usource = (struct usb_source *)source;
 	revents = 0;
+
+	if (usource->pollfds->len == 0) {
+		struct timeval tv;
+
+		/*
+		 * Without pollable file descriptors we have to wait for libusb
+		 * events here. This returns as soon as a transfer completes
+		 * (the timeout only bounds the wait), which is what keeps the
+		 * acquisition from falling behind at high sample rates.
+		 */
+		tv.tv_sec = 0;
+		tv.tv_usec = USB_SOURCE_POLL_INTERVAL_MS * 1000;
+		libusb_handle_events_timeout(usource->usb_ctx, &tv);
+	}
+
 	/*
 	 * This is somewhat arbitrary, but drivers use revents to distinguish
 	 * actual I/O from timeouts. When we remove the user timeout from the
@@ -263,8 +298,15 @@ static GSource *usb_source_new(struct sr_session *session,
 
 	upollfds = libusb_get_pollfds(usb_ctx);
 	if (!upollfds) {
-		sr_err("Failed to get libusb file descriptors.");
-		return NULL;
+		/*
+		 * Not every platform exposes pollable libusb event sources.
+		 * Windows, for example, has no file descriptors at all, so
+		 * libusb_get_pollfds() always returns NULL there. Fall back to
+		 * a purely timeout-driven event source instead: its dispatch
+		 * callback pumps libusb events, so in-flight transfers still
+		 * complete.
+		 */
+		sr_info("No pollable libusb event sources, blocking on libusb instead.");
 	}
 	source = g_source_new(&usb_source_funcs, sizeof(struct usb_source));
 	usource = (struct usb_source *)source;
@@ -282,14 +324,16 @@ static GSource *usb_source_new(struct sr_session *session,
 	usource->usb_ctx = usb_ctx;
 	usource->pollfds = g_ptr_array_new_full(8, &usb_source_free_pollfd);
 
-	for (upfd = upollfds; *upfd != NULL; upfd++)
-		usb_pollfd_added((*upfd)->fd, (*upfd)->events, usource);
+	if (upollfds) {
+		for (upfd = upollfds; *upfd != NULL; upfd++)
+			usb_pollfd_added((*upfd)->fd, (*upfd)->events, usource);
 
 #if (LIBUSB_API_VERSION >= 0x01000104)
-	libusb_free_pollfds(upollfds);
+		libusb_free_pollfds(upollfds);
 #else
-	free(upollfds);
+		free(upollfds);
 #endif
+	}
 	libusb_set_pollfd_notifiers(usb_ctx,
 		&usb_pollfd_added, &usb_pollfd_removed, usource);
 

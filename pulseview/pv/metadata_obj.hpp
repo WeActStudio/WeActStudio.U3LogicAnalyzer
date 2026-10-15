@@ -40,6 +40,8 @@ enum MetadataObjectType {
 	MetadataObjSelection,
 	MetadataObjTimeMarker,
     // --- Types below will not be saved/restored ---
+	// The segment the views are on; the main view keeps it up to date.
+	MetadataObjCurrentSegment,
 	MetadataObjMousePos,
 	MetadataObjectTypeCount  // Indicates how many metadata object types there are, must always be last
 };
@@ -49,6 +51,7 @@ enum MetadataValueType {
 	MetadataValueStartSample,  // int64_t / qlonglong
 	MetadataValueEndSample,    // int64_t / qlonglong
 	MetadataValueText,
+	MetadataValueSegmentId,  // uint32_t, used by MetadataObjCurrentSegment
 	MetadataValueTypeCount  // Indicates how many metadata value types there are, must always be last
 };
 

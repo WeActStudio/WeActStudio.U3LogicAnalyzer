@@ -56,6 +56,10 @@ public:
 
 	QString get_log() const;
 
+	/* The last libsigrok log line: a driver names a failed open there,
+	 * while the exception it throws only carries a generic error code. */
+	QString last_sr_message() const;
+
 	void log(const QString &text, int source);
 
 	static void log_pv(QtMsgType type, const QMessageLogContext &context, const QString &msg);
@@ -75,6 +79,7 @@ Q_SIGNALS:
 private:
 	int buffer_size_;
 	QStringList buffer_;
+	QString last_sr_message_;
 	mutable mutex log_mutex_;
 };
 

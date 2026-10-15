@@ -136,19 +136,22 @@ Channels::Channels(Session &session, QString device_name, QWidget *parent) :
 	init_ui();
 
 	/*
-	 * Grow with the content instead of squeezing it. The previous fixed
-	 * 500x450 minimum compressed the "Use N channels" radio buttons and
-	 * the channel grid on systems with a larger font or a different style.
+	 * Take the size the content asks for, so the popup grows with a large
+	 * font or a different style instead of squeezing the "Use N channels"
+	 * radios and the channel grid.
+	 *
+	 * A fixed height is worse than useless here: whatever it adds over the
+	 * content is handed to the rows, and a device with only a few rows
+	 * (fx2lafw) then gets rows so tall that each label sits well above the
+	 * value it belongs to.
 	 */
 	layout_.activate();
-	const QSize content = layout_.minimumSize();
-	setMinimumSize(qMax(500, content.width()), qMax(450, content.height()));
+	setMinimumSize(layout_.minimumSize());
 }
 
 QSize Channels::sizeHint() const
 {
-	/* Match the minimum size the constructor computed, so the popup opens
-	 * large enough to show every option without squeezing them. */
+	/* The popup opens at the size its content needs. */
 	return minimumSize();
 }
 
@@ -230,6 +233,8 @@ void Channels::init_ui()
 		options_box_->setLayout(options_layout);
 		options_layout->addRow(vbox_layout);
 		layout_.addRow(options_box_);
+	} else {
+		init_other_ui();
 	}
 
 	for (auto& entry : device->channel_groups()) {
@@ -284,7 +289,55 @@ void Channels::init_wch_ui()
 
 void Channels::init_other_ui()
 {
-	// Non-WCH devices have no extra UI
+	/*
+	 * A device that is not a WCH one still has a model and usually a serial
+	 * number, and how far its buffer reaches back before the trigger is
+	 * worth setting for it as well. Everything that only makes sense for
+	 * the WCH hardware - threshold levels, channel widths, ADC settings -
+	 * stays out.
+	 */
+	if (session_.using_file_device() || !session_.device())
+		return;
+
+	const shared_ptr<sigrok::Device> device = session_.device()->device();
+	if (!device)
+		return;
+
+	const string model = device->model();
+	if (!model.empty()) {
+		device_name_label_ = new QLabel(QString::fromStdString(model));
+		layout_.addRow(tr("Model:"), device_name_label_);
+	}
+
+	const string serial = device->serial_number();
+	if (!serial.empty()) {
+		serial_number_label_ = new QLabel(QString::fromStdString(serial));
+		layout_.addRow(tr("SN:"), serial_number_label_);
+	}
+
+	/* Only a device that takes a capture ratio can place the trigger. */
+	bool can_pre_trigger = false;
+	try {
+		can_pre_trigger = device->config_check(
+			sigrok::ConfigKey::CAPTURE_RATIO, sigrok::Capability::SET);
+	} catch (sigrok::Error &error) {
+		qDebug() << "Failed to check the capture ratio support:" << error.what();
+	}
+
+	if (can_pre_trigger) {
+		pre_trigger_selector_ = new QDoubleSpinBox();
+		pre_trigger_selector_->setRange(0, 100);
+		pre_trigger_selector_->setSingleStep(1);
+		pre_trigger_selector_->setDecimals(0);
+		pre_trigger_selector_->setSuffix("%");
+		pre_trigger_selector_->setValue(0);
+		pre_trigger_selector_->setToolTip(tr(
+			"With a repeating signal the trigger point floats: this is a limit "
+			"rather than a fixed place."));
+		connect(pre_trigger_selector_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+			this, &Channels::pre_trigger_changed);
+		layout_.addRow(tr("Pre-trigger"), pre_trigger_selector_);
+	}
 }
 
 void Channels::init_channel_state()

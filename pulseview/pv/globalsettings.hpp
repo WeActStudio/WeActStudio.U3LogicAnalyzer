@@ -102,6 +102,7 @@ public:
 	static const QString Key_Dec_InitialStateConfigurable;
 	static const QString Key_Dec_ExportFormat;
 	static const QString Key_Dec_AlwaysShowAllRows;
+	static const QString Key_Dec_ColoredAnnotations;
 	static const QString Key_Log_BufferSize;
 	static const QString Key_Log_NotifyOfStacktrace;
 	

@@ -5,15 +5,18 @@
 This tree builds **U3LogicAnalyzer**, the host application for the
 WeAct Studio CH32H417 logic analyzer. It is based on sigrok PulseView, ships 132 protocol
 decoders (I²C, SPI, UART, ...) and keeps the hardware drivers down to the two
-that belong to this device (PulseView's `demo` driver is kept as well).
-Everything is built by CMake through one script.
+that belong to this device (PulseView's `demo` driver is kept as well, along
+with the `fx2lafw` driver for FX2 based analyzers). Everything is built by CMake
+through one script.
 
 > **Origin**: this software is a modification of the project of **Q2H2**. The
 > CH375 driver (`libsigrok/src/hardware/wch-ch32h417/`), the `demo` driver and
 > the parts of libsigrok / libsigrokdecode that were left alone still carry
 > their `Copyright (C) 2026 Q2H2` notice, which this project did not touch.
 > The libusb driver added here (`wch-ch32h417-libusb/`) is copyright
-> WeAct Studio.
+> WeAct Studio. The `fx2lafw` driver (`libsigrok/src/hardware/fx2lafw/`) is
+> upstream sigrok code and keeps the notice of its authors, Bert Vermeulen and
+> Joel Holdsworth.
 
 ## Quick start
 
@@ -58,14 +61,14 @@ you and starts `build_cmake/logicanalyzer_build/U3LogicAnalyzer`.
 pacman -S --needed --noconfirm \
     mingw-w64-x86_64-{gcc,cmake,ninja,pkgconf,gdb} \
     mingw-w64-x86_64-{glib2,glibmm,libusb,hidapi,libzip} \
-    mingw-w64-x86_64-{boost,qt5-static,python}
+    mingw-w64-x86_64-{boost,qt6-static,python}
 ```
 
 > On Windows the **MSYS2 MINGW64** shell is required (Start menu -> MSYS2 MINGW64).
 > A plain shell is fine on Linux; `build.sh` detects the platform itself
 > (macOS is not ported).
-> The Qt version is picked with `--qt5` / `--qt6`: on Windows that means
-> `qt5-static` / `qt6-static`, on Linux the Qt of the system is used.
+> Qt 6 is the default and `--qt5` falls back to Qt 5: on Windows that
+> means `qt6-static` / `qt5-static`, on Linux the Qt of the system is used.
 
 ## Device access and driver back ends
 
@@ -74,6 +77,7 @@ pacman -S --needed --noconfirm \
 | Overall | supported | supported | not ported |
 | `wch-ch32h417` (CH375DLL) | yes, the default binding | not built | not built |
 | `wch-ch32h417-libusb` (libusb) | yes, after rebinding to WinUSB with Zadig | yes | unverified |
+| `fx2lafw` (libusb, FX2 based analyzers) | yes, after rebinding to WinUSB with Zadig | yes | unverified |
 | Hot plug | CH375 callback + libusb polling | libusb polling | unverified |
 | Firmware upgrade (IAP) | either back end | libusb only | unverified |
 
@@ -84,6 +88,34 @@ sources of the CH375 driver are dropped while CMake configures
 (`list(REMOVE_ITEM ...)` under `if(NOT WIN32)` in `libsigrok/CMakeLists.txt`).
 Of the two, Linux has been built and run; macOS has not been ported.
 
+**fx2lafw** is the driver for the analyzers built on a Cypress FX2 that run the
+open source fx2lafw firmware: Saleae Logic and its clones, the USBee AX/DX
+family, the sigrok fx2grok boards. It is a libusb back end like the one above,
+so on Windows the board has to be bound to WinUSB with Zadig as well.
+
+The FX2 is a USB 2.0 high speed part, and the sample rates the driver offers (up
+to 24 MHz with 8 channels, 12 MHz with 16) are the ones its bulk endpoint keeps
+up with on a high speed link. The driver reports the link the board ended up on
+when it opens it, so a board that only runs at full speed - a slow hub, or a
+cable that carries just the four wires - says so instead of quietly returning
+samples that are not there.
+
+An FX2 has no flash of its own, so the firmware is not kept in the board: it is
+downloaded into its RAM by the driver, at the latest when the board is scanned,
+and the board then re-enumerates with the `fx2lafw` ID that the driver waits for
+and opens. It is gone again as soon as the board loses power, which is why the
+firmware files have to be there every time - an FX2 based analyzer cannot be
+used at all without them.
+
+The files are in the `firmware/` directory of this repository - the
+`fx2lafw-*.fw` of the sigrok-firmware-fx2lafw package - and the build installs
+them to `share/sigrok-firmware/` of the install tree. That is one of the
+directories libsigrok looks in, and the application points `SIGROK_FIRMWARE_DIR`
+at its own copy as well, the way it does for the decoders; a value coming from
+the environment wins. A board that is already running the firmware - one that a
+previous scan programmed, in the same power cycle - is recognised as
+`sigrok fx2lafw` and opened without another download.
+
 **Using the device without root on Linux**: by default the `/dev/bus/usb/*`
 nodes belong to root, so libusb fails with `LIBUSB_ERROR_ACCESS` - `lsusb`
 lists the device while the application cannot find it.
@@ -93,11 +125,13 @@ sudo ./install_udev_rules.sh            # install
 sudo ./install_udev_rules.sh --remove   # remove again
 ```
 
-The rules file is `99-weact-ch32h417.rules` and covers two USB IDs:
+The rules come in two files, one per analyzer family:
 
-- `1a86:5537` - the runtime interfaces (commands, logic data, ADC data)
-- `1a86:fe17` - the HID interface used by the IAP firmware upgrade (its hidraw
-  node is covered as well)
+- `99-weact-ch32h417.rules` - `1a86:5537` (the runtime interfaces: commands,
+  logic data, ADC data) and `1a86:fe17` (the HID interface used by the IAP
+  firmware upgrade, its hidraw node included)
+- `99-fx2lafw.rules` - `1d50:608c` and `1d50:608d`, the FX2 based 8- and
+  16-channel boards
 
 Unplug and replug the device afterwards. Installing the deb puts the rules into
 `/etc/udev/rules.d/` as part of the package, so nothing has to be done by hand.
@@ -105,8 +139,8 @@ Unplug and replug the device afterwards. Installing the deb puts the rules into
 ## Building
 
 ```bash
-./build.sh                 # incremental build (Qt 5 by default)
-./build.sh --qt6           # build against Qt 6
+./build.sh                 # incremental build (Qt 6 by default)
+./build.sh --qt5           # build against Qt 5
 ./build.sh --clean         # throw the build directory away first
 ./build.sh --package       # build and fill dist/U3LogicAnalyzer/
 ./build.sh --prefix <dir>  # install prefix (default: ./install)
@@ -191,7 +225,8 @@ channels, a lower sample rate or a shorter run is what fits it into memory.
 ├── build_pv_debug.sh            # the same with a debug configuration
 ├── package_installer.sh         # installer (NSIS / deb + tar.gz + AppImage)
 ├── install_udev_rules.sh        # installs the udev rules on Linux
-├── 99-weact-ch32h417.rules      # rules for using the device without root
+├── 99-weact-ch32h417.rules      # udev rules for the CH32H417
+├── 99-fx2lafw.rules             # udev rules for the FX2 based boards
 ├── start_pv.sh                  # start with the environment set (-l 5)
 ├── start_pv_debug.sh            # start the debug build (-l 5)
 ├── install/                     # libsigrok / libsigrokcxx / libsigrokdecode
@@ -222,8 +257,8 @@ desktop shortcut and can be removed from the control panel.
 ### Linux
 
 ```bash
-./package_installer.sh              # build and package (Qt 5)
-./package_installer.sh --qt6        # the same, built against Qt 6
+./package_installer.sh              # build and package (Qt 6)
+./package_installer.sh --qt5        # the same, built against Qt 5
 ./package_installer.sh --skip-build # package the existing dist/ as it is
 ./package_installer.sh --no-clean   # reuse the existing build directory
 ```

@@ -32,6 +32,8 @@
 #include <QToolButton>
 #include <QString>
 #include <QCheckBox>
+#include <QDialog>
+#include <QPointer>
 #include <future>
 #include "devicemanager.hpp"
 #include "session.hpp"
@@ -159,6 +161,20 @@ public Q_SLOTS:
 
 private:
 	void do_device_detach_switch();
+
+	/* The answer to the detach question: read the device list again, move
+	 * the session to what is there, and let device events through. */
+	void apply_device_detach();
+
+	/* Tells the user about the drivers whose scan had to be given up on,
+	 * so a device that is missing from the list has a reason on screen. */
+	void report_stalled_devices();
+
+	/* Lets device events through again. A change that arrived meanwhile is
+	 * run again only when replay_pending is set: the answer to the detach
+	 * question has just read the whole device list, and running the pass
+	 * again would put the same question to the user twice. */
+	void resume_device_events(bool replay_pending = true);
 	
 private Q_SLOTS:
 	void on_add_view(ViewType type, Session *session);
@@ -242,6 +258,13 @@ private:
 	bool link_stop_message_visible_ = false;
 	bool is_wch_device_ = false;
 	bool attach_process_done = true;
+	/* Set when a device change arrived while the previous one was still being
+	 * handled; it is handled as soon as that pass is done. */
+	bool device_event_pending_ = false;
+	/* The detach question while it is on screen. Only one is ever asked: a
+	 * second copy would sit exactly on top of the first, and answering one
+	 * would only reveal the other. */
+	QPointer<QDialog> detach_dialog_;
 };
 
 } // namespace pv

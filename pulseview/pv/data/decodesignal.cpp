@@ -1448,7 +1448,16 @@ void DecodeSignal::logic_mux_proc()
 						double mux_ms = std::chrono::duration<double, std::milli>(mux_end - mux_start).count();
 						// fprintf(stderr, "MUX_TOTAL: time=%.1fms samples=%lu\n", mux_ms, (unsigned long)mux_total_samples);
 					}
-					return;
+					/*
+					 * A repeat acquisition adds segments later, so stay alive
+					 * instead of ending the thread here. The timeout guards
+					 * against a wakeup that arrives while nothing is waiting:
+					 * without it the thread would sleep through it, and the join
+					 * on the next decode would hang.
+					 */
+					unique_lock<mutex> logic_mux_lock(logic_mux_mutex_);
+					logic_mux_cond_.wait_for(logic_mux_lock,
+						std::chrono::milliseconds(100));
 				}
 			} else {
 				// Input segments aren't all complete yet but samples_to_process is 0, wait for more input data
@@ -1788,27 +1797,69 @@ void DecodeSignal::decode_proc()
 			}
 		} while (!decode_interrupt_ && (samples_to_process > 0));
 
-		if (!decode_interrupt_) {
-			if (source_segment->is_complete()) {
-				// All data has been processed
-				{
-					auto decode_proc_end = std::chrono::steady_clock::now();
-					double total_ms = std::chrono::duration<double, std::milli>(decode_proc_end - decode_proc_start).count();
-					//fprintf(stderr, "DECODE_PROC_TOTAL: total=%.1fms decode_data=%.1fms wait_data=%.1fms\n", total_ms, (double)total_decode_data_time_ms, (double)total_wait_time_ms);
-				}
-				if (srd_session_) srd_session_send_eof(srd_session_);
-				if (!decode_interrupt_)
-					decode_finished();
-				return;
-			} else {
-				// Wait for more input data from acquisition
-				auto wt0 = std::chrono::steady_clock::now();
-				unique_lock<mutex> input_wait_lock(input_mutex_);
-				decode_input_cond_.wait(input_wait_lock);
-				auto wt1 = std::chrono::steady_clock::now();
-				total_wait_time_ms += (uint64_t)std::chrono::duration<double, std::milli>(wt1 - wt0).count();
-			}
+		if (decode_interrupt_)
+			break;
+
+		if (!source_segment->is_complete()) {
+			// Wait for more input data from acquisition
+			auto wt0 = std::chrono::steady_clock::now();
+			unique_lock<mutex> input_wait_lock(input_mutex_);
+			decode_input_cond_.wait(input_wait_lock);
+			auto wt1 = std::chrono::steady_clock::now();
+			total_wait_time_ms += (uint64_t)std::chrono::duration<double, std::milli>(wt1 - wt0).count();
+			continue;
 		}
+
+		// This segment is done: let the decoders flush what they still hold.
+		if (srd_session_)
+			srd_session_send_eof(srd_session_);
+
+		if (decode_interrupt_)
+			break;
+
+		/*
+		 * A repeat acquisition keeps adding segments. Every one of them is
+		 * decoded from its own start, with the decoder state reset but the
+		 * stack kept, so that its annotations land in its own segment.
+		 */
+		shared_ptr<const LogicSegment> next_segment;
+		for (const decode::DecodeChannel& ch : channels_) {
+			if (!ch.assigned_signal) continue;
+			auto logic = ch.assigned_signal->logic_data();
+			if (!logic || logic->logic_segments().size() <= current_segment_id_ + 1) continue;
+			next_segment = logic->logic_segments().at(current_segment_id_ + 1)->get_shared_ptr();
+			break;
+		}
+
+		if (!next_segment) {
+			// All data has been processed
+			{
+				auto decode_proc_end = std::chrono::steady_clock::now();
+				double total_ms = std::chrono::duration<double, std::milli>(decode_proc_end - decode_proc_start).count();
+				//fprintf(stderr, "DECODE_PROC_TOTAL: total=%.1fms decode_data=%.1fms wait_data=%.1fms\n", total_ms, (double)total_decode_data_time_ms, (double)total_wait_time_ms);
+			}
+			if (!decode_interrupt_)
+				decode_finished();
+
+			// More segments may still turn up, so wait rather than end the
+			// thread. See the mux thread for why the wait has a timeout.
+			unique_lock<mutex> input_wait_lock(input_mutex_);
+			decode_input_cond_.wait_for(input_wait_lock,
+				std::chrono::milliseconds(100));
+			continue;
+		}
+
+		current_segment_id_++;
+		source_segment = next_segment;
+		abs_start_samplenum = 0;
+
+		// Create the next segment and set its metadata
+		create_decode_segment();
+		segments_.at(current_segment_id_).samplerate = source_segment->samplerate();
+		segments_.at(current_segment_id_).start_time = source_segment->start_time();
+
+		// Reset decoder state but keep the decoder stack intact
+		start_srd_session();
 	} while (!decode_interrupt_);
 }
 

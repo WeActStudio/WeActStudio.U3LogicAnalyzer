@@ -95,9 +95,6 @@ QString Ruler::format_time_with_distance(
 {
 	const unsigned limit = 60;
 
-	if (t.is_zero())
-		return "0";
-
 	// If we have to use samples then we have no alternative formats
 	if (unit == pv::util::TimeUnit::Samples)
 		return pv::util::format_time_si_adjusted(t, prefix, precision, "sa", sign);
@@ -106,6 +103,17 @@ QString Ruler::format_time_with_distance(
 	if (unit == pv::util::TimeUnit::Time)
 		unit_string = "s";
 	// Note: In case of pv::util::TimeUnit::None, unit_string remains empty
+
+	/*
+	 * Zero is written the way the ticks next to it are - "0 ms" beside
+	 * "+100 ms" - and not as a bare "0" that drops the unit the whole scale
+	 * carries. With TimeUnit::None no unit was asked for, so it stays bare.
+	 */
+	if (t.is_zero()) {
+		if (unit_string.isEmpty())
+			return "0";
+		return pv::util::format_time_si_adjusted(t, prefix, precision, unit_string, sign);
+	}
 
 	// View zoomed way out -> low precision (0), big distance (>=60s)
 	// -> DD:HH:MM
@@ -291,14 +299,24 @@ void Ruler::paintEvent(QPaintEvent*)
 		const int leftedge = 0;
 		const int rightedge = width();
 		const int x_tick = tick.first;
-		if ((x_tick > leftedge) && (x_tick < rightedge)) {
+		/*
+		 * A tick that lands exactly on an edge is drawn as well. A capture
+		 * spanning a whole number of tick periods - 1 s on a 100 ms scale -
+		 * puts the first and the last tick on x = 0 and x = width, and a
+		 * strict comparison dropped both of their legends while every tick
+		 * in between kept one.
+		 */
+		if ((x_tick >= leftedge) && (x_tick <= rightedge)) {
 			const int x_left_bound = util::text_width(QFontMetrics(font()), tick.second) / 2;
 			const int x_right_bound = rightedge - x_left_bound;
 			const int x_legend = min(max(x_tick, x_left_bound), x_right_bound);
 			p.drawText(x_legend, ValueMargin, 0, text_height,
 				AlignCenter | AlignTop | TextDontClip, tick.second);
-			p.drawLine(QPointF(x_tick, major_tick_y1),
-			QPointF(tick.first, ruler_height));
+			/* The widget ends at its last pixel, so the line of an edge
+			 * tick is held back onto it. */
+			const int x_line = min(x_tick, rightedge - 1);
+			p.drawLine(QPointF(x_line, major_tick_y1),
+			QPointF(x_line, ruler_height));
 		}
 	}
 

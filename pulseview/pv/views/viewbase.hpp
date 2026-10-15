@@ -135,6 +135,14 @@ protected:
 	/// The ID of the currently displayed segment
 	uint32_t current_segment_;
 
+	/**
+	 * The data segment the main view is showing. The main view publishes
+	 * it as a metadata object, the way it publishes the range it has on
+	 * screen, so the other views can follow along. Without such an
+	 * object the segment in use is kept.
+	 */
+	uint32_t main_view_segment() const;
+
 	QTimer delayed_view_updater_;
 };
 

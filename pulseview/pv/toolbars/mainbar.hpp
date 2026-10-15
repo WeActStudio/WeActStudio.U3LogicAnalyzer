@@ -102,6 +102,7 @@ private:
 	static const char *SettingSaveDirectory;
 	std::thread t_hot_plug;
 	QString m_vendorName;
+	QString m_device_driver;
 	std::mutex vendorName_mutex;
 	
 public:
@@ -135,6 +136,13 @@ public:
 	void hot_plug_stop();
 	void set_vendorName(QString vendorName);
 	QString get_vendorName();
+
+	/* The driver backing the device in use. The hot-plug poll runs on its own
+	 * thread and needs it to tell a change of that device from a change that
+	 * only affects the list, so it is cached here the same way the vendor
+	 * name is. */
+	void set_device_driver(QString driver);
+	QString get_device_driver();
 	
 private:
 	void run_stop();
@@ -160,6 +168,7 @@ private:
 
 private Q_SLOTS:
 	void show_session_error(const QString text, const QString info_text);
+	void on_refresh_device_list();
 
 	void export_file(shared_ptr<sigrok::OutputFormat> format,
 		bool selection_only = false, QString file_name = "");
@@ -225,8 +234,11 @@ protected:
 Q_SIGNALS:
 	void new_view(Session *session, int type);
 	void show_decoder_selector(Session *session);
-	void divice_detached();
 	void device_attached();
+
+	/* A board came or went in a driver the session is not using, so only the
+	 * device list has to catch up. */
+	void refresh_device_list();
 	void run_stop_button_clicked();
 	void settings_triggered();
 	void ch32h417_device_event_signal(unsigned long eventStatus);
