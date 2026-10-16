@@ -1381,7 +1381,8 @@ void DecodeSignal::logic_mux_proc()
 		if (input_segment_count == 0) {
 			// Wait for input data
 			unique_lock<mutex> logic_mux_lock(logic_mux_mutex_);
-			logic_mux_cond_.wait(logic_mux_lock);
+			logic_mux_cond_.wait_for(logic_mux_lock,
+				std::chrono::milliseconds(100));
 		}
 	} while ((!logic_mux_interrupt_) && (input_segment_count == 0));
 
@@ -1475,7 +1476,8 @@ void DecodeSignal::logic_mux_proc()
 			} else {
 				// Input segments aren't all complete yet but samples_to_process is 0, wait for more input data
 				unique_lock<mutex> logic_mux_lock(logic_mux_mutex_);
-				logic_mux_cond_.wait(logic_mux_lock);
+				logic_mux_cond_.wait_for(logic_mux_lock,
+					std::chrono::milliseconds(100));
 			}
 		}
 	} while (!logic_mux_interrupt_);
@@ -1736,7 +1738,8 @@ void DecodeSignal::decode_data(
 
 			if (decode_paused_) {
 				unique_lock<mutex> pause_wait_lock(decode_pause_mutex_);
-				decode_pause_cond_.wait(pause_wait_lock);
+				decode_pause_cond_.wait_for(pause_wait_lock,
+					std::chrono::milliseconds(100));
 			}
 
 			if (stats.total_chunks % stats_print_interval == 0) {
@@ -1773,7 +1776,8 @@ void DecodeSignal::decode_proc()
 				break;
 			// No data available yet, wait for notification
 			unique_lock<mutex> input_wait_lock(input_mutex_);
-			decode_input_cond_.wait(input_wait_lock);
+			decode_input_cond_.wait_for(input_wait_lock,
+				std::chrono::milliseconds(100));
 		} while (!decode_interrupt_);
 	}
 
@@ -1817,7 +1821,8 @@ void DecodeSignal::decode_proc()
 			// Wait for more input data from acquisition
 			auto wt0 = std::chrono::steady_clock::now();
 			unique_lock<mutex> input_wait_lock(input_mutex_);
-			decode_input_cond_.wait(input_wait_lock);
+			decode_input_cond_.wait_for(input_wait_lock,
+				std::chrono::milliseconds(100));
 			auto wt1 = std::chrono::steady_clock::now();
 			total_wait_time_ms += (uint64_t)std::chrono::duration<double, std::milli>(wt1 - wt0).count();
 			continue;
