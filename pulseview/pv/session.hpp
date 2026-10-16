@@ -179,6 +179,10 @@ public:
 	 */
 	bool data_saved() const;
 
+	/// Whether anything has been captured on this device yet. Its data
+	/// survives being saved, unlike the flag above.
+	bool data_held() const;
+
 	void save_setup(QSettings &settings) const;
 	void save_settings(QSettings &settings) const;
 	void restore_setup(QSettings &settings);
@@ -234,6 +238,7 @@ public:
 
 #ifdef ENABLE_DECODE
 	shared_ptr<data::DecodeSignal> add_decode_signal();
+
 
 	void remove_decode_signal(shared_ptr<data::DecodeSignal> signal);
 
@@ -390,6 +395,13 @@ private:
 	 */
 	int memory_check_countdown_;
 	bool data_saved_;
+
+	/**
+	 * Whether anything has been captured on this device. data_saved_ only
+	 * says the capture was written out; this one stays set until the data
+	 * goes away with the device.
+	 */
+	bool data_held_ = false;
 	bool frame_began_;
 	bool is_stop_capture_;
 	bool is_first_trigger_;

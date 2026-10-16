@@ -1442,6 +1442,16 @@ Por favor, compruebe la conexión del dispositivo y el archivo de firmware.</tra
 <context>
     <name>pv::toolbars::MainBar</name>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1933"/>
+        <source>Switch device</source>
+        <translation>Cambiar de dispositivo</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1950"/>
+        <source>Switch device? The captured data and its decoders will be lost.</source>
+        <translation>¿Cambiar de dispositivo? Se perderán los datos capturados y sus decodificadores.</translation>
+    </message>
+    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2616"/>
         <source>Warning</source>
         <translation>Advertencia</translation>

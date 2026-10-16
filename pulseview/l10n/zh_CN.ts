@@ -1443,6 +1443,16 @@ Please check the device connection and firmware file.</source>
 <context>
     <name>pv::toolbars::MainBar</name>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1933"/>
+        <source>Switch device</source>
+        <translation>切换设备</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1950"/>
+        <source>Switch device? The captured data and its decoders will be lost.</source>
+        <translation>切换设备？已采集的数据和其上的解码器都会丢失。</translation>
+    </message>
+    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2616"/>
         <source>Warning</source>
         <translation>警告</translation>

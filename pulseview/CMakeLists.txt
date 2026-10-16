@@ -406,6 +406,7 @@ set(pulseview_SOURCES
 	pv/widgets/importmenu.cpp
 	pv/widgets/popup.cpp
 	pv/widgets/popuptoolbutton.cpp
+	pv/widgets/splitbutton.cpp
 	pv/widgets/sweeptimingwidget.cpp
 	pv/widgets/timestampspinbox.cpp
 	pv/widgets/wellarray.cpp
@@ -473,6 +474,7 @@ set(pulseview_HEADERS
 	pv/widgets/importmenu.hpp
 	pv/widgets/popup.hpp
 	pv/widgets/popuptoolbutton.hpp
+	pv/widgets/splitbutton.hpp
 	pv/widgets/sweeptimingwidget.hpp
 	pv/widgets/timestampspinbox.hpp
 	pv/widgets/wellarray.hpp

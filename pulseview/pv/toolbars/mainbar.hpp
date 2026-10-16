@@ -339,6 +339,14 @@ public:
 #endif
 
 	QToolButton *add_math_signal_button_;
+
+	/**
+	 * Set while the device change the user has just agreed to is under
+	 * way: the switch itself walks the same path again (the device
+	 * list is rebuilt as part of it), and asking a second time would
+	 * be asking about the very change that was just allowed.
+	 */
+	bool device_switch_allowed_ = false;
 };
 
 } // namespace toolbars

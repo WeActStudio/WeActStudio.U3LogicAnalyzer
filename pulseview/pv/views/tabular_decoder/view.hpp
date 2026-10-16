@@ -42,6 +42,7 @@
 #include "pv/globalsettings.hpp"
 #include "pv/metadata_obj.hpp"
 #include "pv/views/viewbase.hpp"
+#include "pv/widgets/splitbutton.hpp"
 #include "pv/data/decodesignal.hpp"
 
 namespace pv {
@@ -208,40 +209,6 @@ Q_SIGNALS:
 
 
 /**
- * The save button of the table: the body saves straight away and the
- * end of it opens the menu of formats. The style in use draws no
- * indicator for that end and leaves it a few pixels wide, so the
- * chevron is drawn here and the end is made wide enough to aim at.
- */
-class SplitButton : public QToolButton
-{
-	Q_OBJECT
-
-public:
-	explicit SplitButton(QWidget* parent = nullptr);
-
-	/**
-	 * The menu the end of the button opens. It is kept here rather than
-	 * handed to QToolButton, which would reserve a part of the button
-	 * for an indicator this style does not draw.
-	 */
-	void set_menu(QMenu* menu);
-
-protected:
-	void paintEvent(QPaintEvent* event) override;
-	void mousePressEvent(QMouseEvent* event) override;
-	void mouseReleaseEvent(QMouseEvent* event) override;
-
-private:
-	/// How much of the end opens the menu, drawn and clicked alike.
-	static const int kMenuWidth = 20;
-
-	QMenu* menu_;
-	bool menu_pressed_;
-};
-
-
-/**
  * A header that carries a funnel at the end of the columns holding one
  * of a few categories. Clicking it asks the view for the list of values.
  */
@@ -401,7 +368,7 @@ private:
 	QLabel* row_count_label_;
 	QToolButton* colored_annotations_button_;
 
-	SplitButton* save_button_;
+	widgets::SplitButton* save_button_;
 	QAction* save_action_;
 
 	CustomTableView* table_view_;

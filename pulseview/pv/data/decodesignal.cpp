@@ -79,6 +79,19 @@ DecodeSignal::DecodeSignal(pv::Session &session) :
 DecodeSignal::~DecodeSignal()
 {
 	reset_decode(true);
+
+	/*
+	 * A decoder names the channel it reads after what it decodes - "TX
+	 * (D0)" for D0 - by renaming the channel itself. Removing a decoder
+	 * puts those names back, but one that is destroyed along with the
+	 * session, as it is when the device under it changes, never goes
+	 * that way: the name is left on a channel no decoder reads.
+	 */
+	for (decode::DecodeChannel& ch : channels_)
+		if (ch.assigned_signal &&
+			!ch.assigned_signal->internal_name().isEmpty())
+			std::const_pointer_cast<SignalBase>(ch.assigned_signal)->set_name(
+				ch.assigned_signal->internal_name());
 	if (decode_chunk_ != NULL)
 		delete[] decode_chunk_;
 	if (src_buffer_ != NULL)

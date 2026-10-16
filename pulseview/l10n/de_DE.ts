@@ -1451,6 +1451,16 @@ Bitte überprüfen Sie die Verbindung und die Firmware Datei.</translation>
 <context>
     <name>pv::toolbars::MainBar</name>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1933"/>
+        <source>Switch device</source>
+        <translation>Gerät wechseln</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1950"/>
+        <source>Switch device? The captured data and its decoders will be lost.</source>
+        <translation>Gerät wechseln? Die erfassten Daten und ihre Decoder gehen verloren.</translation>
+    </message>
+    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2616"/>
         <source>Warning</source>
         <translation>Warnung</translation>

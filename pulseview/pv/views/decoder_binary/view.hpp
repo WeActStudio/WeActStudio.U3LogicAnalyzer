@@ -25,10 +25,10 @@
 #include <QAction>
 #include <QComboBox>
 #include <QStackedWidget>
-#include <QToolButton>
 
 #include "pv/metadata_obj.hpp"
 #include "pv/views/viewbase.hpp"
+#include "pv/widgets/splitbutton.hpp"
 #include "pv/data/decodesignal.hpp"
 
 #include "QHexView.hpp"
@@ -110,7 +110,7 @@ private:
 	QStackedWidget *stacked_widget_;
 	QHexView *hex_view_;
 
-	QToolButton* save_button_;
+	widgets::SplitButton* save_button_;
 	QAction* save_action_;
 
 	data::DecodeSignal *signal_;

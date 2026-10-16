@@ -259,6 +259,11 @@ bool Session::data_saved() const
 	return data_saved_;
 }
 
+bool Session::data_held() const
+{
+	return data_held_;
+}
+
 
 void Session::save_setup(QSettings &settings) const
 {
@@ -729,10 +734,28 @@ void Session::set_device(shared_ptr<devices::Device> device)
 	if (device_)
 		device_->close();
 	device_.reset();
+	/* The data is gone with the device: nothing is held, and nothing is
+	 * waiting to be saved. */
+	data_held_ = false;
+	data_saved_ = true;
+
 	// Revert name back to default name (e.g. "Session 1") as the data is gone
 	name_ = default_name_;
 	name_changed();
 	save_path_.clear();
+
+	/*
+	 * A decoder renames the channel it reads after what it decodes - "TX
+	 * (D0)" for D0 - and that name lives on the signal. The signals go
+	 * away with the data below, but the name stays on the channel of the
+	 * device, which outlives them: put the original names back first, so
+	 * the device does not come back wearing the name of a decoder that is
+	 * no longer there.
+	 */
+	for (const shared_ptr<data::SignalBase>& s : signalbases_)
+		if (!s->internal_name().isEmpty() &&
+			(s->name() != s->internal_name()))
+			s->set_name(s->internal_name());
 
 	// Remove all stored data and reset all views
 	for (shared_ptr<views::ViewBase> view : views_) {
@@ -1744,8 +1767,10 @@ void Session::sample_thread_proc(function<void (const QString)> error_handler)
 	shared_ptr<devices::File> file_device =
 		dynamic_pointer_cast<devices::File>(device_);
 
-	if (!file_device)
+	if (!file_device) {
 		data_saved_ = false;
+		data_held_ = true;
+	}
 
 	if (is_repeat_acquisition_)
 		notify_acq_done();

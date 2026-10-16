@@ -179,6 +179,14 @@ private:
 private Q_SLOTS:
 	void on_add_view(ViewType type, Session *session);
 
+	/**
+	 * Sets a dock up the way the views are: it is stacked with the ones
+	 * already in the window, and can be taken out and put back with a
+	 * double click on its title bar. Shared by the views and the sub
+	 * windows.
+	 */
+	void make_dock_floatable(QDockWidget *dock);
+
 	void on_focus_changed();
 	void on_focused_session_changed(shared_ptr<Session> session);
 
@@ -233,6 +241,11 @@ private:
 	 * remembered as the type it was derived from. */
 	map< QDockWidget*, int > view_dock_types_;
 	map< QDockWidget*, int > sub_window_types_;
+	/* The layout of each session window as it was last known to be good,
+	 * kept so a view that comes back from a float - and takes the float's
+	 * geometry with it, outside the window - can be put right by handing
+	 * the whole layout back to the window. */
+	map< QMainWindow*, QByteArray > window_layouts_;
 	map< shared_ptr<Session>, QMainWindow*> session_windows_;
 
 	QWidget *static_tab_widget_;

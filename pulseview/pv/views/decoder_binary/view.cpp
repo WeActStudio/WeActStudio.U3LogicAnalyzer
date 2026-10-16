@@ -38,6 +38,7 @@
 #include "pv/globalsettings.hpp"
 #include "pv/session.hpp"
 #include "pv/util.hpp"
+#include "pv/widgets/splitbutton.hpp"
 #include "pv/data/decode/decoder.hpp"
 
 using pv::data::DecodeSignal;
@@ -70,7 +71,7 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 	class_selector_(new QComboBox()),
 	stacked_widget_(new QStackedWidget()),
 	hex_view_(new QHexView()),
-	save_button_(new QToolButton()),
+	save_button_(new widgets::SplitButton()),
 	save_action_(new QAction(this)),
 	signal_(nullptr)
 {
@@ -125,7 +126,7 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 	connect(save_action_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionSave_triggered()));
 
-	QMenu *save_menu = new QMenu();
+	QMenu *save_menu = new QMenu(save_button_);
 	connect(save_menu, SIGNAL(triggered(QAction*)),
 		this, SLOT(on_actionSave_triggered(QAction*)));
 
@@ -134,9 +135,8 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 		action->setData(QVariant::fromValue(i));
 	}
 
-	save_button_->setMenu(save_menu);
 	save_button_->setDefaultAction(save_action_);
-	save_button_->setPopupMode(QToolButton::MenuButtonPopup);
+	save_button_->set_menu(save_menu);
 
 	parent->setMinimumWidth(10);
 	parent->setSizePolicy(QSizePolicy(QSizePolicy::Minimum, QSizePolicy::Expanding));

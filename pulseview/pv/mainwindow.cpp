@@ -364,6 +364,219 @@ shared_ptr<views::ViewBase> MainWindow::get_active_view() const
 	return nullptr;
 }
 
+namespace {
+
+/*
+ * A dock that answers a double click on its title bar while it floats.
+ *
+ * The window system has a use of its own for that click on a tool window -
+ * it resizes the window - and the geometry it leaves behind is the one the
+ * view keeps when it is docked again, which can be outside the window
+ * altogether, where nothing can reach it. The click is taken here instead,
+ * and the toggle is put off a turn of the event loop so that it is not done
+ * from inside the window procedure.
+ */
+class ViewDock : public QDockWidget
+{
+public:
+	ViewDock(const QString &title, QWidget *parent) :
+		QDockWidget(title, parent)
+	{
+	}
+
+protected:
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	bool nativeEvent(const QByteArray &type, void *message, qintptr *result) override
+#else
+	bool nativeEvent(const QByteArray &type, void *message, long *result) override
+#endif
+	{
+#ifdef Q_OS_WIN
+		if ((type == QByteArrayLiteral("windows_generic_MSG")) && message) {
+			const MSG *msg = static_cast<const MSG *>(message);
+
+			if (msg->message == WM_NCLBUTTONDBLCLK) {
+				QTimer::singleShot(0, this, [this]() {
+					setFloating(!isFloating());
+				});
+
+				*result = 0;
+				return true;
+			}
+		}
+#endif
+		return QDockWidget::nativeEvent(type, message, result);
+	}
+};
+
+} // namespace
+
+/*
+ * Lets a dock be taken out of the window and put back with a double click on
+ * its title bar, as the views of PulseView can. The dock does the docked case
+ * for itself; ViewDock looks after the floating one, where the decorations
+ * belong to the window system.
+ *
+ * A view that comes back keeps the geometry of the floating window, which is
+ * measured from the window - so one carried well away from the window lands
+ * beyond its edge, where nothing can reach it. Only that case is put right:
+ * anywhere inside the window is where the user put it. The window is made to
+ * lay the whole thing out afresh by handing it back the layout it had when
+ * the view was last known to be in a good place.
+ */
+void MainWindow::make_dock_floatable(QDockWidget *dock)
+{
+	/*
+	 * The dock joins the ones already stacked in the window, as the views
+	 * of PulseView do: the window gives them a tab bar and they take turns,
+	 * which leaves the room to the waveforms. The first one to arrive has
+	 * nobody to join, so it simply stands beside the main view.
+	 */
+	QMainWindow *window = qobject_cast<QMainWindow *>(dock->parentWidget());
+
+	if (window) {
+		QDockWidget *sibling = nullptr;
+
+		/* Views first, then the sub windows: whichever came in first is
+		 * the one anything new is stacked on. */
+		for (auto &entry : view_docks_)
+			if ((entry.first != dock) &&
+				(view_dock_types_.count(entry.first) > 0) &&
+				!entry.first->isFloating() &&
+				(entry.first->parentWidget() == window)) {
+				sibling = entry.first;
+				break;
+			}
+
+		if (!sibling)
+			for (auto &entry : sub_windows_)
+				if (entry.first != dock &&
+					!entry.first->isFloating() &&
+					(entry.first->parentWidget() == window)) {
+					sibling = entry.first;
+					break;
+				}
+
+		if (sibling) {
+			window->tabifyDockWidget(sibling, dock);
+
+			/*
+			 * The one just opened is the one to look at. Raised a turn
+			 * later: at this point the dock has no contents yet, and
+			 * the window has not laid the tab bar out.
+			 */
+			QTimer::singleShot(0, dock, [dock]() {
+				dock->raise();
+			});
+		}
+	}
+
+	/*
+	 * Every view can be taken out of the window and put back again, as the
+	 * views of PulseView can.
+	 */
+	dock->setFeatures(QDockWidget::DockWidgetMovable |
+		QDockWidget::DockWidgetFloatable | QDockWidget::DockWidgetClosable);
+
+	{
+		/* Enough to read in, and no more: the divider stays free. */
+		dock->setMinimumWidth(200);
+
+		/*
+		 * A view that comes back from a float keeps the geometry of the
+		 * floating window as its own, even though Qt reports it as docked
+		 * - it can end up outside the window, where nothing can reach it.
+		 * Taking it out of the layout and putting it back is what makes
+		 * the window lay it out afresh; the width is then given to it in
+		 * a turn of the event loop, once the layout has settled.
+		 */
+		connect(dock, &QDockWidget::topLevelChanged, dock,
+			[this, dock](bool floating) {
+				if (floating)
+					return;
+
+				QMainWindow *window =
+					qobject_cast<QMainWindow *>(dock->parentWidget());
+
+				if (!window)
+					return;
+
+				/*
+				 * A view that comes back from a float keeps the geometry
+				 * of the floating window, even though Qt reports it as
+				 * docked - it can sit outside the window, where nothing
+				 * can reach it. Adding it to the edge it is already on
+				 * changes nothing at all; splitting it off the main view
+				 * is what makes the window lay it out afresh.
+				 */
+				QDockWidget *main_dock = nullptr;
+
+				for (auto &entry : view_docks_)
+					if (view_dock_types_.count(entry.first) == 0) {
+						main_dock = entry.first;
+						break;
+					}
+
+				/*
+				 * A view that sits inside the window stays where it is:
+				 * that is where the user put it. One that only overlaps
+				 * the window - its top left corner inside, the rest of it
+				 * beyond the edge - does not count, which is what an
+				 * over-wide view gives.
+				 */
+				const QRect window_rect(window->mapToGlobal(QPoint(0, 0)),
+					window->size());
+
+				if (window_rect.contains(QRect(
+						dock->mapToGlobal(QPoint(0, 0)), dock->size())))
+					return;
+
+				/*
+				 * Only one that came back somewhere outside the window is
+				 * put right. Qt keeps the geometry of the floating window
+				 * as the place of the dock - a place measured from the
+				 * window, so a window at 531,445 on the screen puts a
+				 * view dropped at 1962,604 at 2493,1049, well outside
+				 * it. Neither addDockWidget nor splitDockWidget shifts
+				 * it once that has happened; handing the whole layout
+				 * back to the window does.
+				 */
+				auto known = window_layouts_.find(window);
+
+				if (known != window_layouts_.end() &&
+					!known->second.isEmpty()) {
+					window->restoreState(known->second);
+					window->addDockWidget(Qt::RightDockWidgetArea, dock);
+				} else if (main_dock &&
+					(main_dock->parentWidget() == window)) {
+					window->removeDockWidget(dock);
+					window->splitDockWidget(main_dock, dock,
+						Qt::Horizontal);
+				} else {
+					window->removeDockWidget(dock);
+					window->addDockWidget(Qt::RightDockWidgetArea, dock);
+				}
+
+				dock->show();
+
+
+				QTimer::singleShot(0, dock, [dock]() {
+					QMainWindow *w =
+						qobject_cast<QMainWindow *>(dock->parentWidget());
+
+					if (!w)
+						return;
+
+					const int room = qMax(240, qMin(w->width() / 3, 480));
+
+					if (dock->width() < room)
+						w->resizeDocks({dock}, {room}, Qt::Horizontal);
+				});
+			});
+	}
+
+}
+
 shared_ptr<views::ViewBase> MainWindow::add_view(views::ViewType type,
 	Session &session)
 {
@@ -378,27 +591,23 @@ shared_ptr<views::ViewBase> MainWindow::add_view(views::ViewType type,
 
 	shared_ptr<MainBar> main_bar = session.main_bar();
 
-	// Only use the view type in the name if it's not the main view
-	QString title;
-	if (main_bar) {
-		title = QString("%1").arg(QCoreApplication::translate(
-			"pv::views", views::ViewTypeNames[type]));
-	}
-	else
-		title = session.name();
+	/*
+	 * Every view is named after its view type, the main one included: what
+	 * it shows is the waveforms, not the session it belongs to.
+	 */
+	QString title = QString("%1").arg(QCoreApplication::translate(
+		"pv::views", views::ViewTypeNames[type]));
 
-	QDockWidget* dock = new QDockWidget(title, main_window);
+	QDockWidget* dock = new ViewDock(title, main_window);
 	// dock->setWindowFlags(Qt::Window | Qt::FramelessWindowHint);  //todo ???
 	dock->setObjectName(title);
 
-	if (type == views::ViewTypeTrace && !main_bar) {
+	if (type == views::ViewTypeTrace && !main_bar)
 		main_window->addDockWidget(Qt::LeftDockWidgetArea, dock);
-		dock->setAllowedAreas(Qt::LeftDockWidgetArea);
-	} else {
+	else
 		main_window->addDockWidget(Qt::RightDockWidgetArea, dock);
-		dock->setAllowedAreas(Qt::RightDockWidgetArea);
-	}
-	dock->setFeatures(QDockWidget::DockWidgetClosable);
+
+	make_dock_floatable(dock);
 
 	// Insert a QMainWindow into the dock widget to allow for a tool bar
 	QMainWindow *dock_main = new QMainWindow(dock);
@@ -416,12 +625,19 @@ shared_ptr<views::ViewBase> MainWindow::add_view(views::ViewType type,
 
 	if (!v)
 		return nullptr;
-	if (title == session.name())
+
+	/* The main view carries the session name, and has no title bar of its
+	 * own: it takes the whole window. The waveforms are what the window is
+	 * for, so it keeps the larger part of it even when other views are
+	 * docked beside it or under it. */
+	if (type == views::ViewTypeTrace && !main_bar) {
 		dock->setTitleBarWidget(new QWidget());
-	
+		dock->setMinimumWidth(240);
+	}
+
 	view_docks_[dock] = v;
-	/* Only a dock that was named after its view type follows the
-	 * language; the first trace view carries the session name. */
+	/* The main view is not one of these: the others are laid beside it,
+	 * never over it, and it is not renamed when the session is. */
 	if (main_bar)
 		view_dock_types_[dock] = (int)type;
 	session.register_view(v);
@@ -479,6 +695,11 @@ shared_ptr<views::ViewBase> MainWindow::add_view(views::ViewType type,
 			standard_bar->action_view_show_cursors()->setChecked(tv->cursors_shown());
 		}
 	}
+	/* Remember the layout now that it holds this view as well. */
+	QTimer::singleShot(0, main_window, [this, main_window]() {
+		window_layouts_[main_window] = main_window->saveState();
+	});
+
 	v->setFocus();
 	return v;
 }
@@ -537,7 +758,7 @@ shared_ptr<subwindows::SubWindowBase> MainWindow::add_subwindow(
 			break;
 	}
 
-	QDockWidget* dock = new QDockWidget(title, main_window);
+	QDockWidget* dock = new ViewDock(title, main_window);
 	dock->setObjectName(title);
 
 	if (title == "") {
@@ -548,7 +769,7 @@ shared_ptr<subwindows::SubWindowBase> MainWindow::add_subwindow(
 	// main_window->addDockWidget(Qt::TopDockWidgetArea, dock);
 	main_window->addDockWidget(Qt::RightDockWidgetArea, dock);
 	dock->setAllowedAreas(Qt::RightDockWidgetArea);
-	dock->setFeatures(QDockWidget::DockWidgetClosable);
+	make_dock_floatable(dock);
 
 
 	// Insert a QMainWindow into the dock widget to allow for a tool bar
@@ -587,10 +808,10 @@ shared_ptr<subwindows::SubWindowBase> MainWindow::add_subwindow(
 		toolbar->setMovable(false);
 	}
 
-	if (w->minimum_width() > 0) {
+	if (w->minimum_width() > 0)
+		/* Room enough for what it holds, and no ceiling: it is dragged
+		 * to the width that suits like any other view. */
 		dock->setMinimumSize(w->minimum_width(), 0);
-		dock->setMaximumWidth(350);
-	}
 	return w;
 }
 
@@ -627,7 +848,7 @@ shared_ptr<Session> MainWindow::add_session()
 	session_selector_.setCurrentIndex(index);
 	last_focused_session_ = session;
 
-	window->setDockNestingEnabled(false);
+	window->setDockNestingEnabled(true);
 
 	add_view(views::ViewTypeTrace, *session);
 	return session;
@@ -1511,15 +1732,10 @@ shared_ptr<Session> MainWindow::get_tab_session(int index) const
 void MainWindow::closeEvent(QCloseEvent *event)
 {
 	bool data_saved = true;
-	QSettings global_settings;
-	for (auto& entry : session_windows_) {
-		if (!entry.first->data_saved()) {
+
+	for (auto& entry : session_windows_)
+		if (!entry.first->data_saved())
 			data_saved = false;
-			QString n = entry.first->name();
-			if (n.isEmpty())
-				n = tr("Untitled");
-		}
-	}
 
 	if (!data_saved)
 	{
@@ -1701,7 +1917,8 @@ void MainWindow::on_run_stop_clicked()
 				s->stop_capture();
 			else
 				s->start_capture([&](QString message) {
-					// show_session_error("Capture failed", message); 
+					Q_UNUSED(message);
+					// show_session_error("Capture failed", message);
 					qDebug() << "Capture failed";
 				});
 		}		
@@ -1721,6 +1938,7 @@ void MainWindow::on_run_stop_clicked()
 				qDebug() << "Repeat acquisition is already";
 			qDebug() << "Start acquisition";
 			session->start_capture([&](QString message) {
+				Q_UNUSED(message);
 				// show_session_error("Capture failed", message);
 				qDebug() << "Capture failed";
 			 });
@@ -1804,16 +2022,11 @@ void MainWindow::on_session_name_changed()
 	if (session == nullptr)
 		return;
 
-	for (const shared_ptr<views::ViewBase>& view : session->views()) {
-		// Get the dock that contains the view
-		for (auto& entry : view_docks_)
-			if (entry.second == view) {
-				entry.first->setObjectName(session->name());
-				entry.first->setWindowTitle(session->name());
-				entry.first->setWindowTitle("");
-				// entry.first->setTitleBarWidget(nullptr);
-			}
-	}
+	/*
+	 * Every view is named after its view type - the main one shows the
+	 * waveforms, not the session - so a session given another name has
+	 * nothing to change here.
+	 */
 
 	// Update the tab widget by finding the main window and the tab from that
 	for (auto& entry : session_windows_)

@@ -53,6 +53,7 @@
 #include "pv/globalsettings.hpp"
 #include "pv/session.hpp"
 #include "pv/util.hpp"
+#include "pv/widgets/splitbutton.hpp"
 #include "pv/data/decode/decoder.hpp"
 
 using pv::data::DecodeSignal;
@@ -348,71 +349,6 @@ void CustomTableView::copy_selection_to_clipboard() const
 		lines.join(QStringLiteral("\r\n")));
 }
 
-
-SplitButton::SplitButton(QWidget* parent) :
-	QToolButton(parent),
-	menu_(nullptr),
-	menu_pressed_(false)
-{
-}
-
-void SplitButton::set_menu(QMenu* menu)
-{
-	menu_ = menu;
-}
-
-void SplitButton::paintEvent(QPaintEvent* event)
-{
-	QToolButton::paintEvent(event);
-
-	if (!menu_)
-		return;
-
-	const QRect area(width() - kMenuWidth, 0, kMenuWidth, height());
-	const QColor color(palette().color(QPalette::ButtonText));
-	const int cx = area.center().x();
-	const int cy = area.center().y();
-
-	QPainter painter(this);
-	painter.setRenderHint(QPainter::Antialiasing, true);
-
-	// The seam between saving and picking a format.
-	QColor seam(color);
-	seam.setAlpha(70);
-	painter.setPen(seam);
-	painter.drawLine(area.left(), 7, area.left(), height() - 8);
-
-	QPen pen(color);
-	pen.setWidthF(1.3);
-	pen.setCapStyle(Qt::RoundCap);
-	painter.setPen(pen);
-	painter.drawLine(cx - 3, cy - 1, cx, cy + 2);
-	painter.drawLine(cx, cy + 2, cx + 3, cy - 1);
-}
-
-void SplitButton::mousePressEvent(QMouseEvent* event)
-{
-	if (!menu_ || (event->pos().x() < width() - kMenuWidth)) {
-		menu_pressed_ = false;
-		QToolButton::mousePressEvent(event);
-		return;
-	}
-
-	menu_pressed_ = true;
-	setDown(true);
-}
-
-void SplitButton::mouseReleaseEvent(QMouseEvent* event)
-{
-	if (menu_pressed_) {
-		menu_pressed_ = false;
-		setDown(false);
-		menu_->popup(mapToGlobal(QPoint(0, height())));
-		return;
-	}
-
-	QToolButton::mouseReleaseEvent(event);
-}
 
 FilterHeaderView::FilterHeaderView(QWidget* parent) :
 	QHeaderView(Qt::Horizontal, parent),
@@ -749,7 +685,7 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 	row_filter_(new QLineEdit()),
 	row_count_label_(new QLabel()),
 	colored_annotations_button_(new QToolButton()),
-	save_button_(new SplitButton()),
+	save_button_(new widgets::SplitButton()),
 	save_action_(new QAction(this)),
 	table_view_(new CustomTableView()),
 	filter_header_(new FilterHeaderView()),
@@ -858,12 +794,7 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 	}
 
 	save_button_->setDefaultAction(save_action_);
-	save_button_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 	save_button_->set_menu(save_menu);
-	// Room between the label and the seam that opens the menu; the
-	// style leaves the two much closer than that.
-	save_button_->setStyleSheet(toggle_style +
-		QStringLiteral("QToolButton { padding-right: 28px; }"));
 
 	// Set up the models and the table view
 	filter_proxy_model_->setSourceModel(model_);

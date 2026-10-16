@@ -1937,6 +1937,29 @@ namespace pv
 				return;
 			}
 
+			/*
+			 * Everything set up for the device in hand goes when another
+			 * one is taken, so ask before that happens - but only when
+			 * there is something to lose. Same test as closing the
+			 * window uses: capture that has not been saved. A decoder
+			 * merely set up and waiting has no data behind it.
+			 */
+			if (!device_switch_allowed_ && session_.data_held()) {
+				const QMessageBox::StandardButton answer = QMessageBox::question(
+					this, tr("Switch device"),
+					tr("Switch device? The captured data and its decoders "
+					   "will be lost."),
+					QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+
+				if (answer != QMessageBox::Yes) {
+					/* Put the selector back to the device in use. */
+					update_device_list();
+					return;
+				}
+
+				device_switch_allowed_ = true;
+			}
+
 			const shared_ptr<sigrok::Device> sr_dev = device->device();
 			QString vendor = QString::fromStdString(sr_dev->vendor());
 			QString model = QString::fromStdString(sr_dev->model());
@@ -2179,6 +2202,9 @@ namespace pv
 
 		void MainBar::on_device_changed()
 		{
+			/* The change is through: the next one asks again. */
+			device_switch_allowed_ = false;
+
 			const shared_ptr<devices::HardwareDevice> hw_device =
 				dynamic_pointer_cast<devices::HardwareDevice>(session_.device());
 			set_device_driver(hw_device ?

@@ -370,7 +370,17 @@ void Trace::paint_axis(QPainter &p, ViewItemPaintParams &pp, int y)
 	bool was_antialiased = p.testRenderHint(QPainter::Antialiasing);
 	p.setRenderHint(QPainter::Antialiasing, false);
 
-	p.setPen(axis_pen_);
+	/*
+	 * The line along a trace is a wash of black, which reads as a shadow
+	 * on the bright theme. On the dark one the same wash is a line that
+	 * is darker than what it lies on, which is nothing like the shade it
+	 * is meant to be, so it goes the other way round there: as much
+	 * white as it carries black elsewhere.
+	 */
+	QPen pen = axis_pen_;
+	if (GlobalSettings::current_theme_is_dark())
+		pen.setColor(QColor(255, 255, 255, pen.color().alpha()));
+	p.setPen(pen);
 	p.drawLine(QPointF(pp.left(), y), QPointF(pp.right(), y));
 
 	p.setRenderHint(QPainter::Antialiasing, was_antialiased);
