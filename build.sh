@@ -382,9 +382,16 @@ if [ $PACKAGE -eq 1 ]; then
 #         echo ""
 #         echo "To distribute: copy the entire dist/U3LogicAnalyzer/ folder."
 #         echo "To run: double-click run.bat or U3LogicAnalyzer.exe"
-    # 7. Copy driver directory
+    # 7. Copy driver directory. driver/libusb holds the vendored libusb the
+    #    build uses - its DLL is shipped beside the executable (step 8), and
+    #    the patch and notes in there are for whoever builds it, not for the
+    #    package, so that one directory is left out.
     echo "  Driver directory..."
-    cp -r "$SCRIPT_DIR/driver" "$DIST_DIR/driver/"
+    mkdir -p "$DIST_DIR/driver"
+    for item in "$SCRIPT_DIR/driver"/*; do
+        [ "$(basename "$item")" = "libusb" ] && continue
+        cp -r "$item" "$DIST_DIR/driver/"
+    done
 
     # 8. Copy license file
     echo "  License file..."
