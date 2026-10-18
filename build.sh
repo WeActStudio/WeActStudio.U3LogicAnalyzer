@@ -7,6 +7,8 @@
 #   ./build.sh --qt5        # Build against Qt 5
 #   ./build.sh --package    # Build + create dist/U3LogicAnalyzer/ package
 #   ./build.sh --clean      # Clean build
+#   ./build.sh --debug      # Debug build with symbols, in build_cmake_debug/
+#                           # (slower, not packageable: use it under gdb)
 # ============================================================================
 
 set -e
@@ -17,6 +19,8 @@ PREFIX="${SCRIPT_DIR}/install"
 DIST_DIR="${SCRIPT_DIR}/dist/U3LogicAnalyzer"
 CLEAN=0
 PACKAGE=0
+DEBUG=0
+BUILD_TYPE="Release"
 IS_WINDOWS=0
 IS_MACOS=0
 
@@ -79,6 +83,7 @@ while [ $# -gt 0 ]; do
     case $1 in
         --clean) CLEAN=1 ;;
         --package) PACKAGE=1 ;;
+        --debug) DEBUG=1 ;;
         --qt5|--qt6) ;;   # already picked up above
         --prefix)
             if [ $# -lt 2 ]; then
@@ -94,6 +99,21 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+
+if [ $DEBUG -eq 1 ]; then
+    if [ $PACKAGE -eq 1 ]; then
+        echo "[error] --debug cannot be combined with --package: a package is shipped optimised" >&2
+        exit 1
+    fi
+    BUILD_TYPE="Debug"
+    # Installed beside the release one as well: a debug build of the sigrok
+    # libraries must not quietly replace the ones the release build uses.
+    PREFIX="${SCRIPT_DIR}/install_debug"
+    # A tree of its own: -O0 objects and release objects do not belong in the
+    # same directory, and switching back and forth would rebuild everything
+    # anyway. Symbols stay in, which is the point - gdb needs them.
+    BUILD_DIR="${SCRIPT_DIR}/build_cmake_debug"
+fi
 
 # ============================================================================
 # Python version detection
@@ -121,6 +141,7 @@ echo "Source:  $SCRIPT_DIR"
 echo "Build:   $BUILD_DIR"
 echo "Install: $PREFIX"
 echo "Qt:      $QT_MAJOR${QT_PREFIX:+ ($QT_PREFIX)}"
+echo "Type:    $BUILD_TYPE"
 [ $PACKAGE -eq 1 ] && echo "Package: $DIST_DIR"
 echo ""
 
@@ -153,7 +174,7 @@ echo "===== Step 1/4: libsigrok (CH32H417 + Demo) ====="
 mkdir -p libsigrok_build && cd libsigrok_build
 cmake "${SCRIPT_DIR}/libsigrok" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     -DDISABLE_WERROR=ON $MINGW_EXTRA
 cmake --build . -j"$JOBS"
 cmake --install .
@@ -169,7 +190,7 @@ cd "$BUILD_DIR" && mkdir -p libsigrokcxx_build && cd libsigrokcxx_build
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH}"
 cmake "${SCRIPT_DIR}/libsigrok/bindings/cxx" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     -DCMAKE_PREFIX_PATH="$PREFIX" $MINGW_EXTRA
 cmake --build . -j"$JOBS"
 cmake --install .
@@ -185,7 +206,7 @@ cd "$BUILD_DIR" && mkdir -p libsigrokdecode_build && cd libsigrokdecode_build
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH}"
 cmake "${SCRIPT_DIR}/libsigrokdecode" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     -DDISABLE_WERROR=ON $MINGW_EXTRA
 cmake --build . -j"$JOBS"
 cmake --install .
@@ -213,7 +234,7 @@ cd "$BUILD_DIR" && mkdir -p logicanalyzer_build && cd logicanalyzer_build
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH}"
 cmake "${SCRIPT_DIR}/pulseview" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     -DSTATIC_PKGDEPS_LIBS=OFF \
     -DENABLE_DECODE=ON \
     -DENABLE_FLOW=OFF \
@@ -267,9 +288,13 @@ if [ $IS_WINDOWS -eq 1 ]; then
 # RBEOF
 
     echo "  $(ls "$PVDIR"/*.dll 2>/dev/null | wc -l) DLLs, run.bat created"
-    echo "  Stripping debug symbols..."
-    strip "$PVDIR/U3LogicAnalyzer.exe" 2>/dev/null || echo "  (strip not available, skipping)"
-    echo "  $(du -sh "$PVDIR/U3LogicAnalyzer.exe" | cut -f1) after strip"
+    if [ $DEBUG -eq 0 ]; then
+        echo "  Stripping debug symbols..."
+        strip "$PVDIR/U3LogicAnalyzer.exe" 2>/dev/null || echo "  (strip not available, skipping)"
+        echo "  $(du -sh "$PVDIR/U3LogicAnalyzer.exe" | cut -f1) after strip"
+    else
+        echo "  Symbols kept (debug build)"
+    fi
 fi
 
 echo ""

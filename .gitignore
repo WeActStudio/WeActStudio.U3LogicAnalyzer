@@ -1,6 +1,8 @@
 /.vscode
 /build_cmake
 /install
+/build_cmake_debug
+/install_debug
 /dist
 /CMakeFiles
 /.workbuddy
