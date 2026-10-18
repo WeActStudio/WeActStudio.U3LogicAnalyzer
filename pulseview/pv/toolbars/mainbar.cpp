@@ -26,6 +26,8 @@
 #include "pv/application.hpp"
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
+#include <cstdarg>
 
 #include <QProgressDialog>
 #include <QDir>
@@ -115,7 +117,6 @@ namespace pv
 		const uint64_t MainBar::MaxSampleCount = 1000000000000ULL;
 		const uint64_t MainBar::DefaultSampleCount = 1000000;
 		const uint64_t MainBar::MinSampleRate = 25000ULL;
-		uint64_t MainBar::MaxSampleRate = 50000000ULL;
 		const char *MainBar::SettingOpenDirectory = "MainWindow/OpenDirectory";
 		const char *MainBar::SettingSaveDirectory = "MainWindow/SaveDirectory";
 
@@ -388,6 +389,28 @@ namespace pv
 			save_button_->setDefaultAction(action_save_);
 			save_button_->setPopupMode(QToolButton::MenuButtonPopup);
 			save_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+
+			/*
+			 * Putting what was captured into a session of its own is not an
+			 * export, so it sits above the formats, and only where there is
+			 * something to copy: a file session has no capture of its own.
+			 */
+			action_copy_to_new_session_ =
+				new QAction(tr("Export to a New Session"), this);
+			connect(action_copy_to_new_session_, &QAction::triggered,
+					this, &MainBar::copy_session_requested);
+			connect(export_menu, &QMenu::aboutToShow, this, [this, export_menu]() {
+				action_copy_to_new_session_->setVisible(!session_.using_file_device());
+				action_copy_to_new_session_->setEnabled(session_.data_held());
+			});
+			if (!export_menu->actions().isEmpty()) {
+				export_menu->insertAction(export_menu->actions().first(),
+					action_copy_to_new_session_);
+				export_menu->insertSeparator(export_menu->actions().value(1));
+			} else {
+				export_menu->addAction(action_copy_to_new_session_);
+			}
+
 			// Device selector menu
 			connect(&device_selector_, SIGNAL(device_selected()),
 					this, SLOT(on_device_selected()));
@@ -397,6 +420,11 @@ namespace pv
 			 * rebuilt once the popup menu is gone. */
 			connect(&device_selector_, SIGNAL(refresh_requested()),
 					this, SIGNAL(device_attached()), Qt::QueuedConnection);
+
+			/* Opening a board in a session of its own is the window's
+			 * business: the bar only passes the request on. */
+			connect(&device_selector_, &widgets::DeviceToolButton::device_new_session_requested,
+					this, &MainBar::device_new_session_requested);
 
 			/* A change that does not involve the device in use only needs the
 			 * list rebuilt. Queued: the scan may not run on the poll thread. */
@@ -538,16 +566,32 @@ namespace pv
 
 	MainBar::~MainBar()
 		{
-			s_mainbar_instance = nullptr;
+			/*
+			 * Hot-plug belongs to the bar that started the poll. Another
+			 * session's bar being destroyed must not take it down: clearing
+			 * the shared instance here would leave the callback with
+			 * nowhere to report to, and boards would stop being noticed.
+			 */
+			const bool owns_listener = (s_mainbar_instance == this);
+			if (owns_listener)
+			{
+				s_mainbar_instance = nullptr;
 
 #ifdef _WIN32
-			ch375_set_device_notify(0, NULL, NULL);
+				ch375_set_device_notify(0, NULL, NULL);
 #endif
+			}
 
 			if (channels_)
 			{
 				delete channels_;
 				channels_ = nullptr;
+			}
+
+			if (device_options_)
+			{
+				delete device_options_;
+				device_options_ = nullptr;
 			}
 
 			/* Stop the hot-plug thread */
@@ -557,10 +601,13 @@ namespace pv
 				t_hot_plug.join();
 			}
 
+			if (owns_listener)
+			{
 #ifdef _WIN32
-			/* Release the CH375DLL resources */
-			ch375_cleanup();
+				/* Release the CH375DLL resources */
+				ch375_cleanup();
 #endif
+			}
 			commit_channel_number(0);
 		}
 
@@ -604,6 +651,22 @@ namespace pv
 				devs.push_back(selected_device);
 			device_selector_.set_device_list(devs, selected_device);
 			update_device_config_widgets();
+		}
+
+		void MainBar::refresh_device_selector()
+		{
+			DeviceManager &mgr = session_.device_manager();
+
+			device_selector_.update_device_mamager(session_.device_manager_ptr());
+
+			list<shared_ptr<devices::Device>> devs;
+			copy(mgr.devices().begin(), mgr.devices().end(), back_inserter(devs));
+			const shared_ptr<devices::Device> selected = session_.device();
+			if (std::find(devs.begin(), devs.end(), selected) == devs.end())
+				devs.push_back(selected);
+			device_selector_.set_device_list(devs, selected);
+
+			update_device_status_icon();
 		}
 
 		void MainBar::on_refresh_device_list()
@@ -670,6 +733,70 @@ namespace pv
 			device_selector_.set_device_list_name(device_selector);
 		}
 
+		void MainBar::set_device_selector_role(bool new_session_allowed,
+			bool single_device_only)
+		{
+			device_selector_.set_device_selector_role(new_session_allowed,
+				single_device_only);
+		}
+
+		void MainBar::set_busy_devices(const QSet<QString> &busy,
+			const QString &own)
+		{
+			device_selector_.set_busy_devices(busy, own);
+		}
+
+		QString MainBar::last_save_directory()
+		{
+			return QSettings().value(SettingSaveDirectory).toString();
+		}
+
+		void MainBar::remember_save_directory(const QString &path)
+		{
+			QSettings().setValue(SettingSaveDirectory,
+				QFileInfo(path).absolutePath());
+		}
+
+		void MainBar::set_capture_buttons_visible(bool mode, bool run)
+		{
+			/*
+			 * The action as well as the widget: a tool bar holds what
+			 * addWidget() hands back, and that action shows its widget
+			 * again whenever it is shown itself.
+			 */
+			if (model_change_button_)
+				model_change_button_->setVisible(mode);
+			if (model_change_action_)
+				model_change_action_->setVisible(mode);
+			if (run_stop_button_)
+				run_stop_button_->setVisible(run);
+			if (run_stop_action_)
+				run_stop_action_->setVisible(run);
+		}
+
+		void MainBar::set_device_selector_visible(bool visible)
+		{
+			/* Both the widget and the action that holds it: hiding only the
+			 * widget leaves a gap in the tool bar where it used to be. */
+			device_selector_.setVisible(visible);
+			if (device_selector_action_)
+				device_selector_action_->setVisible(visible);
+		}
+
+		void MainBar::update_device_manager(DeviceManager *manager)
+		{
+			/*
+			 * The list the selector holds belongs to the manager that is
+			 * gone, and the board this session shows is about to be taken
+			 * back from this new manager. Until that happens the session
+			 * still holds the instance the scan freed, and reading the list
+			 * now would put that board in twice - once from the manager,
+			 * once from the session. Taking the board back, or the detach
+			 * that follows when it cannot, is what rebuilds the list.
+			 */
+			device_selector_.update_device_mamager(manager);
+		}
+
 		QAction *MainBar::action_open() const
 		{
 			return action_open_;
@@ -708,7 +835,7 @@ namespace pv
 				return;
 			}
 
-			const shared_ptr<devices::Device> device = device_selector_.selected_device();
+			const shared_ptr<devices::Device> device = session_.device();
 			if (!device)
 				return;
 
@@ -772,7 +899,7 @@ namespace pv
 				assert(stepRate > 0);
 
 				minRate = max(minRate, MinSampleRate);
-				maxRate = min(maxRate, MaxSampleRate);
+				maxRate = min(maxRate, max_sample_rate_);
 				if (stepRate == 1)
 					sample_rate_.show_125_list(minRate, maxRate);
 				else
@@ -790,7 +917,6 @@ namespace pv
 				elements = (const uint64_t *)g_variant_get_fixed_array(
 					gvar_list, &num_elements, sizeof(uint64_t));
 				QString vendor = QString::fromStdString(sr_dev->vendor());
-				QString model = QString::fromStdString(sr_dev->model());
 				if (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH569)])
 				{
 					// CH569: the number of sample rates depends on the channel count
@@ -810,11 +936,13 @@ namespace pv
 						break;
 					}
 				}
-				else if (model == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
-				{
-					// CH32H417: always 16 sample rates, independent of the channel count
-					num_elements = 16;
-				}
+				/*
+				 * The number of entries is whatever the driver lists: the
+				 * table follows the sample width, and the width follows
+				 * the channel count. A fixed number ran past the end of
+				 * the narrower table, so the list held rates the board
+				 * does not have and lost the ones it does.
+				 */
 				sample_rate_.show_list(elements, num_elements);
 				// if (is_rate_setting_default_){
 				// 	sample_rate_.set_current_index(sample_rate_default_index_);
@@ -831,7 +959,7 @@ namespace pv
 			if (updating_sample_rate_)
 				return;
 
-			const shared_ptr<devices::Device> device = device_selector_.selected_device();
+			const shared_ptr<devices::Device> device = session_.device();
 			if (!device)
 				return;
 
@@ -857,7 +985,7 @@ namespace pv
 			if (updating_sample_count_)
 				return;
 
-			const shared_ptr<devices::Device> device = device_selector_.selected_device();
+			const shared_ptr<devices::Device> device = session_.device();
 			if (!device)
 				return;
 
@@ -951,7 +1079,7 @@ namespace pv
 
 		void MainBar::on_update_max_sample_rate(uint64_t maxSampleRate)
 		{
-			const shared_ptr<devices::Device> device = device_selector_.selected_device();
+			const shared_ptr<devices::Device> device = session_.device();
 			if (!device)
 				return;
 
@@ -959,34 +1087,14 @@ namespace pv
 			QString model = QString::fromStdString(device->device()->model());
 			bool is_ch32h417 = (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)] || model == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]);
 
-			// CH32H417 handling
+			/*
+			 * CH32H417: nothing to work out. The channel count has already
+			 * been handed to the board by the channel popup, and the board
+			 * picked its rate table from that. Both lists are read back
+			 * from the board, so they say what it can do now.
+			 */
 			if (is_ch32h417)
 			{
-				bool is_usb2 = channels_ ? channels_->is_usb2() : false;
-				uint16_t channel_number = 16;
-				uint64_t sample_rate_channel_max = 0;
-
-				if (is_usb2)
-				{
-					// CH32H417 USB 2.0: up to 40 MHz with 2/4/8 channels, up to 20 MHz with 16 channels
-					if (maxSampleRate == SR_MHZ(40))
-					{
-						channel_number = 8;
-						sample_rate_channel_max = SR_MHZ(40);
-					}
-					else if (maxSampleRate == SR_MHZ(20))
-					{
-						channel_number = 16;
-						sample_rate_channel_max = SR_MHZ(20);
-					}
-				}
-				else
-				{
-					// CH32H417 USB 3.0: sample rate fixed at 200 MHz
-					channel_number = 16;
-					sample_rate_channel_max = SR_MHZ(200);
-				}
-
 				update_sample_rate_selector();
 				update_sample_count_selector();
 				return;
@@ -995,16 +1103,16 @@ namespace pv
 			// CH569 and other devices
 			uint16_t channel_number = 16;
 			uint64_t sample_rate_channel_max = 0;
-			MaxSampleRate = maxSampleRate;
-			if (MaxSampleRate == SR_GHZ(1))
+			max_sample_rate_ = maxSampleRate;
+			if (max_sample_rate_ == SR_GHZ(1))
 			{
 				channel_number = 2;
 			}
-			else if (MaxSampleRate == SR_MHZ(500))
+			else if (max_sample_rate_ == SR_MHZ(500))
 			{
 				channel_number = 4;
 			}
-			else if (MaxSampleRate == SR_MHZ(250))
+			else if (max_sample_rate_ == SR_MHZ(250))
 			{
 				channel_number = 8;
 			}
@@ -1055,33 +1163,42 @@ namespace pv
 				return;
 			}
 
-			if (channelCount == channel_number_)
-			{
-				return;
-			}
-
+			/*
+			 * Handed over even when the page already holds this count:
+			 * this runs whenever the page is rebuilt, and a rebuilt page
+			 * may sit on a board the session has only just taken over. A
+			 * fresh instance starts at the default count - and so at the
+			 * narrow rate table that goes with it - whatever the page
+			 * shows, and the rates of the wider table would be refused.
+			 */
 			commit_channel_number(channelCount);
 			channel_number_ = channelCount;
 
 			update_sample_count_selector();
+			set_setting_default();
 		}
 
 		void MainBar::on_update_threshold_value_1(float thresholdValue)
 		{
 			commit_threshold_value(1, thresholdValue);
 			thresholdValue_1_ = thresholdValue;
+			set_setting_default();
 		}
 
 		void MainBar::on_update_threshold_value_2(float thresholdValue)
 		{
 			commit_threshold_value(2, thresholdValue);
 			thresholdValue_2_ = thresholdValue;
+			set_setting_default();
 		}
 
 		void MainBar::on_update_threshold_value_ch32h417(float thresholdValue)
 		{
 			// Only store the threshold here; the hardware is updated by on_threshold_value_raw_changed
 			thresholdValue_ch32h417_ = thresholdValue;
+			// Write it out now: a board that is pulled out never reaches the
+			// save on exit, and the next one comes up with the old level.
+			set_setting_default();
 		}
 
 		void MainBar::on_update_pre_trigger(uint8_t value)
@@ -1105,6 +1222,7 @@ namespace pv
 			{
 				qDebug() << tr("Failed to configure pre-trigger:") << error.what();
 			}
+			set_setting_default();
 		}
 
 		void MainBar::on_mode_changed(int mode)
@@ -1200,6 +1318,20 @@ namespace pv
 
 		void MainBar::on_channel_selection_changed()
 		{
+			/*
+			 * Which of the modes is showing now: the board is told a
+			 * channel count, but the choice the page shows is the one that
+			 * has to come back after the page is built again.
+			 */
+			if (channels_) {
+				for (int i = 0; i < 4; i++)
+					if (channels_->radioChannels[i] &&
+						channels_->radioChannels[i]->isChecked()) {
+						channel_mode_index_ = i;
+						break;
+					}
+			}
+
 			if (view_) {
 				view_->update_signals_height();
 			}
@@ -1337,14 +1469,52 @@ namespace pv
 
 		void MainBar::set_setting_default()
 		{
-			QSettings settings;
-			// Store the configuration
-			settings.beginGroup("Settings");
+			if (restoring_defaults_)
+				return;
+
+			/*
+			 * Only the WCH boards keep their settings between runs. A demo
+			 * device or an open file writes nothing, or its sample rate
+			 * would be handed to the board that comes after it.
+			 */
+			QString vendorName = get_vendorName();
+			if (vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] &&
+				vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
+				return;
+
+			/*
+			 * Dragging a slider calls this on every step, and every call
+			 * wrote the whole settings file. Hold the write back a little:
+			 * a drag is one change, not thirty.
+			 */
+			if (!setting_save_timer_) {
+				setting_save_timer_ = new QTimer(this);
+				setting_save_timer_->setSingleShot(true);
+				connect(setting_save_timer_, &QTimer::timeout,
+					this, &MainBar::write_setting_default);
+			}
+			setting_save_timer_->start(SettingSaveDelayMs);
+		}
+
+		void MainBar::write_setting_default()
+		{
+			if (restoring_defaults_)
+				return;
 
 			QString vendorName = get_vendorName();
+			if (vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] &&
+				vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
+				return;
+
+			QSettings settings;
+			// Store the configuration
+			settings.beginGroup(setting_group());
+
 			if (vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 			{
-				// CH32H417 uses the ThresholdLevel key of GlobalSettings
+				/* This page's own, and the value last used anywhere stays
+				 * what a page nobody has set up yet starts from. */
+				settings.setValue("ThresholdLevel", thresholdValue_ch32h417_);
 				GlobalSettings gs;
 				gs.setValue(GlobalSettings::Key_ThresholdLevel, thresholdValue_ch32h417_);
 			}
@@ -1358,6 +1528,7 @@ namespace pv
 			settings.setValue("sample_count_index", QString::number(sample_count_.get_current_index()));
 			settings.setValue("sample_rate_index", QString::number(sample_rate_.get_current_index()));
 			settings.setValue("channel_number", QString::number(channel_number_));
+			settings.setValue("channel_mode_index", QString::number(channel_mode_index_));
 			settings.setValue("pre_trigger", QString::number(pre_trigger_));
 			settings.endGroup();
 		}
@@ -1392,19 +1563,44 @@ namespace pv
 			}
 		}
 
+		QString MainBar::setting_group() const
+		{
+			/*
+			 * Every page keeps what the device page offers under its own
+			 * number. One group for all of them meant the page that wrote
+			 * last decided what every other page came up with - the options
+			 * of one session were pushed to the board of another.
+			 */
+			return QString("Settings/%1").arg(session_.id());
+		}
+
 		void MainBar::get_setting_default()
 		{
 			QSettings settings;
-			if (settings.contains("Settings/sample_count_index"))
+			QString group = setting_group();
+
+			/*
+			 * The first page also reads the group older versions kept for
+			 * the whole program, so that an installation does not come up
+			 * with the defaults once. Any other page starts from its own.
+			 */
+			if (!settings.contains(group + "/sample_count_index") &&
+				session_.id() == 0)
+				group = "Settings";
+
+			if (settings.contains(group + "/sample_count_index"))
 			{
 				// CH569 threshold settings
-				threshold_bank_1_default_ = settings.value("Settings/Threshold_bank_1").toFloat();
-				threshold_bank_2_default_ = settings.value("Settings/Threshold_bank_2").toFloat();
-				channel_number_default_ = settings.value("Settings/channel_number").toInt();
-				sample_count_default_index_ = settings.value("Settings/sample_count_index").toUInt();
-				sample_rate_default_index_ = settings.value("Settings/sample_rate_index").toUInt();
-				is_repeat_acq_default_ = settings.value("Settings/repeat_acquisition").toInt();
-				pre_trigger_default_ = settings.value("Settings/pre_trigger").toUInt();
+				threshold_bank_1_default_ = settings.value(group + "/Threshold_bank_1").toFloat();
+				threshold_bank_2_default_ = settings.value(group + "/Threshold_bank_2").toFloat();
+				channel_number_default_ = settings.value(group + "/channel_number").toInt();
+				sample_count_default_index_ = settings.value(group + "/sample_count_index").toUInt();
+				sample_rate_default_index_ = settings.value(group + "/sample_rate_index").toUInt();
+				is_repeat_acq_default_ = settings.value(group + "/repeat_acquisition").toInt();
+				pre_trigger_default_ = settings.value(group + "/pre_trigger").toUInt();
+				channel_mode_index_ = settings.value(group + "/channel_mode_index", 3).toInt();
+				if (channel_mode_index_ < 0 || channel_mode_index_ > 3)
+					channel_mode_index_ = 3;
 				is_count_setting_default_ = true;
 				is_rate_setting_default_ = true;
 			}
@@ -1416,27 +1612,60 @@ namespace pv
 			}
 		}
 
+		/*
+		 * Rebuilding the device page puts every selector in it back to its
+		 * default, and the signals that come out of that would write those
+		 * defaults over what the user saved. Hold the "restoring" flag for
+		 * as long as the rebuild runs - on every way out of it - so that
+		 * nothing is written while it does.
+		 */
+		struct RestoringGuard {
+			bool &flag_;
+			bool was_;
+			RestoringGuard(bool &flag) : flag_(flag), was_(flag) { flag_ = true; }
+			~RestoringGuard() { flag_ = was_; }
+		};
+
 		void MainBar::update_device_config_widgets()
 		{
+			const RestoringGuard restoring(restoring_defaults_);
+
 			// get default settings
 			get_setting_default();
 			using namespace pv::popups;
 
-			const shared_ptr<devices::Device> device = device_selector_.selected_device();
+			/*
+			 * What the session holds, not what the selector shows: the two
+			 * differ when a picked device could not be opened, and the page
+			 * has to describe the device that is really there.
+			 */
+			const shared_ptr<devices::Device> device = session_.device();
 
 			// Hide the widgets if no device is selected
 			// channels_button_action_->setVisible(!!device);
-			if (!device)
+			if (!device || !device->device())
 			{
 				// configure_button_action_->setVisible(false);
 				sample_count_.show_none();
 				sample_rate_.show_none();
+
+				/* The page belongs to a device that is gone. A stale one
+				 * would keep showing its settings and offer its controls,
+				 * and the vendor name is what tells the rest of the bar
+				 * which settings apply. */
+				if (channels_ && !channels_->parent_dialog_) {
+					delete channels_;
+					channels_ = nullptr;
+				}
+				set_vendorName(QString());
 				return;
 			}
 
 			const shared_ptr<sigrok::Device> sr_dev = device->device();
 			if (!sr_dev)
 				return;
+
+			set_vendorName(QString::fromStdString(sr_dev->vendor()));
 
 			// Check if this is a demo device
 			shared_ptr<devices::HardwareDevice> hw_device =
@@ -1459,18 +1688,34 @@ namespace pv
 			}
 
 			// Update the configure popup
-			DeviceOptions *const opts = new DeviceOptions(sr_dev, this);
-			// configure_button_action_->setVisible(!opts->binding().properties().empty());
-			// configure_button_.set_popup(opts);
+			/* Kept, not leaked: the binding it holds is what reports a
+			 * configuration change, so it has to outlive this call. */
+			if (device_options_)
+				delete device_options_;
+			device_options_ = new DeviceOptions(sr_dev, this);
+			// configure_button_action_->setVisible(!device_options_->binding().properties().empty());
+			// configure_button_.set_popup(device_options_);
 
 			// Update the channels popup
 			if (channels_)
 			{
+				/*
+				 * The dialog that shows this page runs a nested event loop,
+				 * so a device event lands here while the user is looking at
+				 * it. Deleting the page would leave the dialog drawing a
+				 * widget that is gone; the next device change rebuilds it.
+				 */
+				if (channels_->parent_dialog_)
+					return;
+
 				delete channels_;
 				channels_ = nullptr;
 			}
+			/* A session between two devices has none for a moment, and the
+			 * page reads it while it is built. */
+			if (!session_.device())
+				return;
 			channels_ = new Channels(session_, QString::fromStdString(sr_dev->vendor()), this);
-			set_vendorName(QString::fromStdString(sr_dev->vendor()));
 
 			// Read the USB version and apply it
 			if (sr_dev->config_check(ConfigKey::USB_VERSION, Capability::GET))
@@ -1510,12 +1755,21 @@ namespace pv
 
 			// Add notification of reconfigure events
 			// Note: No need to disconnect the previous signal as that QObject instance is destroyed
-			connect(&opts->binding(), SIGNAL(config_changed()),
+			connect(&device_options_->binding(), SIGNAL(config_changed()),
 					this, SLOT(on_config_changed()));
 
 			// Update sweep timing widgets.
 			update_sample_count_selector();
 			update_sample_rate_selector();
+
+			/*
+			 * The page was built with every control at its default - sixteen
+			 * channels, the first sample count - so the settings have to go
+			 * back into it. This is the one place a page is made, so it is
+			 * the one place that has to put them back; callers no longer
+			 * have to remember to do it themselves.
+			 */
+			renew_setting_default();
 		}
 
 		void MainBar::renew_default_bank_threshold()
@@ -1525,25 +1779,42 @@ namespace pv
 
 		void MainBar::renew_setting_default()
 		{
+			/*
+			 * Without a page there is nothing to put the values into: the
+			 * device may have failed to open, and the page is only built
+			 * for a device that did.
+			 */
+			if (!channels_)
+				return;
+
 			// restore settings
 			QString vendorName = get_vendorName();
 			// Supports both the CH569 and the CH32H417
 			if (vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] && vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 				return;
 
+			restoring_defaults_ = true;
+
 			// CH32H417 uses the ThresholdLevel key of GlobalSettings
 			if (vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 			{
+				/*
+				 * This page's own value first. The value last used anywhere
+				 * is only there for the first page - what older versions
+				 * kept for the whole program - so that an installation does
+				 * not come up with the hardware default once.
+				 */
+				QSettings settings;
+				const QString key = setting_group() + "/ThresholdLevel";
 				GlobalSettings gs;
-				if (gs.contains(GlobalSettings::Key_ThresholdLevel))
-				{
+				if (settings.contains(key))
+					threshold_ch32h417_default_ = settings.value(key).toFloat();
+				else if (session_.id() == 0 &&
+					gs.contains(GlobalSettings::Key_ThresholdLevel))
 					threshold_ch32h417_default_ = gs.value(GlobalSettings::Key_ThresholdLevel).toFloat();
-				}
 				else
-				{
 					// The CH32H417 hardware default threshold is 2.3 V
 					threshold_ch32h417_default_ = 2.3f;
-				}
 
 				// Disable analog channels A0/A1 in CH32H417 logic analyzer mode
 				for (const auto &sig : session_.signalbases())
@@ -1560,29 +1831,27 @@ namespace pv
 				channels_->set_default_bank_threshold(threshold_bank_1_default_, threshold_bank_2_default_);
 			}
 
+			/*
+			 * A new page comes up with the last of the modes picked, so the
+			 * one the user chose has to be put back. Only when it is not
+			 * already the one showing: pressing the button runs
+			 * channelSelect(), which drops every logic trigger and rebuilds
+			 * the signals - and a board that only got a new instance from
+			 * a rescan was still using all of that.
+			 */
 			if (channels_)
 			{
-				switch (channel_number_default_)
-				{
-				case 2:
-					if (channels_->radioChannels[0])
-						channels_->radioChannels[0]->click();
-					break;
-				case 4:
-					if (channels_->radioChannels[1])
-						channels_->radioChannels[1]->click();
-					break;
-				case 8:
-					if (channels_->radioChannels[2])
-						channels_->radioChannels[2]->click();
-					break;
-				case 16:
-					if (channels_->radioChannels[3])
-						channels_->radioChannels[3]->click();
-					break;
-				default:
-					break;
-				}
+				int showing = -1;
+				for (int i = 0; i < 4; i++)
+					if (channels_->radioChannels[i] &&
+						channels_->radioChannels[i]->isChecked()) {
+						showing = i;
+						break;
+					}
+
+				if (showing != channel_mode_index_ &&
+					channels_->radioChannels[channel_mode_index_])
+					channels_->radioChannels[channel_mode_index_]->click();
 			}
 
 			commit_channel_number(channel_number_);
@@ -1602,39 +1871,78 @@ namespace pv
 
 			channels_->set_default_pre_trigger(pre_trigger_default_);
 			on_update_pre_trigger(pre_trigger_default_);
+			restoring_defaults_ = false;
 			// end
 		}
 
-		void MainBar::commit_sample_rate()
+		bool MainBar::push_sample_rate(const shared_ptr<sigrok::Device> &sr_dev)
 		{
-			uint64_t sample_rate = 0;
+			if (!sr_dev)
+				return false;
 
-			const shared_ptr<devices::Device> device = device_selector_.selected_device();
-			if (!device)
-				return;
-			double sample_count = 0;
-			const shared_ptr<sigrok::Device> sr_dev = device->device();
-
-			sample_rate = sample_rate_.value();
 			try
 			{
 				sr_dev->config_set(ConfigKey::SAMPLERATE,
-								   Glib::Variant<guint64>::create(sample_rate));
-				sample_count = ((double)sample_count_.get_current_data(sample_count_.get_current_index())) / 10000.00 * (double)sample_rate_.get_current_data(sample_rate_.get_current_index());
-				sr_dev->config_set(ConfigKey::LIMIT_SAMPLES,
-								   Glib::Variant<guint64>::create(sample_count));
-				// update_sample_rate_selector();
+								   Glib::Variant<guint64>::create(sample_rate_.value()));
 			}
 			catch (Error &error)
 			{
 				qDebug() << tr("Failed to configure samplerate:") << error.what();
-				return;
+				return false;
 			}
-			// Devices with built-in memory might impose limits on certain
-			// configurations, so let's check what sample count the driver
-			// lets us use now.
-			sample_rate_value_ = sample_rate;
-			sample_count_value_ = sample_count;
+
+			sample_rate_value_ = sample_rate_.value();
+			return true;
+		}
+
+		void MainBar::apply_capture_limits()
+		{
+			const shared_ptr<devices::Device> device = session_.device();
+			if (!device)
+				return;
+
+			/*
+			 * The channel count first: it decides the sample width, the
+			 * width decides the rate table, and a rate outside that table
+			 * is refused. A board that came back as a new instance holds
+			 * the default count again, so its table is the narrow one
+			 * until it is told otherwise - and the rate the page shows
+			 * would be turned down.
+			 */
+			commit_channel_number(channel_number_);
+
+			/*
+			 * Each value is handed over on its own. A rate the device no
+			 * longer offers must not keep the count from being set: the
+			 * count is what the capture ends on, and a capture started
+			 * without one runs until it is stopped by hand.
+			 */
+			const bool rate_ok = push_sample_rate(device->device());
+
+			/* Starting a capture tells the device; it does not change what
+			 * the page is set up with, so nothing is written down. */
+			commit_sample_count(false);
+		}
+
+		void MainBar::commit_sample_rate()
+		{
+			const shared_ptr<devices::Device> device = session_.device();
+			if (!device)
+				return;
+
+			if (!push_sample_rate(device->device()))
+				return;
+
+			/*
+			 * The count first, the list after: the list is rebuilt from the
+			 * count the device holds and the rate it now runs at, so the
+			 * count has to be the one belonging to the new rate by then.
+			 * The other way round reads the old count against the new rate
+			 * - a time that is out of range - and the page drops to the
+			 * shortest capture.
+			 */
+			commit_sample_count();
+
 			update_sample_count_selector();
 		}
 
@@ -1647,7 +1955,7 @@ namespace pv
 			if (channelNum == 0)
 				return;
 
-			const shared_ptr<devices::Device> device = device_selector_.selected_device();
+			const shared_ptr<devices::Device> device = session_.device();
 			if (!device)
 				return;
 			const shared_ptr<sigrok::Device> sr_dev = device->device();
@@ -1658,7 +1966,6 @@ namespace pv
 			}
 			catch (Error &error)
 			{
-				// Do nothing...
 			}
 		}
 
@@ -1737,10 +2044,10 @@ namespace pv
 			a->renew_version_info();
 		}
 
-		void MainBar::commit_sample_count()
+		void MainBar::commit_sample_count(bool remember)
 		{
 			uint64_t sample_count = 0;
-			const shared_ptr<devices::Device> device = device_selector_.selected_device();
+			const shared_ptr<devices::Device> device = session_.device();
 			if (!device)
 				return;
 			const shared_ptr<sigrok::Device> sr_dev = device->device();
@@ -1782,6 +2089,8 @@ namespace pv
 			// configurations, so let's check what sample rate the driver
 			// lets us use now.
 			// update_sample_rate_selector();
+			if (remember)
+				set_setting_default();
 		}
 
 		void MainBar::show_session_error(const QString text, const QString info_text)
@@ -1932,10 +2241,19 @@ namespace pv
 
 		void MainBar::on_device_selected()
 		{
-			shared_ptr<devices::Device> device = device_selector_.selected_device();
-			if (!device) {
-				return;
-			}
+			switch_to_device(device_selector_.selected_device(), true);
+		}
+
+		bool MainBar::switch_to_device(shared_ptr<devices::Device> device, bool ask)
+		{
+			if (!device)
+				return false;
+
+			/* Picking the board that is already in use changes nothing. In
+			 * a session opened for one board that is the only entry there
+			 * is, and it must not throw the capture away. */
+			if (device == session_.device())
+				return false;
 
 			/*
 			 * Everything set up for the device in hand goes when another
@@ -1944,7 +2262,7 @@ namespace pv
 			 * window uses: capture that has not been saved. A decoder
 			 * merely set up and waiting has no data behind it.
 			 */
-			if (!device_switch_allowed_ && session_.data_held()) {
+			if (ask && !device_switch_allowed_ && session_.data_held()) {
 				const QMessageBox::StandardButton answer = QMessageBox::question(
 					this, tr("Switch device"),
 					tr("Switch device? The captured data and its decoders "
@@ -1954,48 +2272,62 @@ namespace pv
 				if (answer != QMessageBox::Yes) {
 					/* Put the selector back to the device in use. */
 					update_device_list();
-					return;
+					return false;
 				}
 
 				device_switch_allowed_ = true;
 			}
 
+
 			const shared_ptr<sigrok::Device> sr_dev = device->device();
-			QString vendor = QString::fromStdString(sr_dev->vendor());
-			QString model = QString::fromStdString(sr_dev->model());
-
-			// Handle switching between CH569 and CH32H417 devices
-			if (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] || vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
-			{
-				// Update the name shown in the device selector
-				QString device_name = vendor;
-				QString vendor_name = vendor;
-				set_device_selector_name(device_name);
-				set_vendorName(vendor_name);
-
-				// Switch to the selected device
-				session_.select_device(device);
-
-				if (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
-				{
-					try
-					{
-						sr_dev->config_set(ConfigKey::PATTERN_MODE,
-										   Glib::Variant<Glib::ustring>::create("Logic Analyzer"));
-						qDebug() << "CH32H417 device mode set to Logic Analyzer on device switch";
-						update_sample_rate_selector();
-						update_sample_rate_selector_value();
-					}
-					catch (Error &error)
-					{
-						qDebug() << tr("Failed to set CH32H417 mode on device switch:") << error.what();
-					}
-				}
-				return;
+			if (!sr_dev) {
+				return false;
 			}
 
-			// Other devices
+			const QString vendor = QString::fromStdString(sr_dev->vendor());
+			const bool wch_device =
+				(vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] ||
+				 vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]);
+
+			/*
+			 * The vendor is what the settings logic keys off, so for a WCH
+			 * board it must stay the bare model name; the label the user
+			 * sees is set further down and may carry the port.
+			 */
+			if (wch_device)
+				set_vendorName(vendor);
+
 			session_.select_device(device);
+
+			/* A board that refused to open leaves the session empty, and the
+			 * selector must not keep showing it as the one in use. */
+			if (!session_.device()) {
+				device_selector_.clear_selection();
+				return false;
+			}
+
+
+			device_selector_.set_current_device(session_.device());
+
+			if (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]) {
+				/*
+				 * A board can come back in the ADC mode it was left in, and
+				 * the capture path here is the logic analyzer. Done after the
+				 * open: the mode is a device setting, not a session one.
+				 */
+				try {
+					sr_dev->config_set(ConfigKey::PATTERN_MODE,
+						Glib::Variant<Glib::ustring>::create("Logic Analyzer"));
+					qDebug() << "CH32H417 device mode set to Logic Analyzer on device switch";
+					update_sample_rate_selector();
+					update_sample_rate_selector_value();
+				} catch (Error &error) {
+					qDebug() << tr("Failed to set CH32H417 mode on device switch:")
+						 << error.what();
+				}
+			}
+
+			return true;
 		}
 
 		void MainBar::hot_plug_listen()
@@ -2211,10 +2543,12 @@ namespace pv
 				QString::fromStdString(
 					hw_device->hardware_device()->driver()->name()) : QString());
 
+			/* Rebuilds the selector, which ends by rebuilding the device
+			 * page as well; calling that again here would throw the page
+			 * away and build it a second time. Putting the settings back
+			 * is part of building the page, so it happens there. */
 			update_device_list();
-			update_device_config_widgets();
 			update_device_status_icon();
-			renew_setting_default();
 
 			/*
 			 * The zoom and pan limits are derived from the sample rate and
@@ -2225,6 +2559,15 @@ namespace pv
 			 */
 			if (view_)
 				view_->update_scale_offset(false);
+		}
+
+		void MainBar::refresh_device_widgets()
+		{
+			/* The device went away and nothing took its place: the page that
+			 * described it has to go as well, or it keeps showing a board
+			 * that is no longer on any bus. */
+			update_device_config_widgets();
+			update_device_status_icon();
 		}
 
 		void MainBar::hot_plug_start()
@@ -2358,10 +2701,16 @@ namespace pv
 
 			if (!file_name.isEmpty())
 			{
-				session_.load_file(file_name);
-
 				const QString abs_path = QFileInfo(file_name).absolutePath();
 				settings.setValue(SettingOpenDirectory, abs_path);
+
+				/*
+				 * A file opened while a trace is up is a second trace, not a
+				 * replacement for the first: the window puts it in a session
+				 * of its own (and reuses the one in front when that still
+				 * holds nothing).
+				 */
+				Q_EMIT open_file_requested(file_name);
 			}
 		}
 
@@ -2454,13 +2803,13 @@ namespace pv
 			addWidget(save_button_);
 			addSeparator();
 
-			addWidget(&device_selector_);
+			device_selector_action_ = addWidget(&device_selector_);
 			if (channels_button_ex_)
 				addWidget(channels_button_ex_);
 			addWidget(&sample_count_);
 			addWidget(&sample_rate_);
-			addWidget(model_change_button_);
-			addWidget(run_stop_button_);
+			model_change_action_ = addWidget(model_change_button_);
+			run_stop_action_ = addWidget(run_stop_button_);
 			addSeparator();
 
 			StandardBar::add_toolbar_widgets();
@@ -2507,6 +2856,13 @@ namespace pv
 
 		void MainBar::channels_button_ex_clicked()
 		{
+			/* The page is built per device, so a click that comes before one
+			 * is there builds it now: the device may have just arrived. */
+			if (!channels_)
+				update_device_config_widgets();
+			if (!channels_)
+				return;
+
 			QDialog *dialog = new QDialog(this);
 			dialog->setWindowTitle(tr("Device Options"));
 			dialog->setModal(true);
@@ -2520,8 +2876,23 @@ namespace pv
 			QVBoxLayout *layout = new QVBoxLayout(dialog);
 			layout->setContentsMargins(0, 0, 0, 0);
 			layout->addWidget(channels_);
-			connect(dialog, &QDialog::finished, this, [this, dialog]()
-					{ channels_->setParent(this); channels_->parent_dialog_ = nullptr; });
+			connect(dialog, &QDialog::finished, this, [this]() {
+				if (channels_) {
+					channels_->setParent(this);
+					channels_->parent_dialog_ = nullptr;
+				}
+
+				/*
+				 * A device change that arrived while the dialog was up was
+				 * left alone, so the page may still describe the board that
+				 * is gone. Rebuilding it has to wait for the dialog to be
+				 * deleted, or the layout would hold a widget that no longer
+				 * exists.
+				 */
+				QTimer::singleShot(0, this, [this]() {
+					update_device_config_widgets();
+				});
+			});
 			dialog->setLayout(layout);
 
 			channels_->parent_dialog_ = dialog;

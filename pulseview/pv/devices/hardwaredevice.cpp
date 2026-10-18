@@ -78,41 +78,27 @@ shared_ptr<sigrok::HardwareDevice> HardwareDevice::hardware_device() const
 string HardwareDevice::display_name(
 	const DeviceManager &device_manager) const
 {
-	const auto hw_dev = hardware_device();
-
-	// If we can find another device with the same model/vendor then
-	// we have at least two such devices and need to distinguish them.
-	const auto &devices = device_manager.devices();
-	const bool multiple_dev = hw_dev && any_of(
-		devices.begin(), devices.end(),
-		[&](shared_ptr<devices::HardwareDevice> dev) {
-			return dev->hardware_device()->vendor() ==
-					hw_dev->vendor() &&
-				dev->hardware_device()->model() ==
-					hw_dev->model() &&
-				dev->device_ != device_;
-		});
+	(void)device_manager;
 
 	vector<string> parts = {};
 	if (device_->vendor().length() > 0)
 		parts.push_back(device_->vendor());
 	else
 		parts.push_back("Demo device");
-	// if (device_->model().length() > 0)
-	// 	parts.push_back(device_->model());
 
-	// if (multiple_dev) {
-	// 	if (device_->version().length() > 0)
-	// 		parts.push_back(device_->version());
-	// 	if (device_->serial_number().length() > 0)
-	// 		parts.push_back("[S/N: " + device_->serial_number() + "]");
+	/*
+	 * The name is the model plus the port the board sits in. The
+	 * connection id is that port, and it is also what tells two boards of
+	 * the same model apart - a serial number can be missing, copied
+	 * between boards, or repeated by firmware that writes the same one
+	 * everywhere. Shown for a single board too, so its port is named.
+	 */
+	if (device_->connection_id().length() > 0)
+		parts.push_back(device_->connection_id());
+	else if (device_->serial_number().length() > 0)
+		parts.push_back("[" + device_->serial_number() + "]");
 
-	// 	if ((device_->serial_number().length() == 0) &&
-	// 		(device_->connection_id().length() > 0))
-	// 		parts.push_back("(" + device_->connection_id() + ")");
-	// }
-
-	return join(parts, "");
+	return join(parts, " ");
 }
 
 void HardwareDevice::open()

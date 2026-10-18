@@ -48,6 +48,7 @@
 #include <pv/data/logicsegment.hpp>
 #include <pv/data/signalbase.hpp>
 #include <pv/devices/device.hpp>
+#include <pv/devices/hardwaredevice.hpp>
 
 using std::make_shared;
 using std::map;
@@ -214,6 +215,14 @@ void Channels::init_ui()
 		model_ = device->model();
 		is_weact_logic_v2_ = model_.find("WeAct Studio Logic Analyzer V2") != string::npos;
 		
+		/* The port is what tells two boards of one model apart, so it
+		 * comes before the model that they share. */
+		const string port = device->connection_id();
+		if (!port.empty()) {
+			port_label_ = new QLabel(QString::fromStdString(port));
+			layout_.addRow(tr("Port:"), port_label_);
+		}
+
 		device_name_label_ = new QLabel();
 		device_name_label_->setText(QString::fromStdString(model_));
 		layout_.addRow(tr("Model:"), device_name_label_);
@@ -303,6 +312,14 @@ void Channels::init_other_ui()
 	if (!device)
 		return;
 
+	/* The port is what distinguishes two boards of one model, so it is
+	 * shown for every device that names one, above the shared model. */
+	const string port = device->connection_id();
+	if (!port.empty()) {
+		port_label_ = new QLabel(QString::fromStdString(port));
+		layout_.addRow(tr("Port:"), port_label_);
+	}
+
 	const string model = device->model();
 	if (!model.empty()) {
 		device_name_label_ = new QLabel(QString::fromStdString(model));
@@ -315,7 +332,11 @@ void Channels::init_other_ui()
 		layout_.addRow(tr("SN:"), serial_number_label_);
 	}
 
-	/* Only a device that takes a capture ratio can place the trigger. */
+	/*
+	 * Only a device that takes a capture ratio can place the trigger. The
+	 * demo device reports one but generates its own signal, so the setting
+	 * never reaches anything and is left out.
+	 */
 	bool can_pre_trigger = false;
 	try {
 		can_pre_trigger = device->config_check(
@@ -324,7 +345,12 @@ void Channels::init_other_ui()
 		qDebug() << "Failed to check the capture ratio support:" << error.what();
 	}
 
-	if (can_pre_trigger) {
+	const shared_ptr<devices::HardwareDevice> hw_device =
+		std::dynamic_pointer_cast<devices::HardwareDevice>(session_.device());
+	const bool is_demo = hw_device &&
+		(hw_device->hardware_device()->driver()->name() == "demo");
+
+	if (can_pre_trigger && !is_demo) {
 		pre_trigger_selector_ = new QDoubleSpinBox();
 		pre_trigger_selector_->setRange(0, 100);
 		pre_trigger_selector_->setSingleStep(1);
@@ -712,7 +738,14 @@ void Channels::channelSelect(uint16_t index)
 {
 	updating_channels_ = true;
 
-	clear_all_logic_triggers();
+	/*
+	 * The triggers used to be dropped here, so that a mode change could
+	 * not leave one on a channel the new mode has disabled. This runs on
+	 * every rebuild of the page as well, though - a board that only got a
+	 * new instance from a rescan had its whole trigger setup wiped for
+	 * nothing. A trigger on a channel that is not shown does no harm, so
+	 * it is left alone.
+	 */
 
 	struct ChannelConfig {
 		int channel_count;
@@ -1269,6 +1302,7 @@ void Channels::retranslate_ui()
 
 	set_field_label(device_name_label_, tr("Model:"));
 	set_field_label(serial_number_label_, tr("SN:"));
+	set_field_label(port_label_, tr("Port:"));
 	set_field_label(mode_selector_, tr("Device Mode"));
 	set_field_label(pre_trigger_selector_, tr("Pre-trigger"));
 	if (pre_trigger_selector_)

@@ -1953,8 +1953,15 @@ void View::renew_measure()
 					diff = t3 - t1;
 					viewport_->period_ = util::format_time_si(
 						diff, pv::util::SIPrefix::unspecified, 3, ("s"), false);
-					viewport_->freq_ = util::format_value_si(
-						1 / diff.convert_to<double>(), pv::util::SIPrefix::unspecified, 6, ("Hz"), false);
+					/*
+					 * The precision of format_value_si counts digits below
+					 * the base unit, so letting it pick the prefix burns six
+					 * of them at MHz and leaves none. Pick the prefix here
+					 * and ask for three decimals after it.
+					 */
+					const double freq = 1 / diff.convert_to<double>();
+					viewport_->freq_ = util::format_value_si(freq,
+						util::determine_value_prefix(freq), 3, ("Hz"), false);
 					char str[64] = "";
 					sprintf(str, "%.2f%%", (double)(t2-t1) / (double)(t3-t1) * 100.00);
 					viewport_->duty_cycle_ = QString::fromUtf8(str);

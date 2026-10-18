@@ -20,10 +20,14 @@
  */
 
 #include <cassert>
+#include <algorithm>
 
 #include <QEvent>
+#include <QHBoxLayout>
+#include <QStyle>
 #include <QTimer>
 #include <QToolTip>
+#include <QWidgetAction>
 #include <QDebug>
 #include <libsigrokcxx/libsigrokcxx.hpp>
 
@@ -45,6 +49,7 @@ using pv::devices::Device;
 namespace pv {
 namespace widgets {
 
+
 DeviceToolButton::DeviceToolButton(QWidget *parent,
 	DeviceManager *device_manager,
 	QAction *connect_action) :
@@ -52,7 +57,6 @@ DeviceToolButton::DeviceToolButton(QWidget *parent,
 	device_manager_(device_manager),
 	connect_action_(connect_action),
 	menu_(this),
-	mapper_(this),
 	devices_(),
 	refresh_action_(new QAction(this))
 {
@@ -61,10 +65,6 @@ DeviceToolButton::DeviceToolButton(QWidget *parent,
 	setToolTip("");
 
 	connect(this, SIGNAL(clicked()), this, SLOT(on_button_clicked()));
-
-	/* mappedObject() is what Qt 5.15 and Qt 6 both carry. */
-	connect(&mapper_, SIGNAL(mappedObject(QObject*)),
-		this, SLOT(on_action(QObject*)));
 
 	connect(&menu_, SIGNAL(hovered(QAction*)),
 		this, SLOT(on_menu_hovered(QAction*)));
@@ -170,26 +170,167 @@ bool DeviceToolButton::only_demo_device() const
 	return true;
 }
 
+void DeviceToolButton::set_device_selector_role(bool new_session_allowed,
+	bool single_device_only)
+{
+	new_session_allowed_ = new_session_allowed;
+	single_device_only_ = single_device_only;
+	update_device_list();
+}
+
+void DeviceToolButton::set_busy_devices(const QSet<QString> &busy,
+	const QString &own)
+{
+	busy_devices_ = busy;
+	own_identity_ = own;
+	update_device_list();
+}
+
+QString DeviceToolButton::device_identity(const shared_ptr<Device> &device)
+{
+	if (!device)
+		return QString();
+
+	const shared_ptr<sigrok::Device> sr_dev = device->device();
+	if (!sr_dev)
+		return QString();
+
+	/*
+	 * The connection id comes first: it is unique for every device on the
+	 * bus, while a serial number can be repeated by firmware that writes
+	 * the same one into every board. A device that reports neither falls
+	 * back to what it says about itself.
+	 */
+	const string conn = sr_dev->connection_id();
+	if (!conn.empty())
+		return QString::fromStdString(conn);
+
+	const string serial = sr_dev->serial_number();
+	if (!serial.empty())
+		return QString::fromStdString(serial);
+
+	return QString::fromStdString(sr_dev->vendor()) + "/" +
+		QString::fromStdString(sr_dev->model());
+}
+
+void DeviceToolButton::set_current_device(
+	const shared_ptr<devices::Device> &device)
+{
+	selected_device_ = device;
+	set_label(device ? QString::fromStdString(
+		device->display_name(*device_manager_)) : tr("<No Device>"));
+}
+
+void DeviceToolButton::activate_device(shared_ptr<Device> device)
+{
+	selected_device_ = device;
+	set_label(device ? QString::fromStdString(
+		device->display_name(*device_manager_)) : tr("<No Device>"));
+	update_device_list();
+	device_selected();
+}
+
+void DeviceToolButton::clear_selection()
+{
+	activate_device(nullptr);
+}
+
 void DeviceToolButton::update_device_list()
 {
 	menu_.clear();
 
+	vector< shared_ptr<Device> > shown;
 	for (weak_ptr<Device>& dev_weak_ptr : devices_) {
 		shared_ptr<Device> dev(dev_weak_ptr.lock());
 		if (!dev)
 			continue;
 
-		QAction *const a = new QAction(QString::fromStdString(
-			dev->display_name(*device_manager_)), this);
-		a->setCheckable(true);
-		a->setChecked(selected_device_ == dev);
-		a->setData(QVariant::fromValue((void*)dev.get()));
-		a->setToolTip(QString::fromStdString(dev->full_name()));
-		mapper_.setMapping(a, a);
+		/* A session opened for one board stays with it: the menu is not a
+		 * way to swap that board for another one. */
+		if (single_device_only_ && (dev != selected_device_))
+			continue;
 
-		connect(a, SIGNAL(triggered()), &mapper_, SLOT(map()));
+		shown.push_back(dev);
+	}
 
-		menu_.addAction(a);
+	/*
+	 * The demo device is the stand-in for a board that was not there. Once
+	 * one is in the list the stand-in is only noise, so it goes - unless it
+	 * is all there is, in which case it is what the menu has to offer.
+	 */
+	const bool has_hardware = std::any_of(shown.begin(), shown.end(),
+		[](const shared_ptr<Device> &dev) { return !is_demo_device(dev); });
+	if (has_hardware)
+		shown.erase(std::remove_if(shown.begin(), shown.end(),
+			[](const shared_ptr<Device> &dev) { return is_demo_device(dev); }),
+			shown.end());
+
+	for (const shared_ptr<Device> &dev : shown) {
+		const bool current = (dev == selected_device_);
+		const QString identity = device_identity(dev);
+
+		QWidget *const row = new QWidget(&menu_);
+		QHBoxLayout *const row_layout = new QHBoxLayout(row);
+		row_layout->setContentsMargins(6, 0, 4, 0);
+		row_layout->setSpacing(0);
+
+		QToolButton *const pick = new QToolButton(row);
+		pick->setAutoRaise(true);
+		pick->setToolButtonStyle(Qt::ToolButtonTextOnly);
+		/* A check mark for the one in use, spaces for the rest, so the
+		 * names stay in one column. */
+		pick->setText((current ? QString::fromUtf8("\xE2\x9C\x93  ")
+			: QString("      ")) +
+			QString::fromStdString(dev->display_name(*device_manager_)));
+		pick->setToolTip(QString::fromStdString(dev->full_name()));
+		pick->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+		QFont pick_font = pick->font();
+		pick_font.setBold(current);
+		pick->setFont(pick_font);
+
+		/*
+		 * A board another session is on is not for this page to move to:
+		 * the session that holds it is the one that runs it.
+		 */
+		if (!current && !identity.isEmpty() &&
+			busy_devices_.contains(identity) && (identity != own_identity_)) {
+			pick->setEnabled(false);
+			pick->setToolTip(tr("This device is in use by another session"));
+		}
+
+		row_layout->addWidget(pick, 1);
+
+		if (new_session_allowed_) {
+			QToolButton *const open_new = new QToolButton(row);
+			open_new->setAutoRaise(true);
+			open_new->setIcon(style()->standardIcon(QStyle::SP_FileDialogNewFolder));
+			open_new->setFixedSize(18, 18);
+			const bool busy = identity.isEmpty() || busy_devices_.contains(identity);
+			open_new->setEnabled(!busy);
+			open_new->setToolTip(busy
+				? tr("This device is already open in another session")
+				: tr("Open this device in a new session"));
+			row_layout->addWidget(open_new, 0);
+			connect(open_new, &QToolButton::clicked, this, [this, identity]() {
+				menu_.close();
+				/* Queued: the answer rebuilds this menu, and the row this
+				 * click came from is gone once the handler returns. */
+				QTimer::singleShot(0, this, [this, identity]() {
+					device_new_session_requested(identity);
+				});
+			});
+		}
+
+		connect(pick, &QToolButton::clicked, this, [this, dev]() {
+			menu_.close();
+			QTimer::singleShot(0, this, [this, dev]() {
+				activate_device(dev);
+			});
+		});
+
+		QWidgetAction *const action = new QWidgetAction(&menu_);
+		action->setDefaultWidget(row);
+		menu_.addAction(action);
 	}
 
 	if (only_demo_device()) {
@@ -200,7 +341,7 @@ void DeviceToolButton::update_device_list()
 		menu_.addAction(refresh_action_);
 	}
 
-	if(selected_device_ != nullptr)
+	if (selected_device_ != nullptr)
 		setToolTip(QString::fromStdString(selected_device_->full_name()));
 }
 
@@ -209,26 +350,6 @@ void DeviceToolButton::update_device_mamager(DeviceManager * dev_manager)
 	device_manager_ = dev_manager;
 }
 
-void DeviceToolButton::on_action(QObject *action)
-{
-	assert(action);
-
-	selected_device_.reset();
-
-	Device *const dev = (Device*)((QAction*)action)->data().value<void*>();
-	for (weak_ptr<Device>& dev_weak_ptr : devices_) {
-		shared_ptr<Device> dev_ptr(dev_weak_ptr);
-		if (dev_ptr.get() == dev) {
-			selected_device_ = shared_ptr<Device>(dev_ptr);
-			break;
-		}
-	}
-
-	update_device_list();
-	setText(QString::fromStdString(
-		selected_device_->display_name(*device_manager_)));
-	device_selected();
-}
 
 void DeviceToolButton::on_menu_hovered(QAction *action)
 {

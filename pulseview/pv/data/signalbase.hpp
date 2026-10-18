@@ -139,6 +139,14 @@ public:
 	shared_ptr<sigrok::Channel> channel() const;
 
 	/**
+	 * Points the signal at another SR channel of the same device, e.g. the
+	 * one a re-scan handed out for the board that is already in use. Only
+	 * the channel is exchanged: the data, the name and the colour of the
+	 * signal stay as they are.
+	 */
+	void set_channel(shared_ptr<sigrok::Channel> channel);
+
+	/**
 	 * Returns whether this channel is generated or a channel associated with the device.
 	 */
 	bool is_generated() const;

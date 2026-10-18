@@ -1167,8 +1167,14 @@ static void drawRoundedBorderSurface( QPainter* painter, const QRectF& rect, qre
     painter->drawRoundedRect( rect, radius, radius );
 }
 
+/*
+ * Named after this file rather than after Qt's own helper: the same symbol
+ * exists in Qt 6's Widgets library, and a debug build links both definitions
+ * and stops with "multiple definition of qDrawPlainRoundedRect". The release
+ * link only got away with it by dropping the unused copy.
+ */
 inline void
-qDrawPlainRoundedRect( QPainter* p, int x, int y, int w, int h, qreal rx, qreal ry, const QColor& c, int lineWidth, const QBrush* fill )
+fluentDrawPlainRoundedRect( QPainter* p, int x, int y, int w, int h, qreal rx, qreal ry, const QColor& c, int lineWidth, const QBrush* fill )
 {
     if ( w == 0 || h == 0 )
     {
@@ -1196,14 +1202,14 @@ qDrawPlainRoundedRect( QPainter* p, int x, int y, int w, int h, qreal rx, qreal 
     p->drawRoundedRect( rect, rx, ry );
 }
 
-inline void qDrawPlainRoundedRect( QPainter* painter,
+inline void fluentDrawPlainRoundedRect( QPainter* painter,
                                    const QRect& rect,
                                    qreal rx,
                                    qreal ry,
                                    const QColor& lineColor,
                                    int lineWidth      = 1,
                                    const QBrush* fill = nullptr )
-{ qDrawPlainRoundedRect( painter, rect.x(), rect.y(), rect.width(), rect.height(), rx, ry, lineColor, lineWidth, fill ); }
+{ fluentDrawPlainRoundedRect( painter, rect.x(), rect.y(), rect.width(), rect.height(), rx, ry, lineColor, lineWidth, fill ); }
 
 void fluentui3DrawShadeRect( QPainter* p,
                      int x,
@@ -6004,7 +6010,7 @@ void FluentUI3Style::drawControl( ControlElement element, const QStyleOption* op
                     case QFrame::Box :
                         if ( frameShadow == QFrame::Plain )
                         {
-                            qDrawPlainRoundedRect( painter,
+                            fluentDrawPlainRoundedRect( painter,
                                                    f->rect,
                                                    secondLevelRoundingRadius,
                                                    secondLevelRoundingRadius,
@@ -6020,7 +6026,7 @@ void FluentUI3Style::drawControl( ControlElement element, const QStyleOption* op
                     case QFrame::Panel :
                         if ( frameShadow == QFrame::Plain )
                         {
-                            qDrawPlainRoundedRect( painter,
+                            fluentDrawPlainRoundedRect( painter,
                                                    f->rect,
                                                    secondLevelRoundingRadius,
                                                    secondLevelRoundingRadius,

@@ -91,7 +91,11 @@ public:
 
 	QRadioButton* radioChannels[4];
 	QString device_name_;
-	QDialog* parent_dialog_;
+	/* Set while a dialog shows this page. It must start empty: the code
+	 * that rebuilds the page reads it to know whether the widget is on
+	 * screen, and an uninitialised value reads as "in use", which keeps
+	 * the page of the previous device for good. */
+	QDialog* parent_dialog_ = nullptr;
 
 Q_SIGNALS:
 	void max_sample_rate_change(uint64_t maxSampleRate);
@@ -164,6 +168,9 @@ private:
 	QLabel* threshold_label_ = nullptr;
 	QLabel* device_name_label_ = nullptr;
 	QLabel* serial_number_label_ = nullptr;
+	/* The port the device sits on ("ch375/0"). It is what tells two boards
+	 * of one model apart: the serial number may be missing or repeated. */
+	QLabel* port_label_ = nullptr;
 	QGroupBox* options_box_ = nullptr;
 	QGroupBox* logic_props_box_ = nullptr;
 	QGroupBox* analog_props_box_ = nullptr;

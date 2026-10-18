@@ -152,6 +152,13 @@ public:
 
 	~Session();
 
+	/**
+	 * A number no other page of this run has. What a page is set up with
+	 * is kept under it, so that two pages do not write over each other.
+	 */
+	int id() const;
+
+
 	DeviceManager* device_manager_ptr();
 
 	DeviceManager& device_manager();
@@ -198,8 +205,35 @@ public:
 	 * Sets device instance that will be used in the next capture session.
 	 */
 	void set_device(shared_ptr<devices::Device> device);
+
+	/**
+	 * Takes over a fresh instance of the device this session already uses,
+	 * without going through set_device(): a board that stays plugged in
+	 * comes back from a scan as a new object, and the session has to follow
+	 * it. The capture in it survives - a board appearing on another port is
+	 * no reason to throw the data away. Returns false when it cannot be
+	 * done, so that the caller can fall back to set_device().
+	 */
+	bool adopt_device_instance(shared_ptr<devices::Device> device);
+
+	/**
+	 * Opens the device this session already holds again, after a scan closed
+	 * it, without going through set_device(). The capture in it survives,
+	 * which is why this exists: the same board coming back from a scan is
+	 * not a reason to throw the data away. Returns false when it cannot be
+	 * opened.
+	 */
+	bool reopen_device();
 	void set_default_device();
 	bool using_file_device() const;
+
+	/**
+	 * A copy of another session's capture: it holds the data of a moment
+	 * that has passed, so there is nothing to capture into it and nothing
+	 * to reload from - its own buttons do not apply.
+	 */
+	void set_snapshot(bool on) { snapshot_ = on; }
+	bool is_snapshot() const { return snapshot_; }
 
 	void load_init_file(const string &file_name, const string &format,
 		const string &setup_file_name);
@@ -357,6 +391,7 @@ private:
 	bool shutting_down_;
 	atomic<DeviceManager *>device_manager_;
 	// DeviceManager *device_manager_;
+	int id_;
 	shared_ptr<devices::Device> device_;
 	QString default_name_, name_, save_path_;
 
@@ -402,6 +437,7 @@ private:
 	 * goes away with the device.
 	 */
 	bool data_held_ = false;
+	bool snapshot_ = false;
 	bool frame_began_;
 	bool is_stop_capture_;
 	bool is_first_trigger_;

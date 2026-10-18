@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdarg>
+#include <cstdio>
 #include <climits>
 #include <cstdint>
 #include <iterator>
@@ -34,12 +35,23 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QDateTime>
 #include <QDebug>
+#include <QDir>
+#include <QFileDialog>
 #include <QDockWidget>
+#include <QFile>
+#include <QFontMetrics>
+#include <QPainter>
+#include <QProgressBar>
+#include <QProgressDialog>
+#include <QPainterPath>
 #include <QHBoxLayout>
 #include <QDialog>
 #include <QLabel>
 #include <QPushButton>
+#include <QSet>
+#include <QTabBar>
 #include <QVBoxLayout>
 #ifdef __linux__
 #include <unistd.h>
@@ -50,7 +62,7 @@
 #include <QSettings>
 #include <QShortcut>
 #include <QWidget>
-#include <QString>
+#include <QString>
 #include <QStringList>
 #include <QTime>
 #include <QTimer>
@@ -64,6 +76,9 @@
 #include "dialogs/settings.hpp"
 #include "globalsettings.hpp"
 #include "toolbars/mainbar.hpp"
+#include "widgets/devicetoolbutton.hpp"
+#include "storesession.hpp"
+#include "data/decodesignal.hpp"
 #include "util.hpp"
 #include "views/trace/view.hpp"
 #include "views/trace/standardbar.hpp"
@@ -851,6 +866,23 @@ shared_ptr<Session> MainWindow::add_session()
 	window->setDockNestingEnabled(true);
 
 	add_view(views::ViewTypeTrace, *session);
+
+	/*
+	 * The bar of this session can ask for a file, for a board to be opened
+	 * in a session of its own, or for the captured trace to be copied into
+	 * one. All three are the window's to carry out.
+	 */
+	if (session->main_bar()) {
+		connect(session->main_bar().get(), &toolbars::MainBar::open_file_requested,
+			this, &MainWindow::on_open_file_requested);
+		connect(session->main_bar().get(), &toolbars::MainBar::device_new_session_requested,
+			this, &MainWindow::on_device_new_session_requested);
+		connect(session->main_bar().get(), &toolbars::MainBar::copy_session_requested,
+			this, &MainWindow::on_copy_session_requested);
+	}
+
+	update_session_roles();
+	update_session_tabs();
 	return session;
 }
 
@@ -872,40 +904,154 @@ static string ch32h417_driver_name(const shared_ptr<sigrok::Context>& context)
 	return names.front();
 }
 
-void MainWindow::do_device_detach_switch()
+/*
+ * Whether another session than the one asking is already on this board:
+ * the identity is the port the board sits in, so it is the same board even
+ * though a scan handed each session its own instance of it.
+ */
+static bool board_taken(const list< shared_ptr<Session> > &sessions,
+	const shared_ptr<Session> &self, const shared_ptr<devices::Device> &dev)
 {
-	if (!last_focused_session_ || !last_focused_session_->main_bar()) {
+	const QString identity = widgets::DeviceToolButton::device_identity(dev);
+	if (identity.isEmpty())
+		return false;
+
+	for (const shared_ptr<Session>& s : sessions)
+		if (s && s != self &&
+			widgets::DeviceToolButton::device_identity(s->device()) == identity)
+			return true;
+
+	return false;
+}
+
+void MainWindow::do_device_detach_switch(const shared_ptr<Session> &session)
+{
+	/*
+	 * The session whose board went away, which is not always the one in
+	 * front: a board can be opened in a session of its own and be the one
+	 * that is pulled while the user is looking at another.
+	 */
+	if (!session || !session->main_bar()) {
 		return;
 	}
 
-	last_focused_session_->device_detached();
+	/* What the page is about to lose, remembered in case it has to fall
+	 * back to the demo device: the board can come back to it later. */
+	const QString lost_identity =
+		widgets::DeviceToolButton::device_identity(session->device());
+
+	/*
+	 * A session that was opened for a board of its own has nothing left to
+	 * do once that board is pulled, so it is closed - that is what pulling
+	 * it asks for, whether the capture on it was saved or not. Keeping it
+	 * would only leave a page holding another board's settings.
+	 *
+	 * The capture page is the one that cannot be closed, so it is the one
+	 * that moves to whatever is still there.
+	 */
+	if (!sessions_.empty() && session != sessions_.front()) {
+		remove_session(session);
+
+		/*
+		 * The board is gone from the list the rescan made, but every page
+		 * that is left was built before that and would still offer it -
+		 * the capture page above all, since it is the one the user is
+		 * looking at.
+		 */
+		for (const shared_ptr<Session>& s : sessions_)
+			if (s && s->main_bar())
+				s->main_bar()->refresh_device_selector();
+
+		return;
+	}
+
+	session->device_detached();
 
 	/* Reuse the global context: a second Context would sr_exit() the
 	 * shared backend when destroyed, freeing every device instance. */
+
 	shared_ptr<sigrok::Context> context = sigrok_context_;
 	string driver = ch32h417_driver_name(context);
-	auto new_device_manager = new pv::DeviceManager(context, driver, true);
-	if (device_manager_) {
-		delete device_manager_.load();
+	/*
+	 * Let go of the old instances before scanning, not after: a scan opens
+	 * every board it finds, and deleting the old manager afterwards closes
+	 * what that manager holds - by an index that a board coming or going
+	 * has already moved. Every page has to let go of its board, not only
+	 * the one that lost it, since a page's own reference keeps the board
+	 * open and the scan would leave it out as if it had been unplugged.
+	 */
+	for (const shared_ptr<Session> &s : sessions_) {
+		if (!s || !s->device() || s == session)
+			continue;
+		try {
+			s->device()->close();
+		} catch (const sigrok::Error &e) {
+			qWarning() << "Error closing a device before the scan:" << e.what();
+		} catch (const QString &msg) {
+			qWarning() << "Error closing a device before the scan:" << msg;
+		}
 	}
+
+	/*
+	 * The fresh manager takes over before the old one goes: releasing it
+	 * lets signals through, and a page being built at that moment asks the
+	 * window for a manager - one that had been set aside would hand it a
+	 * null one, and the page would be built around nothing.
+	 */
+	pv::DeviceManager *const old_device_manager = device_manager_.load();
+	auto new_device_manager = new pv::DeviceManager(context, driver, true);
 	device_manager_.store(new_device_manager);
 	update_sessions_device_manager(new_device_manager);
+	if (old_device_manager)
+		delete old_device_manager;
+
+	/*
+	 * The old manager took every device of it with it when it went, the
+	 * boards of the other sessions included - they would go on holding
+	 * instances that are shut, and every call they make into the driver
+	 * would fail. Each of them takes the fresh instance of its own board.
+	 */
+	adopt_device_in_sessions();
+	update_session_roles();
 
 	list< shared_ptr<devices::HardwareDevice> > devices = new_device_manager->devices();
 
 	if (!devices.empty()) {
-		shared_ptr<devices::Device> default_device = devices.front();
+		shared_ptr<devices::Device> default_device;
 		WchDeviceType found_device_type = WchDeviceType::None;
 
+		/*
+		 * Any board that is free will do, whatever make it is: there is no
+		 * order between them, and a board of another make takes a capture
+		 * just as well as a WCH one. What a board must not be is one that
+		 * another session is already on - two pages on one board would both
+		 * try to run it, which is what put the board of the second session
+		 * on the capture page as well.
+		 */
 		for (const shared_ptr<devices::HardwareDevice>& dev : devices) {
-			WchDeviceType dev_type = get_wch_device_type_by_driver(
+			if (board_taken(sessions_, session, dev))
+				continue;
+			if (dev->hardware_device()->driver()->name() == "demo")
+				continue;
+
+			found_device_type = get_wch_device_type_by_driver(
 				dev->hardware_device()->driver()->name());
-			if (dev_type != WchDeviceType::None) {
-				found_device_type = dev_type;
-				default_device = dev;
-				break;
-			}
+			default_device = dev;
+			break;
 		}
+
+		/* Every board is in use elsewhere or gone: the demo device. */
+		if (!default_device)
+			for (const shared_ptr<devices::HardwareDevice>& dev : devices) {
+				shared_ptr<devices::HardwareDevice> hw_dev =
+					std::dynamic_pointer_cast<devices::HardwareDevice>(dev);
+				if (hw_dev &&
+					hw_dev->hardware_device()->driver()->name() == "demo") {
+					default_device = dev;
+					break;
+				}
+			}
+
 
 		bool is_demo_device = false;
 		shared_ptr<devices::HardwareDevice> hw_dev =
@@ -914,22 +1060,58 @@ void MainWindow::do_device_detach_switch()
 			is_demo_device = true;
 		}
 
-		last_focused_session_->select_device(default_device);
-		if (default_device) {
+		/*
+		 * A board of another make is named by its own model: the bar keys
+		 * the settings logic off the vendor, and it must not go on reading
+		 * the WCH name of the board that went away.
+		 */
+		if ((found_device_type == WchDeviceType::None) && !is_demo_device &&
+			default_device && default_device->device())
+			session->main_bar()->set_vendorName(QString::fromStdString(
+				default_device->device()->model()));
+
+		/*
+		 * The same call the device list uses, so the replacement gets the
+		 * pattern mode, the rate selector and the rollback of a board that
+		 * will not open as well. Ask is false: the question this flow came
+		 * from has already been answered.
+		 */
+		if (session->main_bar()->switch_to_device(default_device, false)) {
+			/* The strip names each page after the board on it, and it is
+			 * this call that does the naming. */
+			update_session_roles();
+
 			if (found_device_type != WchDeviceType::None) {
-				QString device_name = DeviceModelNames[static_cast<int>(found_device_type)];
-				QString vendor_name = device_name;
-				last_focused_session_->main_bar()->set_device_selector_name(device_name);
-				last_focused_session_->main_bar()->set_vendorName(vendor_name);
-				restore_sessions();
+				/*
+				 * The saved setup belongs to this page - it is the one that
+				 * was just given another board - and is applied to it, not
+				 * to whichever page happens to be in front: restoring it
+				 * there would put the settings of this board on a page that
+				 * is on another one.
+				 */
+				QSettings settings;
+				settings.beginGroup("Session0");
+				session->restore_settings(settings);
+				settings.endGroup();
+				if (session->main_bar())
+					session->main_bar()->renew_setting_default();
 			} else if (is_demo_device) {
-				last_focused_session_->main_bar()->set_device_selector_name("Demo device");
-				last_focused_session_->main_bar()->set_vendorName("Demo device");
-				last_focused_session_->create_demo_uart_decoder();
+				/* The vendor name is what the rest of the bar keys off, and
+				 * the demo driver reports none. */
+				session->main_bar()->set_vendorName("Demo device");
+				session->create_demo_uart_decoder();
+
+				/* Nothing could take the place of the board: the page
+				 * stands in with the demo device and takes the board back
+				 * when it is plugged in again. */
+				waiting_for_board_ = lost_identity;
 			}
 		}
 	} else {
-		last_focused_session_->main_bar()->set_vendorName("No Device");
+		session->main_bar()->set_vendorName("No Device");
+		/* Nothing took the place of the board that went away, so the page
+		 * that described it is cleared as well. */
+		session->main_bar()->refresh_device_widgets();
 	}
 }
 
@@ -940,17 +1122,24 @@ void MainWindow::do_device_detach_switch()
  * back is not replayed - the rescan just done covers it, and a second pass
  * would only ask about the session again while the board is still coming up.
  */
-void MainWindow::apply_device_detach()
+void MainWindow::apply_device_detach(const shared_ptr<Session> &session)
 {
 	detach_dialog_ = nullptr;
-	do_device_detach_switch();
+	do_device_detach_switch(session);
 	resume_device_events(false);
 	report_stalled_devices();
 }
 
-void MainWindow::show_device_detach()
+void MainWindow::show_device_detach(const shared_ptr<Session> &session)
 {
-	if (!last_focused_session_ || !last_focused_session_->main_bar()) {
+	if (!session || !session->main_bar()) {
+		/*
+		 * Nobody to ask. Device events were held back for this question,
+		 * so they have to be let through again - otherwise every arrival
+		 * from here on stays pending and the program stops noticing boards
+		 * coming and going.
+		 */
+		resume_device_events(false);
 		return;
 	}
 
@@ -967,7 +1156,17 @@ void MainWindow::show_device_detach()
 	QDialog* dialog = new QDialog(this);
 	dialog->setWindowTitle(tr("Warning"));
 
-	dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
+	/*
+	 * No close button: the answer finishes the detach, and a dialog that
+	 * can be dismissed without answering used to leave the device events
+	 * held back for a question that never got one. The hint is dropped as
+	 * well as the flags customised - a title bar keeps its close box on
+	 * some window managers otherwise.
+	 */
+	dialog->setWindowFlags((dialog->windowFlags()
+			& ~Qt::WindowContextHelpButtonHint & ~Qt::WindowCloseButtonHint)
+		| Qt::CustomizeWindowHint | Qt::WindowTitleHint);
+
 
 	// Use a larger font
 	QFont font = dialog->font();
@@ -1001,37 +1200,94 @@ void MainWindow::show_device_detach()
 	QHBoxLayout *buttonLayout = new QHBoxLayout();
 	buttonLayout->setSpacing(12);
 	buttonLayout->addStretch();
+	/*
+	 * Three answers. The page is the only place the capture is, and the
+	 * board it came from is the one that left, so the data only survives
+	 * if it is handed to a page of its own before the page moves on:
+	 * the first button does just that, the second saves the session, and
+	 * the third lets the page move on without it.
+	 */
+	/* Nothing to hand over when the page holds no capture, so the option is
+	 * not offered: it would be an empty page in a new tab. */
+	const bool has_data = session && session->data_held();
+
+	QPushButton *exportBtn = new QPushButton(
+		tr("Export Only the Capture to a New Session"), dialog);
+	exportBtn->setVisible(has_data);
 	QPushButton *saveBtn = new QPushButton(tr("Save"), dialog);
-	QPushButton *cancelBtn = new QPushButton(tr("Cancel"), dialog);
-	saveBtn->setMinimumWidth(90);
-	cancelBtn->setMinimumWidth(90);
+	QPushButton *discardBtn = new QPushButton(tr("Cancel"), dialog);
+	exportBtn->setObjectName("detach_export");
+	saveBtn->setObjectName("detach_save");
+	discardBtn->setObjectName("detach_discard");
+	for (QPushButton *button : {exportBtn, saveBtn, discardBtn})
+		button->setMinimumWidth(90);
+	buttonLayout->addWidget(exportBtn);
 	buttonLayout->addWidget(saveBtn);
-	buttonLayout->addWidget(cancelBtn);
+	buttonLayout->addWidget(discardBtn);
 	layout->addLayout(buttonLayout);
 
 	// Size to contents and prevent the window from being resized
 	dialog->setFixedSize(dialog->sizeHint());
 
-	// Show modelessly
-	dialog->setModal(false);
+	/* Modal, but shown rather than exec()'d: the question belongs to this
+	 * change of device, and while it is up the user must not be able to
+	 * pick another board - the answer replaces the device afterwards, and
+	 * a pick made in between would simply be overwritten. */
+	dialog->setModal(true);
 
-	if (last_focused_session_->main_bar()->channels_ &&
-		is_wch_device(last_focused_session_->main_bar()->channels_->device_name_)) {
-		save_sessions();
-		last_focused_session_->main_bar()->set_setting_default();
-	}
+	/*
+	 * Every page is written down, whatever board it holds: the pages are
+	 * restored from this, and a page on another make of board is a page
+	 * like any other. Only the settings of a board are WCH boards' own.
+	 */
+	save_sessions();
+	if (session->main_bar()->channels_ &&
+		is_wch_device(session->main_bar()->channels_->device_name_))
+		session->main_bar()->set_setting_default();
 
-	connect(saveBtn, &QPushButton::clicked, [=](){
-		qDebug() << last_focused_session_->main_bar()->channels_->device_name_;
-		qDebug() << last_focused_session_->main_bar()->channels_;
-		
-		last_focused_session_->main_bar()->action_save()->triggered();
-		apply_device_detach();
+	connect(exportBtn, &QPushButton::clicked, [=, session](){
+		/* The capture goes to a page of its own first, while it is still
+		 * here to be handed over. */
+		copy_session_to_new_session(session);
+		apply_device_detach(session);
 		dialog->deleteLater();
 	});
 
-	connect(cancelBtn, &QPushButton::clicked, [=](){
-		apply_device_detach();
+	connect(saveBtn, &QPushButton::clicked, [=, session](){
+		/*
+		 * Written here rather than through the save action: that one hands
+		 * the work to a progress dialog and returns, and the capture would
+		 * be moved to another device while it was still being written. A
+		 * name the user backs out of leaves everything as it was.
+		 */
+		QString path = QFileDialog::getSaveFileName(this,
+			tr("Save File"), toolbars::MainBar::last_save_directory(),
+			tr("Session files (*.sr);;All Files (*)"));
+		if (path.isEmpty())
+			return;
+
+		toolbars::MainBar::remember_save_directory(path);
+
+		if (!store_capture_to(session, path))
+			return;
+
+		apply_device_detach(session);
+		dialog->deleteLater();
+	});
+
+	connect(discardBtn, &QPushButton::clicked, [=, session](){
+		apply_device_detach(session);
+		dialog->deleteLater();
+	});
+
+	/*
+	 * A dismissal that never reached a button - the cancel key, or a
+	 * manager that puts the close box back regardless. It keeps nothing,
+	 * like the third button; what it must not do is leave the device
+	 * events held back, or the list would never be read again.
+	 */
+	connect(dialog, &QDialog::rejected, [=, session](){
+		apply_device_detach(session);
 		dialog->deleteLater();
 	});
 
@@ -1051,11 +1307,36 @@ void sleep_ex(unsigned int msec)
 void MainWindow::on_device_attached()
 {
 	/*
+	 * One board being plugged reaches us several times: the vendor driver
+	 * reports the arrival while it walks its indices, and the rescan it
+	 * starts ends by replaying what came in meanwhile. Let them pile up
+	 * for a moment and answer them all with a single pass - a scan per
+	 * notice is a scan too many, and every one of them walks the USB bus
+	 * again and flashes the scan dialog.
+	 */
+	if (!attach_process_done || device_event_queued_) {
+		device_event_pending_ = true;
+		return;
+	}
+
+	device_event_queued_ = true;
+	device_event_pending_ = false;
+
+	QTimer::singleShot(DeviceEventDebounceMs, this, [this]() {
+		device_event_queued_ = false;
+		run_device_attached();
+	});
+}
+
+void MainWindow::run_device_attached()
+{
+	/*
 	 * A board arrived or went away. A pass has to finish before the next one
 	 * starts, but a change that comes in meanwhile must not be dropped: a
 	 * board that was plugged and unplugged quickly would otherwise be missed
 	 * for good. Remember it and handle it in one more pass instead.
 	 */
+
 	if (!attach_process_done) {
 		device_event_pending_ = true;
 		return;
@@ -1073,9 +1354,9 @@ void MainWindow::on_device_attached()
 	 * can only be looked up again by the identity it reports.
 	 */
 	std::map<string, string> previous_info;
-	string previous_driver;
+	const QString previous_identity =
+		widgets::DeviceToolButton::device_identity(previous);
 	if (previous_hw) {
-		previous_driver = previous_hw->hardware_device()->driver()->name();
 		if (device_manager_)
 			previous_info = device_manager_.load()->get_device_info(previous);
 	}
@@ -1102,77 +1383,131 @@ void MainWindow::on_device_attached()
 	context = sigrok_context_;
 	string driver = ch32h417_driver_name(context);
 
-	auto device_manager = new pv::DeviceManager(context, driver, true);
-	if (device_manager_)
+	/*
+	 * Let go of the old instances before scanning, not after: a scan opens
+	 * every board it finds, and deleting the old manager afterwards closes
+	 * what that manager holds - by an index that a board coming or going
+	 * has already moved. Every page has to let go of its board, not only
+	 * the one in front, since a page's own reference keeps the board open
+	 * and the scan would leave it out as if it had been unplugged.
+	 */
+	for (const shared_ptr<Session> &s : sessions_) {
+		if (!s || !s->device() || s->device() == previous)
+			continue;
+		try {
+			s->device()->close();
+		} catch (const sigrok::Error &e) {
+			qWarning() << "Error closing a device before the scan:" << e.what();
+		} catch (const QString &msg) {
+			qWarning() << "Error closing a device before the scan:" << msg;
+		}
+	}
+
+	if (device_manager_) {
 		delete device_manager_.load();
+		device_manager_.store(nullptr);
+	}
+	auto device_manager = new pv::DeviceManager(context, driver, true);
 	device_manager_.store(device_manager);
 	update_sessions_device_manager(device_manager);
-
-	list< shared_ptr<devices::HardwareDevice> > devices =
-		device_manager->devices();
 
 	/*
 	 * Look for what is in use again. It comes back as a new instance, so it
 	 * is the identity that has to match, not the pointer. Finding it means
 	 * nothing was unplugged: the selection stays where the user put it, an
 	 * arrival never moves it.
+	 *
+	 * The identity is asked first: it is the port the board sits in, and it
+	 * is what tells two boards of one model apart. Matching on the vendor,
+	 * model and serial number instead would let firmware that writes the
+	 * same serial into every board hand back the wrong one - which is a
+	 * device switch.
 	 */
-	const shared_ptr<devices::HardwareDevice> same_device =
-		previous_info.empty() ? nullptr :
-			device_manager->find_device_from_info(previous_info);
+	shared_ptr<devices::HardwareDevice> same_device;
+	if (!previous_identity.isEmpty())
+		same_device = find_device_by_identity(previous_identity);
+	else if (!previous_info.empty())
+		same_device = device_manager->find_device_from_info(previous_info);
 
-	/* Only a board on a bus can go away; the demo device and an open file
-	 * cannot, and an empty identity is how that shows here. */
-	if (previous_hw && !previous_info.empty() && !same_device) {
-		/*
-		 * The device in use is gone: ask about the session the way the detach
-		 * flow does. That is also what picks the replacement, and it lets the
-		 * device events through again once the question is answered.
-		 */
-		show_device_detach();
-		return;
-	}
+	/*
+	 * A board that comes back is the one that is in use, so it has to be
+	 * taken over: the scan freed its instance. Any other arrival - a second
+	 * board, or the first one plugged in while the demo device stands in -
+	 * only joins the list. Picking a device is the user's to do; a board
+	 * appearing under the desk must not move the selection out of the
+	 * capture he is looking at.
+	 *
+	 * This runs before the question about a board being pulled, and has to:
+	 * a page still holding the instance the scan freed would list its board
+	 * a second time once the list is read again.
+	 */
+	/*
+	 * Every session with a board takes its new instance - including the
+	 * ones that are not in front: a session left holding the instance a
+	 * scan freed has an object no list has, and listing it beside the
+	 * board is what showed the same board twice.
+	 *
+	 * Taking a board back has to keep what the session holds: the arrival
+	 * of another board is no reason to throw a capture away. Nothing is
+	 * restored from the saved settings here on purpose: applying them
+	 * again would put back values the user has changed since - the channel
+	 * count he just lowered to eight, say, or the pre-trigger - which is
+	 * what made a board coming back look like a reset of everything.
+	 */
+	const shared_ptr<Session> unplugged = adopt_device_in_sessions();
 
-	if (same_device) {
-		last_focused_session_->select_device(same_device);
-		restore_sessions();
-	} else if (!previous) {
-		/*
-		 * Nothing was in use yet - started without a device, or the one that
-		 * was there could not be opened. Pick one in the order the start-up
-		 * path uses: the driver that was in use, then any other real
-		 * hardware, then whatever is left.
-		 */
-		shared_ptr<devices::HardwareDevice> pick = nullptr;
-		for (const auto &dev : devices)
-			if (dev->hardware_device()->driver()->name() == previous_driver) {
-				pick = dev;
-				break;
-			}
-		if (!pick)
-			for (const auto &dev : devices)
-				if (dev->hardware_device()->driver()->name() != "demo") {
-					pick = dev;
-					break;
-				}
-		if (!pick && !devices.empty())
-			pick = devices.front();
+	/* A board came or went beside it, which changes what the selector of
+	 * each session may offer. */
+	update_session_roles();
 
-		if (pick) {
-			last_focused_session_->select_device(pick);
-			const WchDeviceType type = get_wch_device_type_by_driver(
-				pick->hardware_device()->driver()->name());
-			const QString name = (type != WchDeviceType::None) ?
-				DeviceModelNames[static_cast<int>(type)] :
-				QString::fromStdString(pick->device()->model());
-			if (!name.isEmpty()) {
-				last_focused_session_->main_bar()->set_device_selector_name(name);
-				last_focused_session_->main_bar()->set_vendorName(name);
-			}
+	/*
+	 * The board this page is waiting for is back: it returns to it, unless
+	 * another page took it in the meantime. A board that arrives is not
+	 * supposed to move a page, but this one was only ever on the demo
+	 * device because its own board was missing.
+	 */
+	if (!waiting_for_board_.isEmpty()) {
+		const shared_ptr<Session> page =
+			sessions_.empty() ? nullptr : sessions_.front();
+		shared_ptr<devices::HardwareDevice> back =
+			find_device_by_identity(waiting_for_board_);
+
+		if (back && page && page->main_bar() &&
+			!board_taken(sessions_, page, back)) {
+			waiting_for_board_.clear();
+			page->main_bar()->switch_to_device(back, false);
+			update_session_roles();
 		}
 	}
 
-	last_focused_session_->main_bar()->update_device_list();
+
+	/*
+	 * A page other than the capture page lost its board in this scan. A
+	 * scan that ran while the bus was being re-enumerated can miss a board
+	 * that is still there, and closing a page over that is worse than one
+	 * more look: the board is asked for again before it is taken for gone.
+	 */
+	if (unplugged && !attach_retry_done_ && unplugged != sessions_.front()) {
+		attach_retry_done_ = true;
+		resume_device_events();
+		QTimer::singleShot(700, this, [this]() { on_device_attached(); });
+		return;
+	}
+	attach_retry_done_ = false;
+
+	if (unplugged) {
+		/*
+		 * The board in that session is gone: ask about saving it the way
+		 * the detach flow does. That is also what picks the replacement,
+		 * and it lets the device events through again once the question
+		 * is answered.
+		 */
+		show_device_detach(unplugged);
+		return;
+	}
+
+	/* The list is already up to date: rebuilding the manager above put it
+	 * into the selector, and taking the board back rebuilds it again. */
 	resume_device_events();
 	report_stalled_devices();
 }
@@ -1234,6 +1569,146 @@ void MainWindow::update_sessions_device_manager(pv::DeviceManager *device_manage
 		last_focused_session_->update_device_manager(device_manager);
 }
 
+shared_ptr<devices::HardwareDevice> MainWindow::find_device_by_identity(
+	const QString &identity)
+{
+	if (identity.isEmpty() || !device_manager_)
+		return nullptr;
+
+	for (const shared_ptr<devices::HardwareDevice>& dev :
+			device_manager_.load()->devices())
+		if (widgets::DeviceToolButton::device_identity(dev) == identity)
+			return dev;
+
+	return nullptr;
+}
+
+shared_ptr<devices::HardwareDevice> MainWindow::find_moved_board(
+	const shared_ptr<Session> &session)
+{
+	if (!session || !session->device() || !device_manager_)
+		return nullptr;
+
+	const shared_ptr<sigrok::Device> was = session->device()->device();
+	if (!was)
+		return nullptr;
+
+	/*
+	 * Only an identity the host bus assigns is worth chasing: both WCH
+	 * drivers name a board by the port path, which a replug does not move,
+	 * and matching those by serial number would let one page take the board
+	 * of another - the serial of a board that has gone is still readable
+	 * through the handle it left behind.
+	 */
+	const QString was_id = QString::fromStdString(was->connection_id());
+	if (!was_id.startsWith("usb/") && !was_id.startsWith("ch375/"))
+		return nullptr;
+
+	const string serial = was->serial_number();
+	const string model = was->model();
+	if (serial.empty())
+		return nullptr;
+
+	shared_ptr<devices::HardwareDevice> found;
+	for (const shared_ptr<devices::HardwareDevice>& dev :
+			device_manager_.load()->devices()) {
+		const shared_ptr<sigrok::Device> sr_dev = dev->device();
+		if (!sr_dev || sr_dev->serial_number() != serial ||
+			sr_dev->model() != model)
+			continue;
+
+		/* A board another page is on is not this page's to take. */
+		const QString id = widgets::DeviceToolButton::device_identity(dev);
+		bool held = false;
+		for (const shared_ptr<Session> &other : sessions_)
+			if (other && other != session && other->device() &&
+				widgets::DeviceToolButton::device_identity(other->device()) == id) {
+				held = true;
+				break;
+			}
+		if (held)
+			continue;
+
+		/* Two of them answer: which one is not for a guess to decide. */
+		if (found)
+			return nullptr;
+
+		found = dev;
+	}
+
+	return found;
+}
+
+shared_ptr<Session> MainWindow::adopt_device_in_sessions()
+{
+	/*
+	 * Every session with a board on it is looked at, not only the one in
+	 * front: the scan handed out new instances for all of them, and a
+	 * session left holding the old one keeps an object no list has - which
+	 * is what put the same board twice into the selector.
+	 */
+	shared_ptr<Session> unplugged;
+
+	/* The focused session may already have been taken out of the list. */
+	list< shared_ptr<Session> > sessions = sessions_;
+	if (last_focused_session_ && std::find(sessions.begin(), sessions.end(),
+			last_focused_session_) == sessions.end())
+		sessions.push_back(last_focused_session_);
+
+	for (const shared_ptr<Session>& session : sessions) {
+		if (!session)
+			continue;
+
+		/*
+		 * A board on a bus has an identity; a page that shows a file has
+		 * none to look for, and must not be taken for one whose board went
+		 * away - it never had a board to lose.
+		 */
+		if (session->using_file_device())
+			continue;
+
+		const QString identity =
+			widgets::DeviceToolButton::device_identity(session->device());
+		if (identity.isEmpty())
+			continue;
+
+		shared_ptr<devices::HardwareDevice> again =
+			find_device_by_identity(identity);
+
+		/*
+		 * The board may have come back in another port: what the scan
+		 * reports is where it sits now, not where it used to sit.
+		 */
+		if (!again)
+			again = find_moved_board(session);
+
+		if (!again) {
+			if (!unplugged)
+				unplugged = session;
+			continue;
+		}
+
+		if (!session->adopt_device_instance(again)) {
+			/* A real switch: the page and the view are rebuilt by it. */
+			session->select_device(again);
+			continue;
+		}
+
+
+		/*
+		 * The board it is on came back as a new instance. The list is the
+		 * only thing that moved - a board was plugged or pulled beside it -
+		 * so the selector is refreshed and everything the session holds is
+		 * left standing.
+		 */
+		if (session->main_bar())
+			session->main_bar()->refresh_device_selector();
+	}
+
+	/* Whose board the list no longer has, if any. */
+	return unplugged;
+}
+
 void MainWindow::remove_session(shared_ptr<Session> session)
 {
 	// Determine the height of the button before it collapses
@@ -1278,6 +1753,20 @@ void MainWindow::remove_session(shared_ptr<Session> session)
 		// generate focus change events
 		setWindowTitle(WindowTitle);
 	}
+
+	/* The board this session held is free again, so every selector must
+	 * offer it once more, and the strip loses one tab. */
+	update_session_roles();
+	update_session_tabs();
+
+	/* The page is gone, and so is what it had set up: an id is handed out
+	 * again only after a restart, and the page that gets it then would
+	 * otherwise come up with the settings of a page that was closed. */
+	QSettings().remove("Settings/" + QString::number(session->id()));
+
+	/* A copy of it that is still being written keeps the session itself
+	 * alive; the page no longer carries the button that said so. */
+	copy_percent_.remove(session.get());
 }
 
 void MainWindow::add_default_setting()
@@ -1335,10 +1824,15 @@ void MainWindow::add_default_session()
 		shared_ptr<sigrok::Context> context;
 		context = sigrok_context_;
 		string driver = ch32h417_driver_name(context);
-		if (device_manager_)
-			delete device_manager_.load();
-		device_manager_ = new pv::DeviceManager(context, driver, true);
-		update_sessions_device_manager(device_manager_.load());
+		/* Same order as above: the pages must never catch the window
+		 * without a manager to give them. */
+		pv::DeviceManager *const old_device_manager = device_manager_.load();
+		pv::DeviceManager *const new_device_manager =
+			new pv::DeviceManager(context, driver, true);
+		device_manager_.store(new_device_manager);
+		update_sessions_device_manager(new_device_manager);
+		if (old_device_manager)
+			delete old_device_manager;
 	}
 
 	shared_ptr<Session> session = nullptr;
@@ -1351,49 +1845,82 @@ void MainWindow::add_default_session()
 	shared_ptr<devices::HardwareDevice> wch_device = nullptr;
 	shared_ptr<devices::HardwareDevice> demo_device = nullptr;
 	shared_ptr<devices::HardwareDevice> default_device = nullptr;
+	shared_ptr<devices::HardwareDevice> saved_device = nullptr;
 	devices = device_manager_.load()->devices();
-	// Check the list of available devices. Prefer the one that was
-	// found with user supplied scan specs (if applicable). Then try
-	// one of the auto detected devices that are not the demo device.
-	// Pick demo in the absence of "genuine" hardware devices.
-	// shared_ptr<devices::HardwareDevice> user_device, other_device, demo_device;
+	/*
+	 * The board this page was on last time comes first. Its saved setup
+	 * belongs to it, and restore_settings() asks for that same board a
+	 * moment later: picking another one here meant opening it, closing it
+	 * again and building the whole page twice - and the board that stayed
+	 * began at the default channel count, so the rates the page offered
+	 * were the ones of the narrower table.
+	 */
+	QSettings saved;
+	saved.beginGroup("Session0");
+	const bool saved_is_hardware =
+		saved.value("device_type").toString() == "hardware";
+	const string saved_port =
+		saved.value("device/connection_id").toString().toStdString();
+	saved.endGroup();
+
 	if (!devices.empty()) {
-		default_device = devices.front();
-		for (const shared_ptr<devices::HardwareDevice>& dev : devices) {
-			WchDeviceType dev_type = get_wch_device_type_by_driver(
-				dev->hardware_device()->driver()->name());
-			if (dev_type != WchDeviceType::None) {
-				found_device_type = dev_type;
-				wch_device = dev;
-				default_device = dev;
-				break;
+		if (saved_is_hardware && !saved_port.empty())
+			for (const shared_ptr<devices::HardwareDevice>& dev : devices) {
+				const shared_ptr<sigrok::Device> sr_dev = dev->device();
+				/* A real board is worth more than the demo device. */
+				if (string(dev->hardware_device()->driver()->name()) == "demo")
+					continue;
+				if (sr_dev && sr_dev->connection_id() == saved_port) {
+					saved_device = dev;
+					break;
+				}
 			}
-		}
-		// Find demo device as fallback
+
+		/* The demo device keeps the session usable when nothing else is there. */
 		for (const shared_ptr<devices::HardwareDevice>& dev : devices) {
 			if (string(dev->hardware_device()->driver()->name()) == "demo") {
 				demo_device = dev;
 				break;
 			}
 		}
-		/*
-		 * Anything that is not the demo device is real hardware, so it is
-		 * the better choice: fx2lafw and drivers added later have to reach
-		 * a session the same way the WCH ones do.
-		 */
-		bool found_real_device = false;
-		if (!wch_device) {
+
+		if (saved_device) {
+			default_device = saved_device;
+			found_device_type = get_wch_device_type_by_driver(
+				saved_device->hardware_device()->driver()->name());
+			if (found_device_type != WchDeviceType::None)
+				wch_device = saved_device;
+		} else {
+			/* Nothing remembered: the first board of ours will do. */
+			default_device = devices.front();
 			for (const shared_ptr<devices::HardwareDevice>& dev : devices) {
-				if (string(dev->hardware_device()->driver()->name()) != "demo") {
+				WchDeviceType dev_type = get_wch_device_type_by_driver(
+					dev->hardware_device()->driver()->name());
+				if (dev_type != WchDeviceType::None) {
+					found_device_type = dev_type;
+					wch_device = dev;
 					default_device = dev;
-					found_real_device = true;
 					break;
 				}
 			}
+			/*
+			 * Anything that is not the demo device is real hardware, so it
+			 * is the better choice: fx2lafw and drivers added later have
+			 * to reach a session the same way the WCH ones do.
+			 */
+			bool found_real_device = false;
+			if (!wch_device) {
+				for (const shared_ptr<devices::HardwareDevice>& dev : devices) {
+					if (string(dev->hardware_device()->driver()->name()) != "demo") {
+						default_device = dev;
+						found_real_device = true;
+						break;
+					}
+				}
+			}
+			if (!wch_device && !found_real_device && demo_device)
+				default_device = demo_device;
 		}
-		// The demo device keeps the session usable when nothing else is there.
-		if (!wch_device && !found_real_device && demo_device)
-			default_device = demo_device;
 	}
 	session->select_device(default_device);
 
@@ -1449,16 +1976,25 @@ void MainWindow::add_default_session()
 		const string model = sr_dev ? sr_dev->model() : string();
 		if (session->main_bar() && !model.empty()) {
 			session->main_bar()->set_vendorName(QString::fromStdString(model));
-			session->main_bar()->set_device_selector_name(QString::fromStdString(model));
+			session->main_bar()->set_device_selector_name(
+				QString::fromStdString(
+					session->device()->display_name(*device_manager_.load())));
 		}
 	}
+
+	/* The page this call set up is the capture page: it is never closed and
+	 * never shows a file, and it is the only one a new session can be
+	 * started from. */
+	default_session_ = session;
+	update_session_roles();
+	update_session_tabs();
 
 	report_stalled_devices();
 }
 void MainWindow::save_sessions()
 {
 	QSettings settings;
-	int ch569_id = 0, ch32h417_id = 0;
+	int id = 0;
 
 	for (shared_ptr<Session>& session : sessions_) {
 		// Ignore sessions using the demo device or no device at all
@@ -1467,66 +2003,137 @@ void MainWindow::save_sessions()
 				dynamic_pointer_cast< devices::HardwareDevice >
 				(session->device());
 
-			if (device && get_wch_device_type_by_driver(
-				device->hardware_device()->driver()->name()) == WchDeviceType::None){
+			/*
+			 * A file is not restored at start-up - it always gets a
+			 * session of its own - and the demo device stands in for a
+			 * board that is not there, so neither is worth saving.
+			 */
+			if (!device)
 				continue;
-			}
 
-			WchDeviceType dev_type = get_wch_device_type_by_driver(
-				device->hardware_device()->driver()->name());
-			QString group_name;
-			if (dev_type == WchDeviceType::CH569) {
-				group_name = "Session_CH569_" + QString::number(ch569_id++);
-			} else if (dev_type == WchDeviceType::CH32H417) {
-				group_name = "Session_CH32H417_" + QString::number(ch32h417_id++);
-			} else {
-				group_name = "Session_" + QString::number(ch569_id + ch32h417_id);
-			}
+			if (string(device->hardware_device()->driver()->name()) == "demo")
+				continue;
 
-			settings.beginGroup(group_name);
+			settings.beginGroup("Session" + QString::number(id++));
 			settings.remove("");  // Remove all keys in this group
 			session->save_settings(settings);
 			settings.endGroup();
 		}
 	}
-	settings.setValue("sessions_ch569", ch569_id);
-	settings.setValue("sessions_ch32h417", ch32h417_id);
+
+	/*
+	 * A page that is gone leaves its group behind. The count below is what
+	 * a start reads, so a group beyond it is never looked at - but a later
+	 * run that has that page again would write over a group the count had
+	 * already left out, and the two would disagree about what was saved.
+	 * The groups of pages that are no longer there go with them.
+	 */
+	const QStringList groups = settings.childGroups();
+	for (const QString &group : groups) {
+		if (!group.startsWith("Session"))
+			continue;
+
+		bool is_number = false;
+		const int index = group.mid(7).toInt(&is_number);
+		if (is_number && index >= id)
+			settings.remove(group);
+	}
+
+	settings.setValue("sessions", id);
 }
 
 void MainWindow::restore_sessions()
 {
 	QSettings settings;
-	int ch569_count = settings.value("sessions_ch569", 0).toInt();
-	int ch32h417_count = settings.value("sessions_ch32h417", 0).toInt();
+	const int session_count = settings.value("sessions", 0).toInt();
 
-	for (int i = 0; i < ch569_count; i++) {
-		settings.beginGroup("Session_CH569_" + QString::number(i));
-		if (last_focused_session_ != NULL) {
-			last_focused_session_->restore_settings(settings);
+	/*
+	 * One page per saved session, in the order they were saved. The first
+	 * one is the capture page that is already there; the rest are opened
+	 * beside it, and each takes the board it was saved with - a page whose
+	 * board is not plugged in has nothing to show and is dropped.
+	 */
+	const shared_ptr<Session> capture_page = last_focused_session_;
+	QStringList lost;
+
+	for (int i = 0; i < session_count; i++) {
+		settings.beginGroup("Session" + QString::number(i));
+
+		if (i == 0) {
+			if (capture_page)
+				capture_page->restore_settings(settings);
 		} else {
-			last_focused_session_ = add_session();
+			shared_ptr<Session> page = add_session();
+			if (page) {
+				page->restore_settings(settings);
+				DeviceManager *const manager = device_manager_.load();
+
+				/*
+				 * A page whose board is not plugged in has nothing to
+				 * show; neither has one whose board another page already
+				 * holds - two pages cannot capture from one board.
+				 */
+				if (!page->device() ||
+					board_taken(sessions_, page, page->device())) {
+					/*
+					 * Say which board it was: a page that is not there is
+					 * otherwise a page that quietly went missing, and the
+					 * board it needs is usually one another program holds.
+					 */
+					settings.beginGroup("device");
+					lost << QString("%1 %2")
+						.arg(settings.value("model").toString())
+						.arg(settings.value("connection_id").toString());
+					settings.endGroup();
+					remove_session(page);
+				} else if (manager) {
+					const QString name = QString::fromStdString(
+						page->device()->display_name(*manager));
+					if (!name.isEmpty())
+						page->set_name(name);
+				}
+			}
 		}
+
 		settings.endGroup();
 	}
 
-	for (int i = 0; i < ch32h417_count; i++) {
-		settings.beginGroup("Session_CH32H417_" + QString::number(i));
-		if (last_focused_session_ != NULL) {
-			last_focused_session_->restore_settings(settings);
-		} else {
-			last_focused_session_ = add_session();
-		}
-		settings.endGroup();
-	}
+	if (capture_page && capture_page->main_bar())
+		capture_page->main_bar()->renew_setting_default();
 
-	if (last_focused_session_)
-		last_focused_session_->main_bar()->renew_setting_default();
+	/* Opening the pages left the last one in front; the capture page is the
+	 * one that was being looked at when the program was closed. */
+	if (capture_page)
+		session_selector_.setCurrentIndex(0);
+
+	if (!lost.isEmpty())
+		pv::util::show_message(this, tr("Sessions not restored"),
+			tr("These boards could not be opened, so the pages they held are "
+				"not here:") + QString("\n\n") + lost.join("\n") +
+				QString("\n\n") +
+				tr("Another program may be using them. Close it, or unplug and "
+					"replug the board, and open the page again."),
+			pv::util::message_box_icon(QMessageBox::Warning),
+			520, false, false, false);
+
+	update_session_roles();
+	update_session_tabs();
 }
 
 void MainWindow::changeEvent(QEvent *event)
 {
 	if (event->type() == QEvent::LanguageChange)
 		retranslate_ui();
+
+	/* The marks on the tabs are drawn in the colour of the text, so a
+	 * change of theme has to draw them again. */
+	if (event->type() == QEvent::ApplicationPaletteChange ||
+		event->type() == QEvent::PaletteChange) {
+		for (int i = 0; i < session_selector_.count(); i++)
+			session_selector_.tabBar()->setTabButton(
+				i, QTabBar::RightSide, nullptr);
+		update_session_tabs();
+	}
 
 	QMainWindow::changeEvent(event);
 }
@@ -1564,6 +2171,10 @@ void MainWindow::retranslate_ui()
 	/* The run/stop button text carries the capture state. */
 	if (last_focused_session_)
 		update_acq_button(last_focused_session_.get());
+
+	/* The tab tool tips and the header of the strips are built from
+	 * translated pieces as well. */
+	update_session_tabs();
 }
 
 void MainWindow::setup_ui()
@@ -1629,8 +2240,16 @@ void MainWindow::setup_ui()
 	int newHeight = session_selector_.height();
 	static_tab_widget_->setFixedHeight(newHeight);
 	static_tab_widget_->setLayout(layout);
-	session_selector_.tabBar()->setVisible(false);  // hidden session 1
-	// session_selector_.setCornerWidget(static_tab_widget_, Qt::TopLeftCorner);
+	session_selector_.tabBar()->setVisible(true);
+	/* The tabs sit at the bottom: the strip is where the eye goes to change
+	 * traces, not something worth the top edge of the waveform area. */
+	session_selector_.setTabPosition(QTabWidget::South);
+
+	/*
+	 * The buttons of a tab are ours (see update_session_tabs): Qt's own
+	 * close button would take the side the copy button needs, and its
+	 * "Close Tab" tool tip is not translated by this build.
+	 */
 	session_selector_.setTabsClosable(false);
 	close_application_shortcut_ = new QShortcut(pv::util::key_sequence(Qt::CTRL, Qt::Key_Q), this, SLOT(close()));
 	close_application_shortcut_->setAutoRepeat(false);
@@ -1778,11 +2397,35 @@ void MainWindow::closeEvent(QCloseEvent *event)
 			return;
 		}
 	}
-	if (last_focused_session_ && is_wch_device(last_focused_session_->main_bar()->channels_->device_name_)){
+	/*
+	 * Closing saves the pages, not only the settings of a WCH board: a page
+	 * on another make of board would otherwise never be written, and the
+	 * next start would restore a state from some earlier run instead.
+	 */
+	if (last_focused_session_ && last_focused_session_->main_bar()) {
 		save_sessions();
-		last_focused_session_->main_bar()->set_setting_default();
+		if (last_focused_session_->main_bar()->channels_ &&
+			is_wch_device(
+				last_focused_session_->main_bar()->channels_->device_name_))
+			last_focused_session_->main_bar()->set_setting_default();
 	}
 	save_ui_settings();
+
+	/*
+	 * The files a copied session was read from stay locked for as long as
+	 * the session holds them, so they are removed here instead of at the
+	 * moment of the copy. The session file is written with its setup
+	 * beside it, so that one goes too.
+	 */
+	for (const QString &path : copy_temp_files_) {
+		QFile::remove(path);
+
+		QString setup = path;
+		const int dot = setup.lastIndexOf('.');
+		if (dot > 0)
+			QFile::remove(setup.left(dot) + ".pvs");
+	}
+	copy_temp_files_.clear();
 }
 
 QMenu* MainWindow::createPopupMenu()
@@ -1804,6 +2447,8 @@ bool MainWindow::restoreState(const QByteArray &state, int version)
 void MainWindow::on_show_error(QString err)
 {
 	// last_focused_session_->device_detach();
+	for (const shared_ptr<Session>& s : sessions_)
+		if (s)
 	show_session_error(tr("Capture Failed"), err, this);
 }
 
@@ -1889,6 +2534,26 @@ void MainWindow::on_get_repeat_acquisition(bool& is_repeat_acquisition_state)
 	}
 }
 
+/*
+ * Starts a capture on one page. The mode is the one the bar shows, and the
+ * values that bar displays are handed to the device first - they are only
+ * pushed when a selector is moved, so a capture started on the values a
+ * page was set up with would otherwise run with whatever the driver held.
+ */
+static void start_capture_on(const shared_ptr<Session> &session, int mode)
+{
+	if (!session || !session->main_bar())
+		return;
+
+	session->is_repeat_acquisition_ = (mode == Session::Repeat);
+	session->main_bar()->apply_capture_limits();
+
+	session->start_capture([](QString message) {
+		Q_UNUSED(message);
+		qDebug() << "Capture failed";
+	});
+}
+
 void MainWindow::on_run_stop_clicked()
 {
 	GlobalSettings settings;
@@ -1911,38 +2576,29 @@ void MainWindow::on_run_stop_clicked()
 				{ return (s->get_capture_state() == Session::AwaitingTrigger) ||
 						(s->get_capture_state() == Session::Running); });
 
+		const int mode = last_focused_session_->main_bar()->capture_mode_;
 		for (shared_ptr<Session> s : hw_sessions){
-			s->is_repeat_acquisition_ = last_focused_session_->main_bar()->capture_mode_ == Session::Repeat;
 			if (any_running)
 				s->stop_capture();
 			else
-				s->start_capture([&](QString message) {
-					Q_UNUSED(message);
-					// show_session_error("Capture failed", message);
-					qDebug() << "Capture failed";
-				});
-		}		
+				start_capture_on(s, mode);
+		}
 	} else {
 		shared_ptr<Session> session = last_focused_session_;
 		if (!session)
 			return;
 		switch (session->get_capture_state()) {
 		case Session::Stopped:
-			if(session->is_repeat_acquisition_)
-			{
-				session->stop_capture();
-				break;
-			}
-			session->is_repeat_acquisition_ = last_focused_session_->main_bar()->capture_mode_ == Session::Repeat;
-			if (session->is_repeat_acquisition_)
-				qDebug() << "Repeat acquisition is already";
-			qDebug() << "Start acquisition";
-			session->start_capture([&](QString message) {
-				Q_UNUSED(message);
-				// show_session_error("Capture failed", message);
-				qDebug() << "Capture failed";
-			 });
+			/*
+			 * A repeat that has run its last frame is stopped already; the
+			 * flag is all that is left over, and the next press starts a
+			 * fresh run rather than pretending to stop one.
+			 */
+			session->is_repeat_acquisition_ = false;
+			start_capture_on(session,
+				last_focused_session_->main_bar()->capture_mode_);
 			break;
+
 		case Session::AwaitingTrigger:
 		case Session::Running:
 			session->stop_capture();
@@ -2041,12 +2697,23 @@ void MainWindow::on_session_name_changed()
 		// setWindowTitle(WindowTitle + " - " + session->name());
 		setWindowTitle(WindowTitle);
 	}
+
+	/* The tab is named after the session, so it has to be relabelled. */
+	update_session_tabs();
 }
 
 void MainWindow::on_session_device_changed()
 {
 	Session *session = qobject_cast<Session*>(QObject::sender());
 	assert(session);
+
+	/*
+	 * Each page of the strip is named after the board on it, and the
+	 * selector offers what is left. Both are read again whichever page
+	 * changed: the one in front may well be another, and what happened is
+	 * not about it.
+	 */
+	update_session_roles();
 
 	// Ignore if caller is not the currently focused session
 	// unless there is only one session
@@ -2059,6 +2726,10 @@ void MainWindow::on_session_device_changed()
 void MainWindow::on_session_capture_state_changed(int state)
 {
 	(void)state;
+
+	/* Every page tells on its tab what it holds, not only the one in
+	 * front: a capture that just ended appears as a copy button there. */
+	update_session_tabs();
 
 	Session *session = qobject_cast<Session*>(QObject::sender());
 	assert(session);
@@ -2124,6 +2795,612 @@ void MainWindow::on_tab_changed(int index)
 
 	if (session)
 		on_focused_session_changed(session);
+}
+
+void MainWindow::update_session_roles()
+{
+	/* A board a session already holds cannot be captured by a second one,
+	 * so its "open in a new session" entry is greyed out everywhere. */
+	QSet<QString> busy;
+	for (const shared_ptr<Session> &session : sessions_) {
+		if (!session || !session->device())
+			continue;
+		const QString id =
+			widgets::DeviceToolButton::device_identity(session->device());
+		if (!id.isEmpty())
+			busy.insert(id);
+	}
+
+	for (const shared_ptr<Session> &session : sessions_) {
+		apply_session_role(session);
+		if (!session)
+			continue;
+
+		if (session->main_bar())
+			session->main_bar()->set_busy_devices(busy,
+				widgets::DeviceToolButton::device_identity(session->device()));
+
+		/*
+		 * A session that captures is named after the board it is on, so the
+		 * tab follows when the board changes. One showing a file keeps the
+		 * file name instead. Done here rather than in the bar: the name
+		 * needs the device manager, and this is the window that holds it.
+		 */
+		DeviceManager *const manager = device_manager_.load();
+		const shared_ptr<devices::Device> device = session->device();
+		if (manager && device && !session->using_file_device()) {
+			const QString name = QString::fromStdString(
+				device->display_name(*manager));
+			if (!name.isEmpty() && (name != session->name()))
+				session->set_name(name);
+		}
+	}
+}
+
+void MainWindow::apply_session_role(const shared_ptr<Session> &session)
+{
+	if (!session || !session->main_bar())
+		return;
+
+	/* The capture page owns the whole device list and is the only place a
+	 * new session can be started from. A session opened for one board
+	 * stays with that board. One showing a file has nothing to select. */
+	const bool is_default = (session == default_session_);
+	session->main_bar()->set_device_selector_role(is_default, !is_default);
+	session->main_bar()->set_device_selector_visible(!session->using_file_device());
+
+	/*
+	 * A page that shows a file has no device mode to pick, but it keeps the
+	 * start button, and so does the page a capture was exported to: both
+	 * read the capture again and put the waveform back on screen.
+	 */
+	const bool from_device = !session->using_file_device();
+	session->main_bar()->set_capture_buttons_visible(from_device, true);
+}
+
+/*
+ * The two marks a tab carries are drawn here, in the colour of the text:
+ * the icon files this build ships read as a blob at this size, and the
+ * style's close mark is a heavier weight than the one beside it.
+ */
+static QIcon tab_mark(const QPalette &palette, bool copy, bool dim = false,
+	int percent = -1)
+{
+	const int size = 14;
+	const qreal ratio = qApp->devicePixelRatio();
+	QPixmap pm(int(size * ratio), int(size * ratio));
+	pm.setDevicePixelRatio(ratio);
+	pm.fill(Qt::transparent);
+
+	QPainter p(&pm);
+	p.setRenderHint(QPainter::Antialiasing, true);
+
+	/*
+	 * While the write it asks for is under way the mark gives way to a
+	 * ring that fills with it: the tab keeps its size, and how far the
+	 * file has got is visible without a dialog in the way.
+	 */
+	if (percent >= 0) {
+		QColor track = palette.color(QPalette::WindowText);
+		track.setAlpha(70);
+
+		QPen ring(track);
+		ring.setWidthF(1.5);
+		p.setPen(ring);
+		p.setBrush(Qt::NoBrush);
+		p.drawEllipse(QRectF(2.0, 2.0, 10.0, 10.0));
+
+		QPen arc(palette.color(QPalette::WindowText));
+		arc.setWidthF(1.5);
+		arc.setCapStyle(Qt::RoundCap);
+		p.setPen(arc);
+		p.drawArc(QRectF(2.0, 2.0, 10.0, 10.0), 90 * 16,
+			-qRound(percent * 3.6 * 16.0));
+		p.end();
+		return QIcon(pm);
+	}
+
+	/* Dimmed while the write it asks for is under way: the mark stays
+	 * where it was, so the tab does not jump - it only fades. */
+	QColor ink = palette.color(QPalette::WindowText);
+	if (dim)
+		ink.setAlpha(90);
+
+	QPen pen(ink);
+	pen.setWidthF(1.1);
+	pen.setCapStyle(Qt::RoundCap);
+	pen.setJoinStyle(Qt::RoundJoin);
+	p.setPen(pen);
+	p.setBrush(Qt::NoBrush);
+
+	if (!copy) {
+		p.drawLine(QPointF(3.2, 3.2), QPointF(10.8, 10.8));
+		p.drawLine(QPointF(10.8, 3.2), QPointF(3.2, 10.8));
+		p.end();
+		return QIcon(pm);
+	}
+
+	/* A sheet, and the opened corner of the sheet behind it. */
+	p.drawRoundedRect(QRectF(5.0, 5.0, 7.9, 7.9), 1.3, 1.3);
+
+	QPainterPath back;
+	back.moveTo(8.9, 2.9);
+	back.lineTo(8.9, 2.5);
+	back.quadTo(8.9, 1.1, 7.5, 1.1);
+	back.lineTo(2.5, 1.1);
+	back.quadTo(1.1, 1.1, 1.1, 2.5);
+	back.lineTo(1.1, 7.5);
+	back.quadTo(1.1, 8.9, 2.5, 8.9);
+	back.lineTo(2.9, 8.9);
+	p.drawPath(back);
+	p.end();
+
+	return QIcon(pm);
+}
+
+/*
+ * The buttons a page's tab carries on its right: the copy button while the
+ * page holds a capture, and the close button after it. A tab takes a single
+ * widget per side, so the two share one.
+ */
+class TabSideWidget : public QWidget
+{
+public:
+	TabSideWidget(QToolButton *copy, QToolButton *close, QWidget *parent) :
+		QWidget(parent),
+		copy_(copy),
+		close_(close)
+	{
+		QHBoxLayout *const layout = new QHBoxLayout(this);
+		layout->setContentsMargins(0, 0, 0, 0);
+		layout->setSpacing(2);
+		if (copy_)
+			layout->addWidget(copy_);
+		if (close_)
+			layout->addWidget(close_);
+	}
+
+	QToolButton *copy() { return copy_; }
+	QToolButton *close() { return close_; }
+
+private:
+	QToolButton *copy_;
+	QToolButton *close_;
+};
+
+void MainWindow::update_session_tabs()
+{
+	const QFontMetrics fm(session_selector_.tabBar()->font());
+	/* What a tab may take in all, buttons included. */
+	const int max_width = 210;
+
+	for (int i = 0; i < session_selector_.count(); i++) {
+		const shared_ptr<Session> session = get_tab_session(i);
+		const QString full =
+			session ? session->name() : session_selector_.tabText(i);
+
+		/* What the tab carries on its right; the name gets the rest. */
+		const bool want_copy = session && session->data_held();
+		const bool want_close = session && session != default_session_;
+		const int name_width =
+			max_width - (want_copy ? 14 : 0) - (want_close ? 14 : 0);
+
+		/* Long names - device, decoder and time - would push the strip
+		 * across the window; the whole of it stays in the tool tip, with
+		 * what the page holds underneath: a name of a board and a time
+		 * says little about which of two such pages is which. */
+		session_selector_.setTabText(i,
+			fm.elidedText(full, Qt::ElideMiddle, name_width));
+
+		QString tip = full;
+		if (session) {
+			const shared_ptr<devices::Device> device = session->device();
+			const shared_ptr<sigrok::Device> sr_dev =
+				device ? device->device() : nullptr;
+
+			if (session->using_file_device()) {
+				tip += QString("\n") + tr("Shows a session file");
+			} else if (sr_dev) {
+				/* Which board, and where it sits: two boards of one model
+				 * differ in nothing else, and the port is what a replug
+				 * leaves alone. */
+				const string port = sr_dev->connection_id();
+				if (!port.empty())
+					tip += QString("\n") + tr("Port: %1").arg(
+						QString::fromStdString(port));
+
+				const string board = sr_dev->model();
+				if (!board.empty())
+					tip += QString("\n") + tr("Board: %1").arg(
+						QString::fromStdString(board));
+
+				const string serial = sr_dev->serial_number();
+				if (!serial.empty())
+					tip += QString("\n") + tr("SN: %1").arg(
+						QString::fromStdString(serial));
+			}
+
+			int decoders = 0;
+			for (const shared_ptr<data::SignalBase> &sig : session->signalbases())
+				if (dynamic_pointer_cast<data::DecodeSignal>(sig))
+					decoders++;
+
+			if (decoders > 0)
+				tip += QString("\n") + tr("Decoders: %1").arg(decoders);
+		}
+		session_selector_.setTabToolTip(i, tip);
+
+		/*
+		 * One widget on the right of the tab: the copy button while the
+		 * page holds a capture, and the close button after it. It is built
+		 * for what the tab carries rather than hidden and shown, because a
+		 * tab keeps the width it was laid out with - one with a hidden
+		 * button in it would keep a blank of that width for ever.
+		 */
+		TabSideWidget *buttons = dynamic_cast<TabSideWidget *>(
+			session_selector_.tabBar()->tabButton(i, QTabBar::RightSide));
+		const bool have_copy = buttons && buttons->copy();
+		const bool have_close = buttons && buttons->close();
+
+		if (!buttons || have_copy != want_copy || have_close != want_close) {
+			if (buttons)
+				session_selector_.tabBar()->setTabButton(
+					i, QTabBar::RightSide, nullptr);
+
+			QToolButton *copy = nullptr;
+			QToolButton *close = nullptr;
+
+			if (want_copy) {
+				copy = new QToolButton(session_selector_.tabBar());
+				copy->setAutoRaise(true);
+				copy->setIcon(tab_mark(palette(), true));
+				copy->setIconSize(QSize(14, 14));
+				copy->setFixedSize(14, 14);
+				connect(copy, &QToolButton::clicked, this, [this, session]() {
+					/* The page may be gone by the time the click lands. */
+					if (std::find(sessions_.begin(), sessions_.end(),
+							session) == sessions_.end())
+						return;
+					copy_session_to_new_session(session);
+				});
+			}
+
+			if (want_close) {
+				close = new QToolButton(session_selector_.tabBar());
+				close->setAutoRaise(true);
+				close->setIcon(tab_mark(palette(), false));
+				close->setIconSize(QSize(14, 14));
+				close->setFixedSize(14, 14);
+				connect(close, &QToolButton::clicked, this, [this, session]() {
+					for (int k = 0; k < session_selector_.count(); k++)
+						if (get_tab_session(k) == session) {
+							on_tab_close_requested(k);
+							return;
+						}
+				});
+			}
+
+			if (copy || close) {
+				buttons = new TabSideWidget(copy, close,
+					session_selector_.tabBar());
+				session_selector_.tabBar()->setTabButton(
+					i, QTabBar::RightSide, buttons);
+			} else {
+				buttons = nullptr;
+			}
+		}
+
+		/* Set again on every pass: the texts follow the language, and the
+		 * copy button turns into the progress of the write it asked for. */
+		if (buttons) {
+			if (buttons->copy()) {
+				QToolButton *const copy = buttons->copy();
+				const bool busy = copy_percent_.contains(session.get());
+				const int percent = busy ?
+					copy_percent_.value(session.get()) : -1;
+				if (copy->property("percent").toInt() != percent) {
+					copy->setProperty("percent", percent);
+					copy->setIcon(tab_mark(palette(), true, busy, percent));
+				}
+				copy->setToolTip(busy
+					? tr("Exporting the capture... %1%").arg(percent)
+					: tr("Export the capture to a new session"));
+			}
+			if (buttons->close())
+				buttons->close()->setToolTip(tr("Close Session"));
+		}
+	}
+}
+
+
+void MainWindow::on_open_file_requested(QString file_name)
+{
+	if (file_name.isEmpty())
+		return;
+
+	/* The capture page never shows a file, it is where a board is
+	 * captured: a file always gets a session of its own. */
+	const shared_ptr<Session> session = add_session();
+	session->load_file(file_name);
+	update_session_roles();
+	update_session_tabs();
+}
+
+void MainWindow::on_device_new_session_requested(QString identity)
+{
+	if (identity.isEmpty())
+		return;
+
+	DeviceManager *const manager = device_manager_.load();
+	if (!manager)
+		return;
+
+	shared_ptr<devices::HardwareDevice> pick;
+	for (const shared_ptr<devices::HardwareDevice> &dev : manager->devices())
+		if (widgets::DeviceToolButton::device_identity(dev) == identity) {
+			pick = dev;
+			break;
+		}
+
+	if (!pick)
+		return;
+
+	/* A board another page is on is not a second page's to open: the two
+	 * would both run it and each would see the other's samples. The list
+	 * greys such a row out, but the request is answered from here as well. */
+	if (board_taken(sessions_, nullptr, pick))
+		return;
+
+	const shared_ptr<Session> session = add_session();
+	session->select_device(pick);
+
+	/*
+	 * A board that refused to open would leave an empty tab behind, and a
+	 * tab that holds nothing is worse than the request having done nothing.
+	 */
+	if (session->device() != pick) {
+		remove_session(session);
+		return;
+	}
+
+	/* A session that holds one board is named after it, so the strip says
+	 * which board each trace came from. */
+	const QString name = QString::fromStdString(pick->display_name(*manager));
+	if (!name.isEmpty())
+		session->set_name(name);
+
+	update_session_roles();
+	update_session_tabs();
+}
+
+QString MainWindow::copy_session_name(const shared_ptr<Session> &source)
+{
+	QString device = source->main_bar() ?
+		source->main_bar()->get_vendorName() : QString();
+	if (device.isEmpty() && source->device())
+		device = QString::fromStdString(
+			source->device()->display_name(*device_manager_.load()));
+
+	/*
+	 * The port goes after the model: two boards of one model are told
+	 * apart by it, and a page named after the model alone would leave
+	 * the user guessing which of them the capture came from.
+	 */
+	const shared_ptr<sigrok::Device> sr_dev =
+		source->device() ? source->device()->device() : nullptr;
+	if (sr_dev) {
+		const QString port = QString::fromStdString(sr_dev->connection_id());
+		if (!port.isEmpty() && !device.contains(port))
+			device = device.isEmpty() ? port : device + " " + port;
+	}
+
+	QString decoder;
+	for (const shared_ptr<data::SignalBase> &sig : source->signalbases()) {
+		const shared_ptr<data::DecodeSignal> decode =
+			dynamic_pointer_cast<data::DecodeSignal>(sig);
+		if (decode) {
+			decoder = decode->name();
+			break;
+		}
+	}
+
+	QStringList parts;
+	if (!device.isEmpty())
+		parts << device;
+	if (!decoder.isEmpty())
+		parts << decoder;
+	parts << QTime::currentTime().toString("HH:mm:ss");
+	return parts.join(' ');
+}
+
+void MainWindow::on_copy_session_requested()
+{
+	copy_session_to_new_session(last_focused_session_);
+}
+
+/*
+ * The page is taken by value, not by reference: the callers hand over the
+ * page in front, and adding a page moves that very pointer to the new one -
+ * a reference would quietly become the copy, and the copy would be named
+ * after itself instead of after the page it came from.
+ */
+bool MainWindow::copy_session_to_new_session(shared_ptr<Session> source)
+{
+	if (!source || !source->data_held() || source->using_file_device())
+		return false;
+
+	/* One export per page is enough: the tab says it is busy, and a
+	 * second request would write the same capture again. */
+	if (copy_percent_.contains(source.get()))
+		return false;
+
+	const shared_ptr<sigrok::Context> context = sigrok_context_;
+	const shared_ptr<sigrok::OutputFormat> format =
+		context ? context->output_formats()["srzip"] : nullptr;
+	if (!format)
+		return false;
+
+	/*
+	 * The data has to leave the session that captured it to be handed to
+	 * another one, and a session file is the form both sides already
+	 * understand. It is written in the temporary directory and read back
+	 * at once, so nothing is left behind.
+	 *
+	 * The write is compressed on the way out, which takes seconds for a
+	 * capture of a few hundred megabytes - long enough for the window to
+	 * stop drawing if it were waited for here. StoreSession writes on a
+	 * thread of its own; the page is marked busy until it is done.
+	 */
+	const QString path = QDir::temp().filePath(
+		QString("weact-copy-%1.sr").arg(QDateTime::currentMSecsSinceEpoch()));
+
+	source->stop_capture();
+
+	StoreSession *const store = new StoreSession(path.toStdString(), format,
+		map<string, Glib::VariantBase>(),
+		std::make_pair<uint64_t, uint64_t>(0, 0), *source);
+	store->setParent(this);
+
+	/*
+	 * A dialog of its own rather than the tab alone: a write of a few
+	 * hundred megabytes takes long enough to want a number and a way out.
+	 * A small capture is written before the dialog would appear, so it
+	 * only shows up when there is something to wait for.
+	 */
+	auto canceled = std::make_shared<bool>(false);
+	QProgressDialog *const progress = new QProgressDialog(
+		tr("Exporting the capture... %1%").arg(0), tr("Cancel"), 0, 100,
+		this);
+	progress->setWindowTitle(tr("Export to a New Session"));
+	progress->setWindowModality(Qt::WindowModal);
+	progress->setMinimumDuration(400);
+	progress->setAutoClose(false);
+	progress->setAutoReset(false);
+
+	/* The bar puts a percentage of its own in the middle, and the label
+	 * already says one: keep the label, which says what is going on. */
+	if (QProgressBar *bar = progress->findChild<QProgressBar *>())
+		bar->setTextVisible(false);
+
+	connect(progress, &QProgressDialog::canceled, this,
+		[store, canceled]() {
+			*canceled = true;
+			store->cancel();
+		});
+
+	connect(store, &StoreSession::progress_updated, this,
+		[this, store, source, progress]() {
+			/* After the write is over the dialog is on its way out. */
+			if (!copy_percent_.contains(source.get()))
+				return;
+
+			const auto got = store->progress();
+			const int percent = got.second > 0 ?
+				int(100.0 * got.first / got.second) : 0;
+
+			progress->setLabelText(
+				tr("Exporting the capture... %1%").arg(percent));
+			if (progress->value() != percent)
+				progress->setValue(percent);
+
+			if (copy_percent_.value(source.get(), -1) == percent)
+				return;
+			copy_percent_[source.get()] = percent;
+			update_session_tabs();
+		});
+
+	connect(store, &StoreSession::store_successful, this,
+		[this, store, source, path, progress, canceled]() {
+			const QString error = store->error();
+			store->wait();
+			store->deleteLater();
+
+			progress->reset();
+			progress->deleteLater();
+
+			copy_percent_.remove(source.get());
+			update_session_tabs();
+
+			if (*canceled) {
+				/* Half a capture is of no use to anyone. */
+				QFile::remove(path);
+				return;
+			}
+
+			if (!error.isEmpty()) {
+				show_session_info(
+					tr("Could not copy the capture: %1").arg(error));
+				return;
+			}
+
+			const shared_ptr<Session> copy = add_session();
+			copy->load_file(path);
+			copy->set_name(copy_session_name(source));
+			copy->set_snapshot(true);
+			/* Still open in the session that now holds it; the window
+			 * sweeps it away on the way out. */
+			copy_temp_files_ << path;
+
+			update_session_roles();
+			update_session_tabs();
+		});
+
+	copy_percent_.insert(source.get(), 0);
+	update_session_tabs();
+
+	if (!store->start()) {
+		copy_percent_.remove(source.get());
+		update_session_tabs();
+		show_session_info(
+			tr("Could not copy the capture: %1").arg(store->error()));
+		store->deleteLater();
+		return false;
+	}
+
+	return true;
+}
+
+bool MainWindow::store_capture_to(const shared_ptr<Session> &session,
+	const QString &path)
+{
+	const shared_ptr<sigrok::Context> context = sigrok_context_;
+	if (!context || !session || path.isEmpty())
+		return false;
+
+	const shared_ptr<sigrok::OutputFormat> format =
+		context->output_formats()["srzip"];
+	if (!format)
+		return false;
+
+	session->stop_capture();
+
+	/*
+	 * Waited for, not left running: the callers here move the page on to
+	 * another device as soon as they return, and the capture would be
+	 * taken away underneath a write that had only just begun.
+	 */
+	pv::StoreSession store(path.toStdString(), format,
+		map<string, Glib::VariantBase>(),
+		std::make_pair<uint64_t, uint64_t>(0, 0), *session);
+
+	if (!store.start()) {
+		show_session_info(tr("Could not save the session: %1").arg(store.error()));
+		return false;
+	}
+	store.wait();
+
+	/*
+	 * The write can still have gone wrong - a file that could not be put
+	 * in place, a disk that filled up - and the caller has to know: it
+	 * moves the page on to another board next, and the capture would go
+	 * with it.
+	 */
+	if (!store.error().isEmpty()) {
+		show_session_info(tr("Could not save the session: %1").arg(store.error()));
+		return false;
+	}
+
+	return true;
 }
 
 void MainWindow::on_tab_close_requested(int index)

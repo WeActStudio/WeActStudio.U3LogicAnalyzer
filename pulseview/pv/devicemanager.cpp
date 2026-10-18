@@ -80,7 +80,14 @@ DeviceManager::DeviceManager(shared_ptr<Context> context,
 	unique_ptr<QProgressDialog> progress(new QProgressDialog("",
 		QObject::tr("Cancel"), 0, context->drivers().size() + 1));
 	progress->setWindowModality(Qt::WindowModal);
-	progress->setMinimumDuration(1);  // To show the dialog immediately
+	/*
+	 * A scan of a healthy link is over in a fraction of a second, and a
+	 * dialog that comes and goes in that time is only a flicker - several
+	 * of them, when one board being plugged starts more than one scan.
+	 * Only a link that has stopped answering takes long enough to be
+	 * worth showing, and that is the case the dialog is there for.
+	 */
+	progress->setMinimumDuration(800);
 
 	int entry_num = 1;
 

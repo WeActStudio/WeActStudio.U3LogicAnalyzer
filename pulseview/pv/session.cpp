@@ -135,7 +135,15 @@ namespace pv {
 
 shared_ptr<sigrok::Context> Session::sr_context;
 
+/* Every page of the run gets its own, starting at zero. */
+static int next_session_id()
+{
+	static int next = 0;
+	return next++;
+}
+
 Session::Session(DeviceManager &device_manager, QString name) :
+	id_(next_session_id()),
 	shutting_down_(false),
 	device_manager_(&device_manager),
 	default_name_(name),
@@ -177,11 +185,24 @@ Session::~Session()
 void Session::update_device_manager(DeviceManager *device_manager)
 {
 	device_manager_ = device_manager;
+
+	/*
+	 * The bar caches the manager for its device selector. A scan replaces
+	 * that object, and a bar still holding the old one reads freed memory
+	 * the next time it builds its menu.
+	 */
+	if (main_bar_)
+		main_bar_->update_device_manager(device_manager);
 }
 
 DeviceManager& Session::device_manager()
 {
 	return *device_manager_;
+}
+
+int Session::id() const
+{
+	return id_;
 }
 
 DeviceManager* Session::device_manager_ptr()
@@ -366,14 +387,12 @@ void Session::save_settings(QSettings &settings) const
 			dynamic_pointer_cast< devices::HardwareDevice >(device_);
 
 		if (hw_device) {
-			WchDeviceType dev_type = get_wch_device_type_by_driver(
-				hw_device->hardware_device()->driver()->name());
-			if (dev_type == WchDeviceType::CH569)
-				settings.setValue("device_type", "CH569 Logic");
-			else if (dev_type == WchDeviceType::CH32H417)
-				settings.setValue("device_type", "CH32H417 Logic");
-			else
-				settings.setValue("device_type", "hardware");
+			/*
+			 * One kind of hardware, whatever the driver behind it is: what
+			 * tells the devices apart is the information saved below, not
+			 * which model this session happens to be on.
+			 */
+			settings.setValue("device_type", "hardware");
 			settings.beginGroup("device");
 
 			key_list.emplace_back("vendor");
@@ -439,15 +458,37 @@ void Session::restore_setup(QSettings &settings)
 		main_bar_->restore_setup(settings);
 	}
 
+	/*
+	 * The group a channel was saved under: its name is the first one it had,
+	 * so a channel that has been renamed since is looked for by its index.
+	 */
+	auto channel_group = [&settings](const shared_ptr<data::SignalBase> &base) {
+		const QStringList groups = settings.childGroups();
+		if (groups.contains(base->internal_name()))
+			return base->internal_name();
+		const QString prefix =
+			(base->type() == data::SignalBase::AnalogChannel) ? "A" : "D";
+		const QString fallback = prefix + QString::number(base->index());
+		return groups.contains(fallback) ? fallback : QString();
+	};
+
 	// Restore channels
 	for (shared_ptr<data::SignalBase> base : signalbases_) {
-		QString group_key = base->internal_name();
-		if (!settings.childGroups().contains(group_key)) {
-			QString prefix = (base->type() == data::SignalBase::AnalogChannel) ? "A" : "D";
-			QString fallback_key = prefix + QString::number(base->index());
-			if (settings.childGroups().contains(fallback_key))
-				group_key = fallback_key;
-		}
+		/*
+		 * A decoder and a generated signal are not among the D0..D15
+		 * entries - each is restored from a group of its own further down.
+		 * They answer with an internal name all the same, usually that of
+		 * the first channel, and letting them be restored here turns each
+		 * of them into another copy of it: that is where the extra D0s
+		 * came from when a setup was opened after one that had decoders.
+		 */
+		if (base->is_decode_signal() || base->is_generated())
+			continue;
+
+		const QString group_key = channel_group(base);
+		if (group_key.isEmpty())
+			continue;
+
 		settings.beginGroup(group_key);
 		base->restore_settings(settings);
 		settings.endGroup();
@@ -496,6 +537,27 @@ void Session::restore_setup(QSettings &settings)
 		settings.beginGroup("decode_signal" + QString::number(i));
 		shared_ptr<data::DecodeSignal> signal = add_decode_signal();
 		signal->restore_settings(settings);
+		settings.endGroup();
+	}
+
+	/*
+	 * A decoder writes its own labels onto the channels it is bound to while
+	 * it is put back, and the last one to claim a channel leaves its label
+	 * there. The names the page had are put back after them, so that a page
+	 * comes back as it was left rather than wearing the label of whichever
+	 * decoder happened to be restored last.
+	 */
+	for (shared_ptr<data::SignalBase> base : signalbases_) {
+		if (base->is_decode_signal() || base->is_generated())
+			continue;
+
+		const QString group_key = channel_group(base);
+		if (group_key.isEmpty())
+			continue;
+
+		settings.beginGroup(group_key);
+		if (settings.contains("name"))
+			base->set_name(settings.value("name").toString());
 		settings.endGroup();
 	}
 #endif
@@ -555,81 +617,66 @@ void Session::restore_settings(QSettings &settings)
 	shared_ptr<devices::Device> device;
 
 	const QString device_type = settings.value("device_type").toString();
-	if (device_type == "CH569 Logic" || device_type == "CH32H417 Logic") {
-		bool already_demo = false;
-		if (device_) {
-			shared_ptr<devices::HardwareDevice> hw_dev =
-				dynamic_pointer_cast<devices::HardwareDevice>(device_);
-			if (hw_dev && hw_dev->hardware_device()->driver()->name() == "demo") {
-				already_demo = true;
-				qDebug() << "Current device is already demo, skipping restore_settings";
-			}
-		}
 
-		if (already_demo) {
-			return;
-		}
+	if (device_type == "hardware") {
+		map<string, string> dev_info;
+		list<string> key_list;
 
-		const list< shared_ptr<devices::HardwareDevice> > &devices =
-			device_manager_.load()->devices();
+		settings.beginGroup("device");
+		key_list.emplace_back("vendor");
+		key_list.emplace_back("model");
+		key_list.emplace_back("version");
+		key_list.emplace_back("serial_num");
+		key_list.emplace_back("connection_id");
 
-		shared_ptr<devices::HardwareDevice> connected_device;
-		bool saved_setup_applies = false;
-		for (auto dev : devices) {
-			WchDeviceType dev_type = get_wch_device_type_by_driver(
-				dev->hardware_device()->driver()->name());
-			if (dev_type == WchDeviceType::CH569) {
-				connected_device = dev;
-				saved_setup_applies = true;
-				break;
-			} else if (dev_type == WchDeviceType::CH32H417 && !connected_device) {
-				connected_device = dev;
-				saved_setup_applies = true;
-			}
+		for (string key : key_list) {
+			const QString k = QString::fromStdString(key);
+			if (!settings.contains(k))
+				continue;
+
+			const string value = settings.value(k).toString().toStdString();
+			if (!value.empty())
+				dev_info.insert(make_pair(key, value));
 		}
+		settings.endGroup();
 
 		/*
-		 * Anything that is not the demo device is real hardware. A session
-		 * that was saved while a WCH device was attached must not drag a
-		 * freshly selected fx2lafw back to the demo device.
+		 * The connection id is the port the board sits in, and it is what
+		 * tells two boards of one model apart. find_device_from_info()
+		 * tries the serial number first, which firmware is free to write
+		 * the same into every board - so ask by the port before falling
+		 * back to it.
 		 */
-		if (!connected_device) {
-			for (auto dev : devices) {
-				if (string(dev->hardware_device()->driver()->name()) != "demo") {
-					connected_device = dev;
+		shared_ptr<devices::HardwareDevice> saved_device;
+		const auto conn = dev_info.find("connection_id");
+		if (conn != dev_info.end())
+			for (const shared_ptr<devices::HardwareDevice>& dev :
+					device_manager_.load()->devices()) {
+				const shared_ptr<sigrok::Device> sr_dev = dev->device();
+				if (sr_dev && sr_dev->connection_id() == conn->second) {
+					saved_device = dev;
 					break;
 				}
 			}
-		}
 
-		if (connected_device) {
-			device = connected_device;
-			qDebug() << "Found connected device, using it instead of saved settings";
-		}
+		if (!saved_device && dev_info.count("model") > 0)
+			saved_device = device_manager_.load()->find_device_from_info(dev_info);
 
-		if (device) {
-			/* The default session has already selected and opened the very
-			 * device that is connected now. Selecting it once more would
-			 * close and re-open it, and with that run the whole round of
-			 * configuration a second time - which is a full USB round trip
-			 * at start-up and writes every setting twice. */
-			if (device != device_)
-				set_device(device);
-			else
-				qDebug() << "Device is already the selected one, keeping it open";
-		} else {
-			// No device found, fall back to the demo device
-			qDebug() << "No device found, selecting default device";
-			set_default_device();
-		}
+		if (saved_device)
+			device = saved_device;
 
-		bool is_demo = false;
-		if (device_) {
-			shared_ptr<devices::HardwareDevice> hw_dev =
-				dynamic_pointer_cast<devices::HardwareDevice>(device_);
-			if (hw_dev && hw_dev->hardware_device()->driver()->name() == "demo") {
-				is_demo = true;
-			}
+		/*
+		 * A page that already holds a board keeps it. What is being restored
+		 * here is the setup that goes with the page, not which board it is
+		 * on: the board it holds was chosen in this window, and taking it
+		 * away would leave two pages on one board - the saved one is a fact
+		 * about the last run, not an instruction to move.
+		 */
+		if (device && !device_) {
+			qDebug() << "Restoring the saved device";
+			set_device(device);
+		} else if (device) {
+			qDebug() << "Keeping the board this page is already on";
 		}
 
 		/*
@@ -640,9 +687,18 @@ void Session::restore_settings(QSettings &settings)
 		 * other hardware would leave the view scaled to a sample rate
 		 * the device never got.
 		 */
-		if (!is_demo && saved_setup_applies) {
-			restore_setup(settings);
+		bool is_wch = false;
+		if (device_) {
+			const shared_ptr<devices::HardwareDevice> hw_dev =
+				dynamic_pointer_cast<devices::HardwareDevice>(device_);
+			if (hw_dev && get_wch_device_type_by_driver(
+					hw_dev->hardware_device()->driver()->name()) !=
+					WchDeviceType::None)
+				is_wch = true;
 		}
+
+		if (is_wch)
+			restore_setup(settings);
 	}
 #if 0
 	QString filename;
@@ -757,12 +813,32 @@ void Session::set_device(shared_ptr<devices::Device> device)
 			(s->name() != s->internal_name()))
 			s->set_name(s->internal_name());
 
+	/*
+	 * A decoder reads signals and keeps hold of them. It is taken down
+	 * first, through the normal removal path: the signals and the views
+	 * it is attached to are cleared just below, and a decoder left in the
+	 * list would be handed to them a second time - which is what moving a
+	 * session from the demo device to a board used to do.
+	 */
+#ifdef ENABLE_DECODE
+	if (!decode_signal_map_.empty()) {
+		vector< shared_ptr<data::DecodeSignal> > decoders;
+		decoders.reserve(decode_signal_map_.size());
+		for (auto& entry : decode_signal_map_)
+			decoders.push_back(entry.first);
+
+		for (auto& decoder : decoders)
+			remove_decode_signal(decoder);
+	}
+#endif
+
 	// Remove all stored data and reset all views
 	for (shared_ptr<views::ViewBase> view : views_) {
-		view->clear_signalbases();
 #ifdef ENABLE_DECODE
+		/* The decoders are gone by now; the signals they read are next. */
 		view->clear_decode_signals();
 #endif
+		view->clear_signalbases();
 		view->reset_view_state();
 	}
 
@@ -831,6 +907,109 @@ void Session::set_device(shared_ptr<devices::Device> device)
 		update_signals();
 	}
 	device_changed();
+}
+
+bool Session::adopt_device_instance(shared_ptr<devices::Device> device)
+{
+	assert(device);
+
+	if (!device_)
+		return false;
+
+	const shared_ptr<sigrok::Device> old_sr_dev = device_->device();
+	const shared_ptr<sigrok::Device> new_sr_dev = device->device();
+	if (!old_sr_dev || !new_sr_dev)
+		return false;
+
+	/*
+	 * Every signal has to find the channel it stands for in the instance
+	 * that is coming in, or the session would keep channels that belong to
+	 * a device it no longer holds: the data feed looks a signal up by the
+	 * channel the sample came from. Anything that does not line up means
+	 * this is not the same board after all, and the caller has to do a
+	 * real switch.
+	 */
+	const vector< shared_ptr<Channel> > new_channels = new_sr_dev->channels();
+	vector< pair< shared_ptr<data::SignalBase>, shared_ptr<Channel> > > rebind;
+
+	for (const shared_ptr<data::SignalBase>& s : signalbases_) {
+		const shared_ptr<Channel> old_channel = s->channel();
+		if (!old_channel)
+			continue;
+
+		const auto iter = find_if(new_channels.begin(), new_channels.end(),
+			[&](const shared_ptr<Channel>& ch) {
+				return (ch->index() == old_channel->index()) &&
+					(ch->type() == old_channel->type()); });
+
+		if (iter == new_channels.end())
+			return false;
+
+		rebind.emplace_back(s, *iter);
+	}
+
+	/*
+	 * Rebuilding the page strips the label a decoder put on a channel
+	 * ("RX (D0)" back to "D0"), and the channel keeps the decoder. Keep
+	 * the names across the swap so a rescan leaves them as they were.
+	 */
+	vector<QString> saved_names;
+	for (const shared_ptr<data::SignalBase>& s : signalbases_)
+		saved_names.push_back(s->name());
+
+	stop_capture();
+
+	try {
+		device_->close();
+	} catch (const sigrok::Error &e) {
+		qWarning() << "Error closing the previous device:" << e.what();
+	} catch (const QString &msg) {
+		qWarning() << "Error closing the previous device:" << msg;
+	} catch (...) {
+		/* A closed device answers with a bug error, which is of no
+		 * consequence here: it is being replaced anyway. */
+	}
+
+	device_.reset();
+	device_ = move(device);
+
+	try {
+		device_->open();
+	} catch (const QString &) {
+		/*
+		 * Leave nothing half-swapped behind: the caller falls back to
+		 * set_device(), which opens the very instance that is handed in
+		 * here - that only works while it is still untouched.
+		 */
+		device_.reset();
+		return false;
+	}
+
+	device_->session()->add_datafeed_callback([=]
+		(shared_ptr<sigrok::Device> device, shared_ptr<Packet> packet) {
+			data_feed_in(device, packet);
+		});
+
+	/* Enabled is a property of the channel, so it moves with the signal. */
+	for (auto& entry : rebind) {
+		entry.second->set_enabled(entry.first->channel()->enabled());
+		entry.first->set_channel(entry.second);
+	}
+
+	/*
+	 * No device_changed() here: that is what a session says when the board
+	 * in it was replaced, and it makes the tool bar build the device page
+	 * again - which drops the triggers and the decoder labels. Nothing of
+	 * the sort happened: this is the same board, and the only thing that
+	 * changed is the object standing for it. Whoever took it over tells
+	 * the tool bar what to refresh.
+	 */
+
+	for (size_t i = 0; i < signalbases_.size() && i < saved_names.size(); i++)
+		if (signalbases_[i]->name() != saved_names[i])
+			signalbases_[i]->set_name(saved_names[i]);
+
+	return true;
 }
 
 void Session::set_default_device()
@@ -1073,16 +1252,14 @@ void Session::start_capture(function<void (const QString)> error_handler)
 
 	is_first_trigger_ = true;
 
-	// Revert name back to default name (e.g. "Session 1") for real devices
-	// as the (possibly saved) data is gone. File devices keep their name.
-	shared_ptr<devices::HardwareDevice> hw_device =
-		dynamic_pointer_cast< devices::HardwareDevice >(device_);
+	/*
+	 * The name is left alone. It used to be reset to the default here,
+	 * because a capture starts by throwing the last one away - but the
+	 * tab now carries the board the session is on, and renaming it at
+	 * every start made the strip say "Session 1" the moment Run was
+	 * pressed.
+	 */
 
-	if (hw_device) {
-		name_ = default_name_;
-		name_changed();
-	}
-	
 	// if (sampling_thread_.joinable()) {
 	// 	sampling_thread_.join();
 	// }
@@ -1753,6 +1930,16 @@ void Session::sample_thread_proc(function<void (const QString)> error_handler)
 	if (report_link_stop_reason() != LinkStopReason::None)
 		is_repeat_acquisition_ = false;
 
+	/*
+	 * What the capture left behind is held from here on, before the state
+	 * change is announced: the window offers a copy of it on the tab of
+	 * the page, and that has to see the data already there.
+	 */
+	if (!dynamic_pointer_cast<devices::File>(device_)) {
+		data_saved_ = false;
+		data_held_ = true;
+	}
+
 	set_capture_state(Stopped);
 
 	// Confirm that SR_DF_END was received
@@ -1762,15 +1949,6 @@ void Session::sample_thread_proc(function<void (const QString)> error_handler)
 
 	// Optimize memory usage
 	free_unused_memory();
-
-	// We now have unsaved data unless we just "captured" from a file
-	shared_ptr<devices::File> file_device =
-		dynamic_pointer_cast<devices::File>(device_);
-
-	if (!file_device) {
-		data_saved_ = false;
-		data_held_ = true;
-	}
 
 	if (is_repeat_acquisition_)
 		notify_acq_done();

@@ -123,7 +123,18 @@ SignalBase::SignalBase(shared_ptr<sigrok::Channel> channel, ChannelType channel_
 	error_message_("")
 {
 	if (channel_) {
-		set_internal_name(QString::fromStdString(channel_->name()));
+		QString internal = QString::fromStdString(channel_->name());
+		/*
+		 * A saved session keeps the decoder label glued onto the channel
+		 * name ("Data (D3)"). Taking that as the original name makes the
+		 * next decoder pass add a second label, so strip the one that
+		 * belongs to this very channel before storing it.
+		 */
+		const QString bare = (channel_type == AnalogChannel ? "A" : "D") +
+			QString::number(channel_->index());
+		if ((internal != bare) && internal.endsWith(" (" + bare + ")"))
+			internal = bare;
+		set_internal_name(internal);
 		set_index(channel_->index());
 	}
 
@@ -148,6 +159,11 @@ SignalBase::~SignalBase()
 shared_ptr<sigrok::Channel> SignalBase::channel() const
 {
 	return channel_;
+}
+
+void SignalBase::set_channel(shared_ptr<sigrok::Channel> channel)
+{
+	channel_ = channel;
 }
 
 bool SignalBase::is_generated() const

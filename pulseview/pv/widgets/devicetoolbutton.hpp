@@ -28,7 +28,7 @@
 
 #include <QAction>
 #include <QMenu>
-#include <QSignalMapper>
+#include <QSet>
 #include <QToolButton>
 #include "../devicemanager.hpp"
 using std::list;
@@ -83,6 +83,46 @@ public:
 	void reset();
 	void set_device_list_name(QString &device_list_name);
 
+	/**
+	 * Decides what the menu offers besides picking a device.
+	 * @param new_session_allowed show the "open in a new session" wheel;
+	 *        only the capture page that owns every device does that.
+	 * @param single_device_only list nothing but the device in use.
+	 */
+	void set_device_selector_role(bool new_session_allowed,
+		bool single_device_only);
+
+	/**
+	 * Identities of the devices another session already holds. Their
+	 * "open in a new session" wheel is greyed out: one board cannot be
+	 * captured by two sessions at the same time.
+	 */
+	/**
+	 * Boards another session holds are not offered for switching to: two
+	 * pages on one board would both try to run it. The one this session is
+	 * on is not one of them - it is where the session already is.
+	 */
+	void set_busy_devices(const QSet<QString> &busy, const QString &own);
+
+	/**
+	 * Makes the button stand for this device. The label is kept from then
+	 * on, which it otherwise is not: a language change puts the name of the
+	 * device it was told about last, not the one the session is on.
+	 */
+	void set_current_device(const shared_ptr<devices::Device> &device);
+
+	/**
+	 * Drops the selection: the button shows no device. Used when the one
+	 * that was picked could not be opened, so the session holds nothing.
+	 */
+	void clear_selection();
+
+	/**
+	 * A stable name for a device, so a session can be matched to the board
+	 * it holds across a rescan.
+	 */
+	static QString device_identity(const shared_ptr<devices::Device> &device);
+
 	void update_device_mamager(DeviceManager * dev_manager);
 
 private:
@@ -109,12 +149,14 @@ private:
 	 */
 	bool only_demo_device() const;
 
+	/** Makes @c device the one this button shows, then tells the owner. */
+	void activate_device(shared_ptr<devices::Device> device);
+
 protected:
 	/* Called when the application language changed. */
 	void changeEvent(QEvent *event) override;
 
 private Q_SLOTS:
-	void on_action(QObject *action);
 	void on_menu_hovered(QAction *action);
 	void on_menu_hover_timeout();
 	void on_button_clicked();  // Handle a button click and show the drop-down menu
@@ -128,17 +170,23 @@ Q_SIGNALS:
 	 */
 	void refresh_requested();
 
+	/** Open this device in a session of its own. */
+	void device_new_session_requested(QString identity);
+
 private:
 	DeviceManager * device_manager_;
 	QAction *const connect_action_;
 
 	QMenu menu_;
-	QSignalMapper mapper_;
 
 	shared_ptr<devices::Device> selected_device_;
 
 	QString full_label_;
 	vector< weak_ptr<devices::Device> > devices_;
+	QSet<QString> busy_devices_;
+	QString own_identity_;
+	bool new_session_allowed_ = false;
+	bool single_device_only_ = false;
 
 	QString device_tooltip_;
 

@@ -1227,7 +1227,23 @@ void DecodeSignal::commit_decoder_channels()
 			if (s->internal_name().isEmpty())
 				s->set_internal_name(s->name());
 			QString signal_name = QString::fromUtf8(ch.name.toLatin1().constData());
-			s->set_name(signal_name + " (" + s->internal_name() + ")");
+			/*
+			 * This runs again whenever a decoder stack is restored, so it has
+			 * to be idempotent: a name that already carries the label is
+			 * unwrapped first, otherwise every open of a session adds a layer.
+			 */
+			QString internal = s->internal_name();
+			const QString label = signal_name + " (";
+			/* Peel every layer, not just one: a session written by a build
+			 * that stacked them holds more than one. */
+			while (internal.startsWith(label) && internal.endsWith(')'))
+				internal = internal.mid(label.size(),
+					internal.size() - label.size() - 1);
+			if (internal != s->internal_name())
+				s->set_internal_name(internal);
+			const QString new_name = signal_name + " (" + internal + ")";
+			if (s->name() != new_name)
+				s->set_name(new_name);
 		}
 	}
 }
@@ -1800,6 +1816,15 @@ void DecodeSignal::decode_proc()
 	uint64_t total_wait_time_ms = 0;
 
 	uint64_t abs_start_samplenum = 0;
+
+	/*
+	 * A segment is flushed once, when it is complete. The wait below runs
+	 * on a timeout, so the loop passes here again and again while nothing
+	 * new arrives, and flushing every time is what made the decoders print
+	 * "End of sample data" over and over.
+	 */
+	bool eof_sent = false;
+
 	do {
 		// Keep processing new samples until we exhaust the input data
 		uint64_t samples_to_process = 0;
@@ -1811,6 +1836,8 @@ void DecodeSignal::decode_proc()
 				auto dd_t1 = std::chrono::steady_clock::now();
 				total_decode_data_time_ms += (uint64_t)std::chrono::duration<double, std::milli>(dd_t1 - dd_t0).count();
 				abs_start_samplenum += samples_to_process;
+				/* There is something new to flush when this ends. */
+				eof_sent = false;
 			}
 		} while (!decode_interrupt_ && (samples_to_process > 0));
 
@@ -1829,8 +1856,10 @@ void DecodeSignal::decode_proc()
 		}
 
 		// This segment is done: let the decoders flush what they still hold.
-		if (srd_session_)
+		if (srd_session_ && !eof_sent) {
 			srd_session_send_eof(srd_session_);
+			eof_sent = true;
+		}
 
 		if (decode_interrupt_)
 			break;
@@ -1870,6 +1899,7 @@ void DecodeSignal::decode_proc()
 		current_segment_id_++;
 		source_segment = next_segment;
 		abs_start_samplenum = 0;
+		eof_sent = false;
 
 		// Create the next segment and set its metadata
 		create_decode_segment();

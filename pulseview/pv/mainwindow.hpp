@@ -25,12 +25,15 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <vector>
 
 #include <QMainWindow>
 #include <QShortcut>
 #include <QTabWidget>
 #include <QToolButton>
 #include <QString>
+#include <QHash>
+#include <QStringList>
 #include <QCheckBox>
 #include <QDialog>
 #include <QPointer>
@@ -113,6 +116,35 @@ public:
 	 */
 	void update_sessions_device_manager(pv::DeviceManager *device_manager);
 
+	/**
+	 * Let every session take the instance the last scan made for the board
+	 * it is on, keeping what the session holds, and say whose board is no
+	 * longer on the list.
+	 *
+	 * A scan hands out new instances, so each board that stayed plugged in
+	 * has to be taken back - by the session that is on it, and without the
+	 * data going away with the instance. The session whose board is gone is
+	 * returned for the detach question.
+	 */
+	shared_ptr<Session> adopt_device_in_sessions();
+
+	/**
+	 * Looks the device up by its identity, which is what tells two boards
+	 * of the same model apart. Null when no device reports that identity.
+	 */
+	shared_ptr<devices::HardwareDevice> find_device_by_identity(
+		const QString &identity);
+
+	/**
+	 * The same board under another port. A port is part of an identity, and
+	 * a board that re-enumerates can come back on a different one - an FX2
+	 * lands on another bus number, for one. The serial number survives that
+	 * and is what is matched; it is not unique, so the answer is only taken
+	 * when exactly one free board answers to it.
+	 */
+	shared_ptr<devices::HardwareDevice> find_moved_board(
+		const shared_ptr<Session> &session);
+
 	void add_session_with_file(string open_file_name, string open_file_format,
 		string open_setup_file_name);
 
@@ -155,16 +187,48 @@ public Q_SLOTS:
 	void on_run_stop_clicked();
 	void on_show_error(QString err);
 	void show_session_info(const QString info_text);
-	void show_device_detach();
+	void show_device_detach(const shared_ptr<Session> &session);
 	void on_get_repeat_acquisition(bool& is_repeat_acquisition_state);
 	void on_device_attached();
+	void run_device_attached();
 
 private:
-	void do_device_detach_switch();
+	void do_device_detach_switch(const shared_ptr<Session> &session);
+
+	/* Tells every bar what its device selector may offer: the capture page
+	 * lists every board, a session opened for one board lists that one,
+	 * and a session showing a file hides the selector outright. */
+	void update_session_roles();
+
+	/* Names the tabs, eliding what is too long for the strip and keeping
+	 * the full name in its tool tip. The capture page keeps no close
+	 * button: it is the window's way back to a device. */
+	void update_session_tabs();
+
+	void apply_session_role(const shared_ptr<Session> &session);
+
+	/* Names a copied session after the board it came from, the decoder that
+	 * was put on the trace, and the moment it was copied. */
+	QString copy_session_name(const shared_ptr<Session> &session);
+
+	/**
+	 * Hands the capture of one page to a page of its own. True when there
+	 * was something to hand over: the question asked when a board goes
+	 * away keeps the data this way, since the page itself cannot keep it -
+	 * the board it was capturing from is the one that left.
+	 */
+	bool copy_session_to_new_session(shared_ptr<Session> source);
+
+	/**
+	 * Writes the capture of a page into a session file and waits for it to
+	 * be there. Returns false when nothing was written.
+	 */
+	bool store_capture_to(const shared_ptr<Session> &session,
+		const QString &path);
 
 	/* The answer to the detach question: read the device list again, move
 	 * the session to what is there, and let device events through. */
-	void apply_device_detach();
+	void apply_device_detach(const shared_ptr<Session> &session);
 
 	/* Tells the user about the drivers whose scan had to be given up on,
 	 * so a device that is missing from the list has a reason on screen. */
@@ -205,6 +269,15 @@ private Q_SLOTS:
 	void on_tab_changed(int index);
 	void on_tab_close_requested(int index);
 
+	/* A file was chosen in a session's menu: it always gets a session of
+	 * its own, the capture page never shows a file. */
+	void on_open_file_requested(QString file_name);
+
+	/* A board was asked to open in a session of its own, and the save menu
+	 * asked to copy the captured trace into one. */
+	void on_device_new_session_requested(QString identity);
+	void on_copy_session_requested();
+
 	void on_show_decoder_selector(Session *session);
 	void on_sub_window_close_clicked();
 
@@ -234,6 +307,19 @@ private:
 
 	list< shared_ptr<Session> > sessions_;
 	shared_ptr<Session> last_focused_session_;
+
+	/* The capture page the window starts with. It is the one session that
+	 * cannot be closed and never shows a file. */
+	shared_ptr<Session> default_session_;
+
+	/* Session files written to copy a capture into another session. They
+	 * are deleted on exit, once nothing holds them open. */
+	QStringList copy_temp_files_;
+
+	/* The pages whose capture is being written out for a copy, with how
+	 * far the write has got: the tab shows it, and a second click is
+	 * ignored. */
+	QHash<const Session*, int> copy_percent_;
 
 	map< QDockWidget*, shared_ptr<views::ViewBase> > view_docks_;
 	map< QDockWidget*, shared_ptr<subwindows::SubWindowBase> > sub_windows_;
@@ -274,10 +360,25 @@ private:
 	/* Set when a device change arrived while the previous one was still being
 	 * handled; it is handled as soon as that pass is done. */
 	bool device_event_pending_ = false;
+	/*
+	 * One board being plugged is reported more than once, so the pass that
+	 * answers it is held back a little and the notices that arrive in the
+	 * meantime join it. Without this, one plug means several rescans.
+	 */
+	bool device_event_queued_ = false;
+	static const int DeviceEventDebounceMs = 150;
 	/* The detach question while it is on screen. Only one is ever asked: a
 	 * second copy would sit exactly on top of the first, and answering one
 	 * would only reveal the other. */
 	QPointer<QDialog> detach_dialog_;
+
+	/* The board the capture page is waiting to get back, by identity. */
+	QString waiting_for_board_;
+
+	/* A pass that found a page without its board gets one more look before
+	 * the board is taken for gone: a scan can miss one while the bus is
+	 * being re-enumerated. */
+	bool attach_retry_done_ = false;
 };
 
 } // namespace pv

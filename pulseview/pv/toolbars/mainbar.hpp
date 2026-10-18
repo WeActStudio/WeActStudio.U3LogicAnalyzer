@@ -34,6 +34,8 @@
 #include <QLabel>
 #include <QMenu>
 #include <QPixmap>
+#include <QSet>
+#include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 #include <pv/popups/channels.hpp>
@@ -71,6 +73,10 @@ namespace pv {
 class MainWindow;
 class Session;
 
+namespace popups {
+class DeviceOptions;
+}
+
 namespace views {
 namespace trace {
 class View;
@@ -88,7 +94,7 @@ private:
 	static const uint64_t MaxSampleCount;
 	static const uint64_t DefaultSampleCount;
 	static const uint64_t MinSampleRate;
-	static uint64_t MaxSampleRate;
+	uint64_t max_sample_rate_ = 50000000ULL;
 	/**
 	 * Name of the setting used to remember the directory
 	 * containing the last file that was opened.
@@ -110,6 +116,21 @@ public:
 		pv::views::trace::View *view);
 	~MainBar();
 	void update_device_list();
+	/*
+	 * Refreshes what the selector offers without touching the device page
+	 * or the view. For a session that kept its board: a rescan hands that
+	 * board back as a new instance, and building the page again would drop
+	 * its triggers and the labels its decoders put on the channels - all
+	 * for a change that is only in the list.
+	 */
+	void refresh_device_selector();
+
+	/* Takes a device into the session and brings the bar in line with it:
+	 * vendor, selector label, pattern mode and the rollback of a board that
+	 * will not open. A device picked in the list and the replacement a
+	 * detach picks go through the same call, so the two cannot drift apart.
+	 * ask is false when the caller has already settled the data question. */
+	bool switch_to_device(std::shared_ptr<devices::Device> device, bool ask);
 	void update_runstop_status(int state);
 
 	void set_capture_state(pv::Session::capture_state state);
@@ -136,6 +157,48 @@ public:
 	void hot_plug_stop();
 	void set_vendorName(QString vendorName);
 	QString get_vendorName();
+	/* What the device selector offers depends on the session it sits in:
+	 * only the capture page that owns every board can open a new session,
+	 * and a session opened for one board stays with that board. A session
+	 * showing a file has nothing to select at all. */
+	void set_device_selector_role(bool new_session_allowed,
+		bool single_device_only);
+	void set_busy_devices(const QSet<QString> &busy, const QString &own);
+
+	/**
+	 * Hands the capture values this page shows to the device. Needed
+	 * before a capture starts: they are otherwise only pushed when one of
+	 * the selectors is moved, so a page started on the values it was set
+	 * up with would leave the driver holding whatever it had - and with
+	 * the sample limit at zero a capture never reaches its end.
+	 */
+	void apply_capture_limits();
+
+private:
+	/** Sets the rate the page shows on the device; false if it refused. */
+	bool push_sample_rate(const shared_ptr<sigrok::Device> &sr_dev);
+
+public:
+	void set_device_selector_visible(bool visible);
+
+	/**
+	 * The mode button and the run button both act on a device: what to do
+	 * when it is started, and starting it at all. A page that shows a file
+	 * has nothing to start, and a snapshot has nothing to ask for either.
+	 */
+	void set_capture_buttons_visible(bool mode, bool run);
+
+	/** The directory the last session file was saved in, for the next one. */
+	static QString last_save_directory();
+	static void remember_save_directory(const QString &path);
+
+	/* A device scan replaces the manager; the selector must not keep
+	 * pointing at the one that was just freed. */
+	void update_device_manager(DeviceManager *manager);
+
+	/* Rebuilds the device page after the device went away without another
+	 * one taking its place. */
+	void refresh_device_widgets();
 
 	/* The driver backing the device in use. The hot-plug poll runs on its own
 	 * thread and needs it to tell a change of that device from a change that
@@ -143,7 +206,7 @@ public:
 	 * name is. */
 	void set_device_driver(QString driver);
 	QString get_device_driver();
-	
+
 private:
 	void run_stop();
 
@@ -156,12 +219,13 @@ private:
 	void update_sample_count_selector();
 	void update_device_config_widgets();
 	void commit_sample_rate();
-	void commit_sample_count();
+	void commit_sample_count(bool remember = true);
 	void commit_channel_number(uint64_t channelNum);
 	void commit_threshold_value(int index, float thresholdLevel);
 	void hot_plug_listen();
 	void renew_samplecount_samplerate(uint64_t samplerate,uint64_t samplerate_max);
 	void get_decoder_list_default(QString decoder_name);
+	QString setting_group() const;
 
 	static void ch32h417_notify_callback(unsigned long eventStatus);
 	static MainBar* s_mainbar_instance;
@@ -243,6 +307,18 @@ Q_SIGNALS:
 	void settings_triggered();
 	void ch32h417_device_event_signal(unsigned long eventStatus);
 
+	/* A file was picked in this bar's menu. Whether it lands in this session
+	 * or in a new one is the window's decision, not the bar's. */
+	void open_file_requested(QString file_name);
+
+	/* Forwarded from the device selector: open this board in a session of
+	 * its own. */
+	void device_new_session_requested(QString identity);
+
+	/* The save menu was asked to put what has been captured into a session
+	 * of its own. */
+	void copy_session_requested();
+
 private:
 	QAction *const action_new_view_;
 	// QAction *const action_run_stop_;
@@ -255,6 +331,13 @@ private:
 	QAction *const action_restore_setup_;
 	QAction *const action_save_setup_;
 	QAction *const action_connect_;
+
+	/* The tool bar entry that holds the device selector, and the save menu
+	 * entry that copies the trace into a session of its own. */
+	QAction *device_selector_action_ = nullptr;
+	QAction *model_change_action_ = nullptr;
+	QAction *run_stop_action_ = nullptr;
+	QAction *action_copy_to_new_session_ = nullptr;
 
 	/* Menus and entries whose text is a translation and which the
 	 * constructor used to own as local variables. */
@@ -305,9 +388,31 @@ private:
 
 	bool is_count_setting_default_;
 	bool is_rate_setting_default_;
+	/*
+	 * Set while renew_setting_default() walks the settings back into the
+	 * widgets: the commits it triggers would otherwise write the very
+	 * values they are in the middle of reading.
+	 */
+	bool restoring_defaults_ = false;
+
+	/*
+	 * Dragging the pre-trigger slider calls the save on every step, and
+	 * each of those writes the whole settings file. The write is held back
+	 * until the dragging stops instead.
+	 */
+	QTimer *setting_save_timer_ = nullptr;
+	static const int SettingSaveDelayMs = 300;
+
 	uint64_t sample_count_value_ = 12500;
 	uint64_t sample_rate_value_ = SR_KHZ(500);
 	uint16_t channel_number_;
+	/*
+	 * Which of the channel modes the user picked - the 2/4/8/16 choice in
+	 * the device page, not the channel count the board is told to sample.
+	 * The two differ: a board that only samples 8 or 16 still lets two or
+	 * four of them be shown, and that choice has to come back as it was.
+	 */
+	int channel_mode_index_ = 3;
 	float thresholdValue_1_ = 1.0f;
 	float thresholdValue_2_ = 1.0f;
 	float thresholdValue_ch32h417_ = 2.3f;
@@ -316,6 +421,9 @@ private:
 
 public:
 	pv::popups::Channels*  channels_;
+	/* Holds the device bindings; the config_changed signal is reported
+	 * through it, so it lives as long as the device it describes. */
+	pv::popups::DeviceOptions *device_options_ = nullptr;
 	int is_repeat_acq_default_ = 0;
 	float threshold_bank_1_default_ = 1.0;
 	float threshold_bank_2_default_ = 1.0;
@@ -328,6 +436,8 @@ public:
 	int capture_mode_ = Session::Single;
 	void get_setting_default();
 	void set_setting_default();
+	/* The write set_setting_default() holds back; see SettingSaveDelayMs. */
+	void write_setting_default();
 	void renew_setting_default();
 	void save_setup(QSettings &settings) const;
 	void restore_setup(QSettings &settings);
