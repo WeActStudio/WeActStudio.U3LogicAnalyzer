@@ -107,6 +107,7 @@ void *ch32h417_libusb_open_device(unsigned long index);
 void ch32h417_libusb_close_device(unsigned long index);
 unsigned long ch32h417_libusb_get_usb_id(unsigned long index);
 const char *ch32h417_libusb_get_device_name(unsigned long index);
+int ch32h417_libusb_get_usb_path(unsigned long index, char *path, int path_len);
 int ch32h417_libusb_get_device_descr(unsigned long index, void *buffer, unsigned long *length);
 
 /* Timeouts in milliseconds; a value of 0 is clamped so it cannot block forever */

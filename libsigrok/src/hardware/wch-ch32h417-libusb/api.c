@@ -338,7 +338,17 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 			continue;
 		}
 
-		snprintf(connection_id, sizeof(connection_id), "libusb/%d", i);
+		/*
+		 * The connection id is the place on the USB bus the board sits in
+		 * - "usb/<bus>-<port>", the same shape the other libusb drivers
+		 * use - so it survives a replug, unlike the index, which moves as
+		 * soon as another board is unplugged. The index is only the
+		 * fallback, for a board whose place cannot be read.
+		 */
+		if (ch32h417_libusb_get_usb_path(i, connection_id,
+				sizeof(connection_id)) != SR_OK)
+			snprintf(connection_id, sizeof(connection_id), "libusb/%d", i);
+		sr_info("Device at index %d: connection id '%s'", i, connection_id);
 
 		sdi = g_malloc0(sizeof(struct sr_dev_inst));
 		sdi->status = SR_ST_INITIALIZING;
@@ -392,7 +402,11 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 
 		ch32h417_libusb_init_comm_params(devc);
 
-		break;
+		/*
+		 * Carry on: boards of the same model differ only in their index and
+		 * serial number, so stopping at the first one hides the others.
+		 * Each device keeps its own handle, ring and context.
+		 */
 	}
 
 	return std_scan_complete(di, devices);
@@ -407,6 +421,28 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
  * well: on Windows GMutex wraps a CRITICAL_SECTION, which is not released
  * by simply freeing the structure that contains it.
  */
+/*
+ * Whether the index an instance holds still stands for the board it was
+ * made for. A scan rebuilds the table the index goes into, so a board that
+ * came or went moves every index after it: closing by an index that now
+ * belongs to another board would shut that board's handle instead.
+ */
+static gboolean index_is_ours(const struct sr_dev_inst *sdi, unsigned long index)
+{
+	char path[80] = "";
+
+	/* The fallback id scan writes when the path cannot be read is
+	 * "libusb/<index>", which is no identity at all. */
+	if (!sdi->connection_id ||
+		!g_str_has_prefix(sdi->connection_id, "usb/"))
+		return TRUE;
+
+	if (ch32h417_libusb_get_usb_path(index, path, sizeof(path)) != SR_OK)
+		return FALSE;
+
+	return g_strcmp0(path, sdi->connection_id) == 0;
+}
+
 static void dev_clear_private(void *priv)
 {
 	struct dev_context *devc = priv;
@@ -414,10 +450,12 @@ static void dev_clear_private(void *priv)
 	if (!devc)
 		return;
 
-	if (devc->device_handle && devc->device_handle != LIBUSB_INVALID_HANDLE) {
-		ch32h417_libusb_close_device(devc->device_index);
-		devc->device_handle = NULL;
-	}
+	/*
+	 * The handle is let go of by dev_close(), which knows which board the
+	 * instance stands for. Closing here would go by the index alone, and a
+	 * scan drops the whole table it points into anyway.
+	 */
+	devc->device_handle = NULL;
 
 	g_mutex_clear(&devc->mutex);
 }
@@ -463,7 +501,9 @@ static void ch32h417_libusb_update_samplerate_list(struct dev_context *devc)
 
 	if (devc->is_usb2)
 	{
-		if (devc->num_channels == 16)
+		/* The width is what a sample costs on the wire, and any count
+		 * above eight takes two bytes - not just sixteen. */
+		if (devc->sample_width == SAMPLE_WIDTH_16BIT)
 		{
 			devc->samplerates = ch32h417_libusb_logic_samplerates_usb2_16ch;
 			devc->num_samplerates = full_table ?
@@ -551,7 +591,9 @@ static int dev_close(struct sr_dev_inst *sdi)
 
 	sr_info("Closing device at index %d", devc->device_index);
 
-	ch32h417_libusb_close_device(devc->device_index);
+	/* The index moved on to another board; that one is not ours to close. */
+	if (index_is_ours(sdi, devc->device_index))
+		ch32h417_libusb_close_device(devc->device_index);
 	devc->device_handle = NULL;
 
 	return SR_OK;
@@ -668,20 +710,30 @@ static int config_set(uint32_t key, GVariant *data,
 	case SR_CONF_NUM_LOGIC_CHANNELS:
 	{
 		int32_t num = g_variant_get_int32(data);
-		if (num != 8 && num != 16)
+		if (num < 1 || num > 16)
 		{
-			sr_err("Invalid channel count: %" PRId32 " (must be 8 or 16)", num);
+			sr_err("Invalid channel count: %" PRId32 " (must be 1 to 16)", num);
 			return SR_ERR_ARG;
 		}
-		devc->num_channels = num;
-		devc->sample_width = (num == 16) ? SAMPLE_WIDTH_16BIT : SAMPLE_WIDTH_8BIT;
-		sr_info("Channel count set to %d", devc->num_channels);
 
-		/* A different channel count selects a different sample rate table */
-		if (devc->is_usb2 && devc->mode == MODE_LOGIC_ANALYZER)
+		/*
+		 * Eight channels fit in one byte per sample and more take two, so
+		 * the count decides the width - and the width is what picks the
+		 * sample rate table. Only a real change rebuilds the table, or a
+		 * page that sets the count it already had would lose the rate it
+		 * picked.
+		 */
+		sr_info("Channel count set to %d", num);
+		if (devc->num_channels != num)
 		{
-			ch32h417_libusb_update_samplerate_list(devc);
-			devc->cur_samplerate = devc->samplerates[0];
+			devc->num_channels = num;
+			devc->sample_width = (num > 8) ?
+				SAMPLE_WIDTH_16BIT : SAMPLE_WIDTH_8BIT;
+			if (devc->is_usb2 && devc->mode == MODE_LOGIC_ANALYZER)
+			{
+				ch32h417_libusb_update_samplerate_list(devc);
+				devc->cur_samplerate = devc->samplerates[0];
+			}
 		}
 	}
 	break;

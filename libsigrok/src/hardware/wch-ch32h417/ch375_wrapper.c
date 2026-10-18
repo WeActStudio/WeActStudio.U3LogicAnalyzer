@@ -32,6 +32,11 @@
 /* Windows API headers (CH375DLL is a Windows-only library) */
 #ifdef _WIN32
 #include <windows.h>
+#include <setupapi.h>
+#include <devguid.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 #else
 #error "ch375_wrapper.c only supports Windows (CH375DLL is a Windows-only library)"
 #endif
@@ -353,6 +358,125 @@ const char* ch375_get_device_name(unsigned long index)
         return NULL;
     }
     return (const char*)pCH375GetDeviceName(index);
+}
+
+int ch375_get_usb_path(unsigned long index, char *path, int path_len)
+{
+    if (!pCH375GetDeviceName) {
+        return -1;
+    }
+
+    /*
+     * The DLL knows a device by its index, which is only the order it
+     * enumerated them in - and that order moves as soon as another board
+     * is unplugged. The name it hands out for the index is the Windows
+     * device path, and its instance id is the very one the enumeration
+     * below lists, which is what ties the device to the socket it sits in.
+     */
+    const char *device_name = (const char*)pCH375GetDeviceName(index);
+    if (!device_name) {
+        return -1;
+    }
+
+    /*
+     * The path is an interface name: "\\?\usb#vid_1d50&pid_608c#<instance>
+     * #{...}". Only the piece between the second and the third '#' is the
+     * instance id; the rest - the prefix and the interface class GUID at
+     * the end - is not part of what the enumeration reports.
+     */
+    char instance[512];
+    {
+        const char *p1 = strchr(device_name, '#');
+        const char *p2 = p1 ? strchr(p1 + 1, '#') : NULL;
+        const char *p3 = p2 ? strchr(p2 + 1, '#') : NULL;
+        if (!p2)
+            return -1;
+
+        p2++;
+        const size_t len = p3 ? (size_t)(p3 - p2) : strlen(p2);
+        if (len == 0 || len >= sizeof(instance))
+            return -1;
+
+        memcpy(instance, p2, len);
+        instance[len] = '\0';
+    }
+
+    sr_dbg("index %lu name '%s'", index, device_name);
+    sr_dbg("  instance '%s'", instance);
+
+    HDEVINFO devs = SetupDiGetClassDevsA(NULL, NULL, NULL,
+        DIGCF_ALLCLASSES | DIGCF_PRESENT);
+    if (devs == INVALID_HANDLE_VALUE) {
+        sr_dbg("  SetupDiGetClassDevs failed");
+        return -1;
+    }
+
+    int hub = -1;
+    int port = -1;
+    SP_DEVINFO_DATA info;
+    info.cbSize = sizeof(info);
+    for (DWORD i = 0; SetupDiEnumDeviceInfo(devs, i, &info); i++) {
+        char id[512];
+        if (!SetupDiGetDeviceInstanceIdA(devs, &info, id, sizeof(id), NULL))
+            continue;
+
+        /* The id is "USB\VID_xxxx&PID_xxxx\<instance>" - the instance is
+         * the last piece, and the only one the DLL reported. */
+        const char *tail = strrchr(id, '\\');
+        tail = tail ? tail + 1 : id;
+        if (_stricmp(tail, instance) != 0)
+            continue;
+
+        sr_dbg("  matched devnode '%s'", id);
+
+        /*
+         * "Port_#0003.Hub_#0004" - the socket on the hub the device is
+         * plugged into, and the hub itself: together they are the place
+         * on the bus, which is what libsigrok names a USB device by.
+         */
+        char loc[512];
+        if (SetupDiGetDeviceRegistryPropertyA(devs, &info,
+                SPDRP_LOCATION_INFORMATION, NULL, (PBYTE)loc, sizeof(loc), NULL)) {
+            sr_dbg("  location '%s'", loc);
+            const char *tag = strstr(loc, "Port_#");
+            if (tag)
+                port = atoi(tag + 6);
+            tag = strstr(loc, "Hub_#");
+            if (tag)
+                hub = atoi(tag + 5);
+        } else {
+            sr_dbg("  devnode has no location information");
+        }
+        break;
+    }
+
+    SetupDiDestroyDeviceInfoList(devs);
+
+    /*
+     * A board that reports no location still says where it is when Windows
+     * made the instance id up ("5&2f6a1b5&0&3"): the port number is the
+     * last piece of it.
+     */
+    if (port <= 0) {
+        const char *tail = strrchr(instance, '&');
+        tail = tail ? tail + 1 : instance;
+        if (*tail >= '0' && *tail <= '9') {
+            port = atoi(tail);
+            sr_dbg("  port %d taken from the instance id", port);
+        }
+    }
+
+    if (port <= 0) {
+        sr_dbg("  no location for instance '%s'", instance);
+        return -1;
+    }
+
+    /* "ch375/<hub>-<port>" - the shape a USB driver names a device by,
+     * with the transport it was reached over in front of it. */
+    snprintf(path, path_len, "ch375/%d-%d", (hub > 0) ? hub : 0, port);
+    sr_dbg("index %lu -> '%s'", index, path);
+
+    return 0;
 }
 
 int ch375_get_device_descr(unsigned long index, void *buffer, unsigned long *length)

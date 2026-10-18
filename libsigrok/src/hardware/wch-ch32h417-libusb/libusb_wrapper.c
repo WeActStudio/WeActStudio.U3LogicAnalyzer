@@ -790,11 +790,32 @@ int ch32h417_libusb_scan_devices(void)
 		struct usb_device *du;
 		char serial[64] = {0};
 		libusb_device_handle *tmp = NULL;
-		int k;
+		unsigned int bus, address;
+		gboolean duplicate;
+		int k, j;
 
 		if (libusb_get_device_descriptor(list[i], &des) != LIBUSB_SUCCESS)
 			continue;
 		if (des.idVendor != 0x1a86 || des.idProduct != 0x5537)
+			continue;
+
+		/*
+		 * Windows lists one node per interface of a composite device, so a
+		 * single board can appear several times with the same bus and
+		 * address. Only one of them can be opened, and listing the others
+		 * as separate boards is wrong.
+		 */
+		bus = libusb_get_bus_number(list[i]);
+		address = libusb_get_device_address(list[i]);
+		duplicate = FALSE;
+		for (j = 0; j < (int)found; j++) {
+			if (device_table[j] && device_table[j]->bus == bus &&
+				device_table[j]->address == address) {
+				duplicate = TRUE;
+				break;
+			}
+		}
+		if (duplicate)
 			continue;
 
 		/* The serial number needs an open handle, so open it briefly here. */
@@ -809,8 +830,8 @@ int ch32h417_libusb_scan_devices(void)
 		du = g_malloc0(sizeof(struct usb_device));
 		du->device = list[i];
 		libusb_ref_device(list[i]);
-		du->bus = libusb_get_bus_number(list[i]);
-		du->address = libusb_get_device_address(list[i]);
+		du->bus = bus;
+		du->address = address;
 		du->index = found;
 		du->usb_id = ((unsigned long)des.idProduct << 16) | des.idVendor;
 		du->bcd_usb = des.bcdUSB;
@@ -921,6 +942,22 @@ const char *ch32h417_libusb_get_device_name(unsigned long index)
 	struct usb_device *du = device_by_index(index);
 
 	return du ? du->name : NULL;
+}
+
+/*
+ * The place on the USB bus this device sits in, named the way every other
+ * libusb driver in libsigrok names it ("usb/<bus>-<port>"). The index is
+ * only the order the devices were enumerated in, which moves as soon as
+ * another board is unplugged, so it cannot be what a board is known by.
+ */
+int ch32h417_libusb_get_usb_path(unsigned long index, char *path, int path_len)
+{
+	struct usb_device *du = device_by_index(index);
+
+	if (!du || !du->device)
+		return SR_ERR;
+
+	return usb_get_port_path(du->device, path, path_len);
 }
 
 /*

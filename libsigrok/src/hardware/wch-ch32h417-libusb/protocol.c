@@ -869,7 +869,7 @@ static gpointer data_read_thread(gpointer arg)
 	pipe_num = (devc->mode == MODE_LOGIC_ANALYZER) ? PIPE_LOGIC_DATA : PIPE_ADC_DATA;
 
 	if (devc->mode == MODE_LOGIC_ANALYZER)
-		unitsize = (devc->num_channels == 16) ? 2 : 1;
+		unitsize = (devc->sample_width == SAMPLE_WIDTH_16BIT) ? 2 : 1;
 	else
 		unitsize = (devc->adc_width == ADC_WIDTH_10BIT) ? 2 : 1;
 

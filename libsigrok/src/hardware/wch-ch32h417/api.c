@@ -21,6 +21,7 @@
 #include <config.h>
 #include "protocol.h"
 #include <math.h>
+#include <stdio.h>
 
 /* Supported devices */
 static const struct ch32h417_profile supported_devices[] = {
@@ -327,7 +328,45 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 			continue;
 		}
 
-		snprintf(connection_id, sizeof(connection_id), "ch375/%d", i);
+		/*
+		 * The connection id is the place on the USB bus the board sits in
+		 * - "ch375/<hub>-<port>" - so it survives a replug, unlike the
+		 * index, which moves as soon as another board is unplugged. The
+		 * index is only the fallback, for a board whose place cannot be
+		 * read.
+		 */
+		char usb_path[64];
+		if (ch375_get_usb_path(i, usb_path, sizeof(usb_path)) == 0)
+			snprintf(connection_id, sizeof(connection_id), "%s", usb_path);
+		else
+			snprintf(connection_id, sizeof(connection_id), "ch375/%d", i);
+
+		/*
+		 * One entry per board. The same board answers on more than one
+		 * index: a composite device once per interface, and an index a
+		 * board held before it was pulled keeps answering for a moment
+		 * after it comes back. The connection id is the port it sits in,
+		 * so a second one with the same id is the same board - listing it
+		 * twice would only offer the user a duplicate.
+		 */
+		{
+			GSList *l;
+			for (l = devices; l; l = l->next) {
+				const struct sr_dev_inst *listed = l->data;
+				if (listed->connection_id &&
+					!strcmp(listed->connection_id, connection_id))
+					break;
+			}
+
+			if (l) {
+				sr_info("Device at index %d: already listed as '%s'",
+					i, connection_id);
+				ch375_close_device(i);
+				continue;
+			}
+		}
+
+		sr_info("Device at index %d: connection id '%s'", i, connection_id);
 
 		sdi = g_malloc0(sizeof(struct sr_dev_inst));
 		sdi->status = SR_ST_INITIALIZING;
@@ -368,7 +407,17 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 		devc = ch32h417_dev_new();
 		devc->profile = prof;
 		devc->device_index = i;
-		devc->device_handle = handle;
+
+		/*
+		 * The DLL keeps one handle per index, so an instance that has only
+		 * listed a board must not keep it: the instance that is opened on
+		 * that board takes the handle for itself, and a rescan hands out a
+		 * new instance while the old one still holds the old handle. The
+		 * scan still opens the board - reading its identity needs that -
+		 * but lets go of it once the identity is read (see the end of this
+		 * loop). dev_open() takes the handle when the board is opened.
+		 */
+		devc->device_handle = NULL;
 
 		sdi->priv = devc;
 
@@ -380,12 +429,48 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 
 		sr_info("Found CH32H417 device at index %d", i);
 
-		ch375_init_comm_params(devc);
+		/* The identity is read; the handle is not needed any more. */
+		ch375_close_device(i);
 
-		break;
+		/*
+		 * Carry on: two boards of the same model differ only in their
+		 * index, and CH375OpenDevice answers each of them separately.
+		 * Stopping at the first one hides the others.
+		 */
 	}
 
 	return std_scan_complete(di, devices);
+}
+
+/*
+ * Whether the index an instance holds still stands for the board it was
+ * made for. The DLL knows a board by the order it enumerates them, so
+ * pulling or adding one moves every index after it: closing by an index
+ * that now belongs to another board would shut that board's handle, and
+ * the board would fail on every call it makes from then on.
+ */
+static gboolean index_is_ours(const struct sr_dev_inst *sdi, unsigned long index)
+{
+	char path[80] = "";
+
+	/*
+	 * Only a bus path can be compared: the fallback scan writes when the
+	 * path cannot be read is "ch375/<index>", which says nothing about the
+	 * board beyond the index the DLL handed out.
+	 */
+	if (!sdi->connection_id ||
+		!g_str_has_prefix(sdi->connection_id, "ch375/") ||
+		!strchr(sdi->connection_id + 6, '-'))
+		return TRUE;
+
+	/*
+	 * A board that no longer answers has given its index away; closing by
+	 * it would reach whichever board holds it now.
+	 */
+	if (ch375_get_usb_path(index, path, sizeof(path)) != 0)
+		return FALSE;
+
+	return g_strcmp0(path, sdi->connection_id) == 0;
 }
 
 /*
@@ -404,10 +489,14 @@ static void dev_clear_private(void *priv)
 	if (!devc)
 		return;
 
-	if (devc->device_handle && devc->device_handle != CH375_INVALID_HANDLE) {
-		ch375_close_device(devc->device_index);
-		devc->device_handle = NULL;
-	}
+	/*
+	 * The handle is let go of by dev_close(), which knows which board the
+	 * instance stands for. Closing here would go by the index alone, and
+	 * an index outlives the board it once named: the board that has it now
+	 * would be shut instead. An instance that never reached dev_close()
+	 * leaves its handle to the DLL, which drops it when the process ends.
+	 */
+	devc->device_handle = NULL;
 
 	g_mutex_clear(&devc->mutex);
 }
@@ -453,7 +542,9 @@ static void ch32h417_update_samplerate_list(struct dev_context *devc)
 
 	if (devc->is_usb2)
 	{
-		if (devc->num_channels == 16)
+		/* The width is what a sample costs on the wire, and any count
+		 * above eight takes two bytes - not just sixteen. */
+		if (devc->sample_width == SAMPLE_WIDTH_16BIT)
 		{
 			devc->samplerates = logic_samplerates_usb2_16ch;
 			devc->num_samplerates = full_table ?
@@ -484,6 +575,7 @@ static int dev_open(struct sr_dev_inst *sdi)
 
 	devc = sdi->priv;
 	already_open = (devc->device_handle != NULL && devc->device_handle != CH375_INVALID_HANDLE);
+
 
 	if (already_open)
 	{
@@ -532,7 +624,10 @@ static int dev_close(struct sr_dev_inst *sdi)
 
 	sr_info("Closing device at index %d", devc->device_index);
 
-	ch375_close_device(devc->device_index);
+	/* The index moved on to another board; that one is not ours to close. */
+	if (index_is_ours(sdi, devc->device_index))
+		ch375_close_device(devc->device_index);
+
 	devc->device_handle = NULL;
 
 	return SR_OK;
@@ -649,20 +744,31 @@ static int config_set(uint32_t key, GVariant *data,
 	case SR_CONF_NUM_LOGIC_CHANNELS:
 	{
 		int32_t num = g_variant_get_int32(data);
-		if (num != 8 && num != 16)
+		if (num < 1 || num > 16)
 		{
-			sr_err("Invalid channel count: %" PRId32 " (must be 8 or 16)", num);
+			sr_err("Invalid channel count: %" PRId32 " (must be 1 to 16)", num);
 			return SR_ERR_ARG;
 		}
-		devc->num_channels = num;
-		devc->sample_width = (num == 16) ? SAMPLE_WIDTH_16BIT : SAMPLE_WIDTH_8BIT;
-		sr_info("Channel count set to %d", devc->num_channels);
+		/*
+		 * Eight channels fit in one byte per sample and sixteen take two,
+		 * so the width is what the count decides - and the width is what
+		 * picks the sample rate table. A capture of two or four channels
+		 * is a capture of eight as far as the wire is concerned, and runs
+		 * at the higher rates that go with the narrower samples.
+		 */
+		sr_info("Channel count set to %d", num);
 
 		/* A different channel count selects a different sample rate table */
-		if (devc->is_usb2 && devc->mode == MODE_LOGIC_ANALYZER)
+		if (devc->num_channels != num)
 		{
-			ch32h417_update_samplerate_list(devc);
-			devc->cur_samplerate = devc->samplerates[0];
+			devc->num_channels = num;
+			devc->sample_width = (num > 8) ?
+				SAMPLE_WIDTH_16BIT : SAMPLE_WIDTH_8BIT;
+			if (devc->is_usb2 && devc->mode == MODE_LOGIC_ANALYZER)
+			{
+				ch32h417_update_samplerate_list(devc);
+				devc->cur_samplerate = devc->samplerates[0];
+			}
 		}
 	}
 	break;

@@ -869,7 +869,7 @@ static gpointer data_read_thread(gpointer arg)
 	pipe_num = (devc->mode == MODE_LOGIC_ANALYZER) ? PIPE_LOGIC_DATA : PIPE_ADC_DATA;
 
 	if (devc->mode == MODE_LOGIC_ANALYZER)
-		unitsize = (devc->num_channels == 16) ? 2 : 1;
+		unitsize = (devc->sample_width == SAMPLE_WIDTH_16BIT) ? 2 : 1;
 	else
 		unitsize = (devc->adc_width == ADC_WIDTH_10BIT) ? 2 : 1;
 
@@ -1031,6 +1031,20 @@ static gpointer data_read_thread(gpointer arg)
 		}
 		if (frame_ended && final_frame) {
 			send_stop_command_once(sdi);
+
+			/*
+			 * The end of the data has to be announced here as well, not
+			 * only when a capture is stopped from the outside: the upper
+			 * layer ends the capture on that packet, and without it the
+			 * page goes on showing a capture whose samples are all in.
+			 *
+			 * acq_started goes with it so that the stop that follows -
+			 * the timer below asks for one - reports no second end. The
+			 * timer itself needs no removing: the callback returns
+			 * G_SOURCE_REMOVE once it has asked for the stop.
+			 */
+			std_session_send_df_end(sdi);
+			devc->acq_started = FALSE;
 
 			acquisition_set_aborted(devc, TRUE);
 			g_free(buffer);

@@ -163,6 +163,7 @@ void* ch375_open_device(unsigned long index);
 void ch375_close_device(unsigned long index);
 unsigned long ch375_get_usb_id(unsigned long index);
 const char* ch375_get_device_name(unsigned long index);
+int ch375_get_usb_path(unsigned long index, char *path, int path_len);
 int ch375_get_device_descr(unsigned long index, void *buffer, unsigned long *length);
 int ch375_get_config_descr(unsigned long index, void *buffer, unsigned long *length);
 int ch375_reset_device(unsigned long index);
