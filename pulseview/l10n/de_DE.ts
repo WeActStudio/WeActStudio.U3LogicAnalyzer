@@ -279,6 +279,66 @@ Die Aufnahme wurde gestoppt. Die bis dahin erfassten Daten sind möglicherweise 
         <source>&lt;h3&gt;Unsaved Capture Data&lt;/h3&gt;&lt;p&gt;Data will be permanently lost on exit.&lt;/p&gt;</source>
         <translation>&lt;h3&gt;Nicht gespeicherte Erfassungsdaten&lt;/h3&gt;&lt;p&gt;Daten gehen beim Beenden dauerhaft verloren.&lt;/p&gt;</translation>
     </message>
+    <message>
+        <source>Board: %1</source>
+        <translation>Platine: %1</translation>
+    </message>
+    <message>
+        <source>Close Session</source>
+        <translation>Sitzung schließen</translation>
+    </message>
+    <message>
+        <source>Could not copy the capture: %1</source>
+        <translation>Aufnahme konnte nicht kopiert werden: %1</translation>
+    </message>
+    <message>
+        <source>Could not save the session: %1</source>
+        <translation>Sitzung konnte nicht gespeichert werden: %1</translation>
+    </message>
+    <message>
+        <source>Decoders: %1</source>
+        <translation>Dekoder: %1</translation>
+    </message>
+    <message>
+        <source>Export to a New Session</source>
+        <translation>In eine neue Sitzung exportieren</translation>
+    </message>
+    <message>
+        <source>Open this device in a new session</source>
+        <translation>Dieses Gerät in einer neuen Sitzung öffnen</translation>
+    </message>
+    <message>
+        <source>Port: %1</source>
+        <translation>Anschluss: %1</translation>
+    </message>
+    <message>
+        <source>SN: %1</source>
+        <translation>SN: %1</translation>
+    </message>
+    <message>
+        <source>Session files (*.sr);;All Files (*)</source>
+        <translation>Sitzungsdateien (*.sr);;Alle Dateien (*)</translation>
+    </message>
+    <message>
+        <source>Shows a session file</source>
+        <translation>Zeigt eine Sitzungsdatei</translation>
+    </message>
+    <message>
+        <source>This device is already open in another session</source>
+        <translation>Dieses Gerät ist bereits in einer anderen Sitzung geöffnet</translation>
+    </message>
+    <message>
+        <source>Export the capture to a new session</source>
+        <translation>Aufnahme in eine neue Sitzung exportieren</translation>
+    </message>
+    <message>
+        <source>Exporting the capture... %1%</source>
+        <translation>Aufnahme wird exportiert… %1%</translation>
+    </message>
+    <message>
+        <source>Export Only the Capture to a New Session</source>
+        <translation>Nur die Aufnahme in eine neue Sitzung exportieren</translation>
+    </message>
 </context>
 <context>
     <name>pv::Session</name>
@@ -1345,6 +1405,10 @@ Bitte überprüfen Sie die Verbindung und die Firmware Datei.</translation>
         <location filename="../pv/popups/channels.cpp" line="1143"/>
         <source>Confirm</source>
         <translation>Bestätigen</translation>
+    </message>
+    <message>
+        <source>Port:</source>
+        <translation>Anschluss:</translation>
     </message>
 </context>
 <context>

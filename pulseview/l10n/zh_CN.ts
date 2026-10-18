@@ -276,6 +276,62 @@ You can run this application as root later, or copy the rule files from the repo
 
 可之后以管理员身份运行本软件，或把仓库中的规则文件复制到 /etc/udev/rules.d/ 后拔插设备。</translation>
     </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="1240"/>
+        <source>Could not save the session: %1</source>
+        <translation>无法保存会话：%1</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="1234"/>
+        <source>Session files (*.sr);;All Files (*)</source>
+        <translation>会话文件 (*.sr);;所有文件 (*)</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="3175"/>
+        <source>Shows a session file</source>
+        <translation>显示的是会话文件</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="3178"/>
+        <source>Port: %1</source>
+        <translation>端口：%1</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="3182"/>
+        <source>Board: %1</source>
+        <translation>设备：%1</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="3186"/>
+        <source>SN: %1</source>
+        <translation>序列号：%1</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="3190"/>
+        <source>Decoders: %1</source>
+        <translation>解码器：%1</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="3198"/>
+        <source>Close Session</source>
+        <translation>关闭会话</translation>
+    </message>
+    <message>
+        <source>Export the capture to a new session</source>
+        <translation>将采集数据导出到新会话</translation>
+    </message>
+    <message>
+        <source>Exporting the capture... %1%</source>
+        <translation>正在导出采集数据… %1%</translation>
+    </message>
+    <message>
+        <source>Export to a New Session</source>
+        <translation>导出到新会话</translation>
+    </message>
+    <message>
+        <source>Export Only the Capture to a New Session</source>
+        <translation>仅将采集数据导出到新会话</translation>
+    </message>
 </context>
 <context>
     <name>pv::Session</name>
@@ -1343,6 +1399,12 @@ Please check the device connection and firmware file.</source>
         <source>SN:</source>
         <translation>序列号:</translation>
     </message>
+    <message>
+        <location filename="../pv/popups/channels.cpp" line="228"/>
+        <location filename="../pv/popups/channels.cpp" line="320"/>
+        <source>Port:</source>
+        <translation>端口:</translation>
+    </message>
 </context>
 <context>
     <name>pv::prop::Bool</name>
@@ -1877,6 +1939,16 @@ Make sure the doc directory and the user manual are present.</source>
 %1
 
 请确认 doc 目录和用户手册文件是否存在。</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="390"/>
+        <source>Export to a New Session</source>
+        <translation>导出到新会话</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="2340"/>
+        <source>Could not copy the capture: %1</source>
+        <translation>无法复制已采集的数据：%1</translation>
     </message>
 </context>
 <context>
@@ -3132,6 +3204,16 @@ until (condition)
         <location filename="../pv/widgets/devicetoolbutton.cpp" line="198"/>
         <source>Refresh Device List</source>
         <translation>刷新设备列表</translation>
+    </message>
+    <message>
+        <location filename="../pv/widgets/devicetoolbutton.cpp" line="203"/>
+        <source>Open this device in a new session</source>
+        <translation>在新会话中打开此设备</translation>
+    </message>
+    <message>
+        <location filename="../pv/widgets/devicetoolbutton.cpp" line="205"/>
+        <source>This device is already open in another session</source>
+        <translation>此设备已在另一个会话中打开</translation>
     </message>
 </context>
 <context>

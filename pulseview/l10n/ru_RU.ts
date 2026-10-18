@@ -276,6 +276,66 @@ The acquisition was stopped. The data captured before that may be incomplete or 
         <source>This session contains unsaved data. Close anyway?</source>
         <translation>В этом сеансе есть несохранённые данные. Всё равно закрыть?</translation>
     </message>
+    <message>
+        <source>Board: %1</source>
+        <translation>Плата: %1</translation>
+    </message>
+    <message>
+        <source>Close Session</source>
+        <translation>Закрыть сеанс</translation>
+    </message>
+    <message>
+        <source>Could not copy the capture: %1</source>
+        <translation>Не удалось скопировать запись: %1</translation>
+    </message>
+    <message>
+        <source>Could not save the session: %1</source>
+        <translation>Не удалось сохранить сеанс: %1</translation>
+    </message>
+    <message>
+        <source>Decoders: %1</source>
+        <translation>Декодеры: %1</translation>
+    </message>
+    <message>
+        <source>Export to a New Session</source>
+        <translation>Экспортировать в новый сеанс</translation>
+    </message>
+    <message>
+        <source>Open this device in a new session</source>
+        <translation>Открыть это устройство в новом сеансе</translation>
+    </message>
+    <message>
+        <source>Port: %1</source>
+        <translation>Порт: %1</translation>
+    </message>
+    <message>
+        <source>SN: %1</source>
+        <translation>SN: %1</translation>
+    </message>
+    <message>
+        <source>Session files (*.sr);;All Files (*)</source>
+        <translation>Файлы сеансов (*.sr);;Все файлы (*)</translation>
+    </message>
+    <message>
+        <source>Shows a session file</source>
+        <translation>Показан файл сеанса</translation>
+    </message>
+    <message>
+        <source>This device is already open in another session</source>
+        <translation>Это устройство уже открыто в другом сеансе</translation>
+    </message>
+    <message>
+        <source>Export the capture to a new session</source>
+        <translation>Экспортировать запись в новый сеанс</translation>
+    </message>
+    <message>
+        <source>Exporting the capture... %1%</source>
+        <translation>Экспорт записи… %1%</translation>
+    </message>
+    <message>
+        <source>Export Only the Capture to a New Session</source>
+        <translation>Экспортировать только запись в новый сеанс</translation>
+    </message>
 </context>
 <context>
     <name>pv::Session</name>
@@ -1342,6 +1402,10 @@ Please check the device connection and firmware file.</source>
         <location filename="../pv/popups/channels.cpp" line="1302"/>
         <source>Buffer Board</source>
         <translation>Плата buffer</translation>
+    </message>
+    <message>
+        <source>Port:</source>
+        <translation>Порт:</translation>
     </message>
 </context>
 <context>

@@ -275,6 +275,66 @@ La adquisición se detuvo. Los datos capturados antes de eso pueden estar incomp
         <source>Stop</source>
         <translation>Detener</translation>
     </message>
+    <message>
+        <source>Board: %1</source>
+        <translation>Placa: %1</translation>
+    </message>
+    <message>
+        <source>Close Session</source>
+        <translation>Cerrar sesión</translation>
+    </message>
+    <message>
+        <source>Could not copy the capture: %1</source>
+        <translation>No se pudo copiar la captura: %1</translation>
+    </message>
+    <message>
+        <source>Could not save the session: %1</source>
+        <translation>No se pudo guardar la sesión: %1</translation>
+    </message>
+    <message>
+        <source>Decoders: %1</source>
+        <translation>Decodificadores: %1</translation>
+    </message>
+    <message>
+        <source>Export to a New Session</source>
+        <translation>Exportar a una sesión nueva</translation>
+    </message>
+    <message>
+        <source>Open this device in a new session</source>
+        <translation>Abrir este dispositivo en una sesión nueva</translation>
+    </message>
+    <message>
+        <source>Port: %1</source>
+        <translation>Puerto: %1</translation>
+    </message>
+    <message>
+        <source>SN: %1</source>
+        <translation>SN: %1</translation>
+    </message>
+    <message>
+        <source>Session files (*.sr);;All Files (*)</source>
+        <translation>Archivos de sesión (*.sr);;Todos los archivos (*)</translation>
+    </message>
+    <message>
+        <source>Shows a session file</source>
+        <translation>Muestra un archivo de sesión</translation>
+    </message>
+    <message>
+        <source>This device is already open in another session</source>
+        <translation>Este dispositivo ya está abierto en otra sesión</translation>
+    </message>
+    <message>
+        <source>Export the capture to a new session</source>
+        <translation>Exportar la captura a una sesión nueva</translation>
+    </message>
+    <message>
+        <source>Exporting the capture... %1%</source>
+        <translation>Exportando la captura… %1%</translation>
+    </message>
+    <message>
+        <source>Export Only the Capture to a New Session</source>
+        <translation>Exportar solo la captura a una sesión nueva</translation>
+    </message>
 </context>
 <context>
     <name>pv::Session</name>
@@ -1341,6 +1401,10 @@ Por favor, compruebe la conexión del dispositivo y el archivo de firmware.</tra
         <location filename="../pv/popups/channels.cpp" line="1143"/>
         <source>Confirm</source>
         <translation>Confirmar</translation>
+    </message>
+    <message>
+        <source>Port:</source>
+        <translation>Puerto:</translation>
     </message>
 </context>
 <context>
