@@ -213,7 +213,7 @@ void Channels::init_ui()
 	if (device_mode_ != DeviceMode::OTHER) {
 
 		model_ = device->model();
-		is_weact_logic_v2_ = model_.find("WeAct Studio Logic Analyzer V2") != string::npos;
+		is_weact_logic_v2_ = model_.find(util::WeActV2ModelName) != string::npos;
 		
 		/* The port is what tells two boards of one model apart, so it
 		 * comes before the model that they share. */
@@ -356,7 +356,24 @@ void Channels::init_other_ui()
 		pre_trigger_selector_->setSingleStep(1);
 		pre_trigger_selector_->setDecimals(0);
 		pre_trigger_selector_->setSuffix("%");
-		pre_trigger_selector_->setValue(0);
+
+		/*
+		 * The driver is where the ratio lives and it outlives this page,
+		 * which is rebuilt every time the device options are closed.
+		 * Starting the box at zero made a ratio the user had set look
+		 * like it had been dropped.
+		 */
+		guint64 ratio = 0;
+		try {
+			if (device->config_check(sigrok::ConfigKey::CAPTURE_RATIO,
+					sigrok::Capability::GET))
+				ratio = Glib::VariantBase::cast_dynamic<Glib::Variant<guint64>>(
+					device->config_get(sigrok::ConfigKey::CAPTURE_RATIO)).get();
+		} catch (sigrok::Error &error) {
+			qDebug() << "Failed to read the capture ratio:" << error.what();
+		}
+		pre_trigger_selector_->setValue(ratio > 100 ? 100 : ratio);
+
 		pre_trigger_selector_->setToolTip(tr(
 			"With a repeating signal the trigger point floats: this is a limit "
 			"rather than a fixed place."));
@@ -369,6 +386,27 @@ void Channels::init_other_ui()
 void Channels::init_channel_state()
 {
 	updating_channels_ = true;
+
+	/*
+	 * A device outside the WCH family keeps the state of its channels in
+	 * the driver, and that state is what the page has to show. Clearing
+	 * the boxes first and switching everything on again would hand the
+	 * device channels the user had turned off - and this page is rebuilt
+	 * every time the device options are closed, so it happened on every
+	 * visit.
+	 */
+	if (device_mode_ == DeviceMode::OTHER) {
+		for (auto* cb : logic_checkboxes_) {
+			auto it = checkbox_signal_map_.find(cb);
+			const bool on = (it != checkbox_signal_map_.end()) &&
+				it->second->channel() && it->second->channel()->enabled();
+			cb->setChecked(on);
+			if (it != checkbox_signal_map_.end())
+				it->second->set_enabled(on);
+		}
+		updating_channels_ = false;
+		return;
+	}
 
 	for (auto* cb : logic_checkboxes_) {
 		cb->setChecked(false);
@@ -385,23 +423,13 @@ void Channels::init_channel_state()
 		}
 	}
 
-	if (device_mode_ == DeviceMode::OTHER) {
-		for (auto* cb : logic_checkboxes_) {
-			cb->setChecked(true);
-			auto it = checkbox_signal_map_.find(cb);
-			if (it != checkbox_signal_map_.end()) {
-				it->second->set_enabled(true);
-			}
-		}
-	} else {
-		for (int i = 0; i < 4; ++i) {
-			if (radioChannels[i] && radioChannels[i]->isChecked()) {
-				channel_max_ = 16;
-				updating_channels_ = false;
-				channelSelect(i);
-				updating_channels_ = true;
-				break;
-			}
+	for (int i = 0; i < 4; ++i) {
+		if (radioChannels[i] && radioChannels[i]->isChecked()) {
+			channel_max_ = 16;
+			updating_channels_ = false;
+			channelSelect(i);
+			updating_channels_ = true;
+			break;
 		}
 	}
 

@@ -34,6 +34,7 @@
 #include <QLabel>
 #include <QMenu>
 #include <QPixmap>
+#include <QPointer>
 #include <QSet>
 #include <QTimer>
 #include <QToolBar>
@@ -109,6 +110,8 @@ private:
 	std::thread t_hot_plug;
 	QString m_vendorName;
 	QString m_device_driver;
+	QString m_device_identity;
+	QSet<QString> m_busy_identities;
 	std::mutex vendorName_mutex;
 	
 public:
@@ -153,7 +156,12 @@ public:
 	uint64_t get_trigger_offset();
 	uint16_t get_sample_count_index();
 	void set_device_selector_name(QString device_selector);
+	/* Keeps the decoder button pressed while its dock is open. */
+	void set_decoder_button_checked(bool on);
 	void hot_plug_start();
+	/* The page hosting the poll, if any: it goes with that page, and the window
+	 * hands it to one of the pages that are left. */
+	static MainBar *hot_plug_owner();
 	void hot_plug_stop();
 	void set_vendorName(QString vendorName);
 	QString get_vendorName();
@@ -164,6 +172,15 @@ public:
 	void set_device_selector_role(bool new_session_allowed,
 		bool single_device_only);
 	void set_busy_devices(const QSet<QString> &busy, const QString &own);
+	/* What every page holds, for the poll: it has to tell whose board a
+	 * chain belonged to. */
+	QSet<QString> get_busy_identities();
+	/* Covers the page while its board is away and a capture elsewhere keeps
+	 * the pass waiting: nothing here can be done until that capture ends.
+	 * The page is handed in: a session lives in a tab, so window() would be
+	 * the whole program and not this page. */
+	void set_device_offline(bool offline, QWidget *page = nullptr);
+	bool is_device_offline() const;
 
 	/**
 	 * Hands the capture values this page shows to the device. Needed
@@ -200,13 +217,6 @@ public:
 	 * one taking its place. */
 	void refresh_device_widgets();
 
-	/* The driver backing the device in use. The hot-plug poll runs on its own
-	 * thread and needs it to tell a change of that device from a change that
-	 * only affects the list, so it is cached here the same way the vendor
-	 * name is. */
-	void set_device_driver(QString driver);
-	QString get_device_driver();
-
 private:
 	void run_stop();
 
@@ -223,9 +233,27 @@ private:
 	void commit_channel_number(uint64_t channelNum);
 	void commit_threshold_value(int index, float thresholdLevel);
 	void hot_plug_listen();
+	/* The driver backing the device in use; a refresh rescans only the
+	 * drivers that are not in use, so it is cached here. */
+	void set_device_driver(QString driver);
+	QString get_device_driver();
+	/* Which board this page holds, as the poll must see it: whether the one
+	 * in use is still there decides if a pass can wait for a capture. */
+	void set_device_identity(QString identity);
+	QString get_device_identity();
+
+	QString offline_mask_text() const;
+	/* QPointer: a page can be closed before its bar, and the mask is a child
+	 * of that page. */
+	QPointer<QWidget> offline_mask_;
+	QPointer<QWidget> offline_mask_page_;
+	QPointer<QLabel> offline_mask_label_;
+	bool device_offline_ = false;
 	void renew_samplecount_samplerate(uint64_t samplerate,uint64_t samplerate_max);
 	void get_decoder_list_default(QString decoder_name);
 	QString setting_group() const;
+	/* Whether a saved group was written by the board this page is on. */
+	bool setting_group_is_ours(QSettings &settings, const QString &group);
 
 	static void ch32h417_notify_callback(unsigned long eventStatus);
 	static MainBar* s_mainbar_instance;
@@ -299,6 +327,9 @@ Q_SIGNALS:
 	void new_view(Session *session, int type);
 	void show_decoder_selector(Session *session);
 	void device_attached();
+	/* The boards these identities stood for are gone; the pages that hold
+	 * them can say so while a pass waits for a capture to end. */
+	void devices_went_offline(QStringList identities);
 
 	/* A board came or went in a driver the session is not using, so only the
 	 * device list has to catch up. */
@@ -377,6 +408,20 @@ private:
 	bool sample_count_supported_;
 
 	atomic<bool> hot_plug_listen_;
+	/* The poll is the hot-plug source once it runs; the CH375 callback is
+	 * a fallback and the upgrade report only. */
+	atomic<bool> poll_running_{ false };
+	/* A capture on this page; the poll leaves a pass to the end of it. */
+	atomic<bool> capture_running_{ false };
+	/* Captures running over all pages, and a pass put off until the last of
+	 * them ends. Static: the poll of one page sees the captures of the others. */
+	static atomic<int> s_captures_running;
+	static atomic<bool> s_attach_deferred;
+	/* Which boards those captures are on, read by the poll under the same lock
+	 * as the count: what matters is whether a captured board was the one that
+	 * went, not whether this page's own board did. */
+	static std::mutex s_capture_mutex;
+	static QSet<QString> s_capturing_identities;
 	/* Read from the hot-plug polling thread as well as the main thread. */
 	atomic<bool> iap_upgrading_;
 	/*
@@ -388,6 +433,8 @@ private:
 
 	bool is_count_setting_default_;
 	bool is_rate_setting_default_;
+	/* Nothing is put back into a page whose board has no settings saved. */
+	bool has_setting_default_ = false;
 	/*
 	 * Set while renew_setting_default() walks the settings back into the
 	 * widgets: the commits it triggers would otherwise write the very

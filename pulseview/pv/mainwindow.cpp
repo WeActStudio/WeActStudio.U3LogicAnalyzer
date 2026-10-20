@@ -57,6 +57,7 @@
 #include <unistd.h>
 #endif
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QSettings>
@@ -65,6 +66,7 @@
 #include <QString>
 #include <QStringList>
 #include <QTime>
+#include <QElapsedTimer>
 #include <QTimer>
 #include <QEventLoop>
 #include <QCoreApplication>
@@ -111,7 +113,6 @@ namespace pv {
 using toolbars::MainBar;
 #define GB (1024*1024*1024)
 QString MainWindow::WindowTitle;
-
 
 MainWindow::MainWindow(QWidget *parent) :
 	QMainWindow(parent),
@@ -574,7 +575,6 @@ void MainWindow::make_dock_floatable(QDockWidget *dock)
 
 				dock->show();
 
-
 				QTimer::singleShot(0, dock, [dock]() {
 					QMainWindow *w =
 						qobject_cast<QMainWindow *>(dock->parentWidget());
@@ -686,6 +686,8 @@ shared_ptr<views::ViewBase> MainWindow::add_view(views::ViewType type,
 			dock_main->addToolBar(main_bar.get());
 			main_bar->setMovable(false);
 			connect(main_bar.get(), SIGNAL(device_attached()), this, SLOT(on_device_attached()));
+			connect(main_bar.get(), SIGNAL(devices_went_offline(QStringList)),
+				this, SLOT(on_devices_went_offline(QStringList)), Qt::QueuedConnection);
 			connect(this, SIGNAL(save_session()), main_bar.get(), SLOT(on_actionSave_triggered()));
 			connect(main_bar.get(), SIGNAL(new_view(Session*, int)),
 				this, SLOT(on_new_view(Session*, int)));
@@ -785,7 +787,6 @@ shared_ptr<subwindows::SubWindowBase> MainWindow::add_subwindow(
 	main_window->addDockWidget(Qt::RightDockWidgetArea, dock);
 	dock->setAllowedAreas(Qt::RightDockWidgetArea);
 	make_dock_floatable(dock);
-
 
 	// Insert a QMainWindow into the dock widget to allow for a tool bar
 	QMainWindow *dock_main = new QMainWindow(dock);
@@ -1052,7 +1053,6 @@ void MainWindow::do_device_detach_switch(const shared_ptr<Session> &session)
 				}
 			}
 
-
 		bool is_demo_device = false;
 		shared_ptr<devices::HardwareDevice> hw_dev =
 			std::dynamic_pointer_cast<devices::HardwareDevice>(default_device);
@@ -1152,7 +1152,6 @@ void MainWindow::show_device_detach(const shared_ptr<Session> &session)
 	}
 
 	attach_process_done = false;
-
 	QDialog* dialog = new QDialog(this);
 	dialog->setWindowTitle(tr("Warning"));
 
@@ -1166,7 +1165,6 @@ void MainWindow::show_device_detach(const shared_ptr<Session> &session)
 	dialog->setWindowFlags((dialog->windowFlags()
 			& ~Qt::WindowContextHelpButtonHint & ~Qt::WindowCloseButtonHint)
 		| Qt::CustomizeWindowHint | Qt::WindowTitleHint);
-
 
 	// Use a larger font
 	QFont font = dialog->font();
@@ -1328,6 +1326,34 @@ void MainWindow::on_device_attached()
 	});
 }
 
+void MainWindow::on_devices_went_offline(const QStringList &identities)
+{
+	/* Only the pages that lost a board are marked: a mask is taken away by
+	 * the pass that settles the list, never here. */
+	for (const shared_ptr<Session> &session : sessions_)
+	{
+		if (!session || !session->main_bar())
+			continue;
+
+		const QString identity =
+			widgets::DeviceToolButton::device_identity(session->device());
+		if (identity.isEmpty() || !identities.contains(identity))
+			continue;
+
+		/*
+		 * The page is the tab this session sits in, not the whole program.
+		 * A session whose window is not up yet is left alone: passing none
+		 * would put the mask on the window this bar happens to belong to,
+		 * which is the whole program.
+		 */
+		const auto window = session_windows_.find(session);
+		if (window == session_windows_.end())
+			continue;
+
+		session->main_bar()->set_device_offline(true, window->second);
+	}
+}
+
 void MainWindow::run_device_attached()
 {
 	/*
@@ -1454,7 +1480,24 @@ void MainWindow::run_device_attached()
 	 * count he just lowered to eight, say, or the pre-trigger - which is
 	 * what made a board coming back look like a reset of everything.
 	 */
-	const shared_ptr<Session> unplugged = adopt_device_in_sessions();
+	std::vector<shared_ptr<Session>> lost;
+	const shared_ptr<Session> unplugged = adopt_device_in_sessions(&lost);
+
+	/*
+	 * A page that has its board back is usable again, so its mask goes. Every
+	 * page that lost one keeps its own: only the first is asked about below,
+	 * and until that is answered its mask is the truth - the other is no less
+	 * broken for not being asked. Clearing the masks before the scan would
+	 * leave those pages looking alive while their devices are the ones the
+	 * scan freed.
+	 */
+	for (const shared_ptr<Session> &masked : sessions_)
+		if (masked && masked->main_bar() &&
+			std::find(lost.begin(), lost.end(), masked) == lost.end())
+			masked->main_bar()->set_device_offline(false);
+	if (last_focused_session_ && last_focused_session_->main_bar() &&
+		std::find(lost.begin(), lost.end(), last_focused_session_) == lost.end())
+		last_focused_session_->main_bar()->set_device_offline(false);
 
 	/* A board came or went beside it, which changes what the selector of
 	 * each session may offer. */
@@ -1479,7 +1522,6 @@ void MainWindow::run_device_attached()
 			update_session_roles();
 		}
 	}
-
 
 	/*
 	 * A page other than the capture page lost its board in this scan. A
@@ -1639,7 +1681,8 @@ shared_ptr<devices::HardwareDevice> MainWindow::find_moved_board(
 	return found;
 }
 
-shared_ptr<Session> MainWindow::adopt_device_in_sessions()
+shared_ptr<Session> MainWindow::adopt_device_in_sessions(
+	std::vector<shared_ptr<Session>> *lost)
 {
 	/*
 	 * Every session with a board on it is looked at, not only the one in
@@ -1685,6 +1728,8 @@ shared_ptr<Session> MainWindow::adopt_device_in_sessions()
 		if (!again) {
 			if (!unplugged)
 				unplugged = session;
+			if (lost)
+				lost->push_back(session);
 			continue;
 		}
 
@@ -1693,7 +1738,6 @@ shared_ptr<Session> MainWindow::adopt_device_in_sessions()
 			session->select_device(again);
 			continue;
 		}
-
 
 		/*
 		 * The board it is on came back as a new instance. The list is the
@@ -1711,6 +1755,23 @@ shared_ptr<Session> MainWindow::adopt_device_in_sessions()
 
 void MainWindow::remove_session(shared_ptr<Session> session)
 {
+	/*
+	 * The page cannot be closed while its tab is being renamed: the editor
+	 * would be left over the strip with nothing under it, and would keep
+	 * the page alive through the handle it holds.
+	 */
+	if (tab_rename_session_ == session)
+		finish_tab_rename(false);
+
+	/*
+	 * Asked while the page is whole: the poll belongs to one page, and this
+	 * is the one if its bar is the host. Its bar lives as long as the
+	 * session, so at the end of this function there is no way to tell.
+	 */
+	const bool hosted = session && session->main_bar().get() ==
+		toolbars::MainBar::hot_plug_owner();
+	const bool was_file = session && session->using_file_device();
+
 	// Determine the height of the button before it collapses
 	// int h = new_session_button_->height();
 	int h = 22;
@@ -1737,6 +1798,25 @@ void MainWindow::remove_session(shared_ptr<Session> session)
 	// Remove the session from our list of sessions (which also destroys it)
 	sessions_.remove_if([&](shared_ptr<Session> s) {
 		return s == session; });
+
+	/*
+	 * A page holding a file can be the last one, and then there is nothing
+	 * left to capture with: the board page the program opens with takes its
+	 * place, and the poll with it. A page that held a board is another matter
+	 * - that is the last board the user had, and closing it is what he meant.
+	 *
+	 * Put off for a turn: the page that just went is still alive in this
+	 * function, and the board page may rebuild the device manager and delete
+	 * the old one under it.
+	 */
+	if (sessions_.empty() && was_file) {
+		QTimer::singleShot(0, this, [this]() {
+			if (!sessions_.empty())
+				return;
+			add_default_session();
+			start_hot_plug();
+		});
+	}
 
 	if (sessions_.empty()) {
 		// When there are no more tabs, the height of the QTabWidget
@@ -1767,6 +1847,22 @@ void MainWindow::remove_session(shared_ptr<Session> session)
 	/* A copy of it that is still being written keeps the session itself
 	 * alive; the page no longer carries the button that said so. */
 	copy_percent_.remove(session.get());
+
+	/*
+	 * The poll goes with the page that hosted it, and that page is still alive
+	 * here - this function holds the session, and the bar with it. So it is
+	 * stopped where it is before another page takes it over: two polls must
+	 * never run, and the one on the dying page would go on feeding a window
+	 * that is being torn down.
+	 */
+	if (hosted && !sessions_.empty()) {
+		if (toolbars::MainBar *const owner = toolbars::MainBar::hot_plug_owner())
+			owner->hot_plug_stop();
+
+		const shared_ptr<Session> next = sessions_.front();
+		if (next && next->main_bar())
+			next->main_bar()->hot_plug_start();
+	}
 }
 
 void MainWindow::add_default_setting()
@@ -1789,6 +1885,14 @@ void MainWindow::add_default_setting()
 			is_repeat_acq_ = false;
 		}
 	}
+	start_hot_plug();
+}
+
+void MainWindow::start_hot_plug()
+{
+	if (!last_focused_session_ || !last_focused_session_->main_bar())
+		return;
+
 	last_focused_session_->main_bar()->hot_plug_start();
 }
 
@@ -1861,10 +1965,31 @@ void MainWindow::add_default_session()
 		saved.value("device_type").toString() == "hardware";
 	const string saved_port =
 		saved.value("device/connection_id").toString().toStdString();
+	const string saved_serial =
+		saved.value("device/serial_num").toString().toStdString();
+	const string saved_model =
+		saved.value("device/model").toString().toStdString();
 	saved.endGroup();
 
 	if (!devices.empty()) {
-		if (saved_is_hardware && !saved_port.empty())
+		/*
+		 * The board this page was on last time comes first: a WeAct board
+		 * by the serial number that is its own, so that it is still the
+		 * board after it moved to another port.
+		 */
+		map<string, string> saved_info;
+		if (!saved_model.empty())
+			saved_info.insert(make_pair("model", saved_model));
+		if (!saved_serial.empty())
+			saved_info.insert(make_pair("serial_num", saved_serial));
+		if (!saved_port.empty())
+			saved_info.insert(make_pair("connection_id", saved_port));
+
+		if (saved_is_hardware && !saved_info.empty())
+			saved_device = device_manager_.load()->find_saved_device(saved_info);
+
+		/* Nothing remembered of it: the port is all there is to go by. */
+		if (!saved_device && saved_is_hardware && !saved_port.empty())
 			for (const shared_ptr<devices::HardwareDevice>& dev : devices) {
 				const shared_ptr<sigrok::Device> sr_dev = dev->device();
 				/* A real board is worth more than the demo device. */
@@ -1996,29 +2121,39 @@ void MainWindow::save_sessions()
 	QSettings settings;
 	int id = 0;
 
-	for (shared_ptr<Session>& session : sessions_) {
+	/*
+	 * The pages are written in the order the strip shows them, not in the
+	 * order they were opened: a page is restored from the group its number
+	 * gives it, so the numbers are what brings the arrangement back. The
+	 * first tab is always the capture page, the rest follow as they were
+	 * dragged into place.
+	 */
+	for (int i = 0; i < session_selector_.count(); i++) {
+		const shared_ptr<Session> session = get_tab_session(i);
+
 		// Ignore sessions using the demo device or no device at all
-		if (session->device()) {
-			shared_ptr<devices::HardwareDevice> device =
-				dynamic_pointer_cast< devices::HardwareDevice >
-				(session->device());
+		if (!session || !session->device())
+			continue;
 
-			/*
-			 * A file is not restored at start-up - it always gets a
-			 * session of its own - and the demo device stands in for a
-			 * board that is not there, so neither is worth saving.
-			 */
-			if (!device)
-				continue;
+		shared_ptr<devices::HardwareDevice> device =
+			dynamic_pointer_cast< devices::HardwareDevice >
+			(session->device());
 
-			if (string(device->hardware_device()->driver()->name()) == "demo")
-				continue;
+		/*
+		 * A file is not restored at start-up - it always gets a
+		 * session of its own - and the demo device stands in for a
+		 * board that is not there, so neither is worth saving.
+		 */
+		if (!device)
+			continue;
 
-			settings.beginGroup("Session" + QString::number(id++));
-			settings.remove("");  // Remove all keys in this group
-			session->save_settings(settings);
-			settings.endGroup();
-		}
+		if (string(device->hardware_device()->driver()->name()) == "demo")
+			continue;
+
+		settings.beginGroup("Session" + QString::number(id++));
+		settings.remove("");  // Remove all keys in this group
+		session->save_settings(settings);
+		settings.endGroup();
 	}
 
 	/*
@@ -2076,9 +2211,9 @@ void MainWindow::restore_sessions()
 				if (!page->device() ||
 					board_taken(sessions_, page, page->device())) {
 					/*
-					 * Say which board it was: a page that is not there is
-					 * otherwise a page that quietly went missing, and the
-					 * board it needs is usually one another program holds.
+					 * Say which board it was, so the page that went missing
+					 * can be matched to the board that is not plugged in -
+					 * or to the one another program is holding.
 					 */
 					settings.beginGroup("device");
 					lost << QString("%1 %2")
@@ -2108,11 +2243,11 @@ void MainWindow::restore_sessions()
 
 	if (!lost.isEmpty())
 		pv::util::show_message(this, tr("Sessions not restored"),
-			tr("These boards could not be opened, so the pages they held are "
+			tr("These boards are not connected, so the pages they held are "
 				"not here:") + QString("\n\n") + lost.join("\n") +
 				QString("\n\n") +
-				tr("Another program may be using them. Close it, or unplug and "
-					"replug the board, and open the page again."),
+				tr("Plug the board in, or close the program that is using it, "
+					"then open the page again."),
 			pv::util::message_box_icon(QMessageBox::Warning),
 			520, false, false, false);
 
@@ -2270,6 +2405,17 @@ void MainWindow::setup_ui()
 		this, SLOT(on_tab_close_requested(int)));
 	connect(&session_selector_, SIGNAL(currentChanged(int)),
 		this, SLOT(on_tab_changed(int)));
+
+	/*
+	 * The pages are dragged into the order the user wants. The first one
+	 * is the capture page and stays at the left end, which is settled when
+	 * a drag ends. A double click on a page that was exported into gives
+	 * it a name of its own.
+	 */
+	session_selector_.tabBar()->setMovable(true);
+	session_selector_.tabBar()->installEventFilter(this);
+	connect(session_selector_.tabBar(), &QTabBar::tabBarDoubleClicked,
+		this, &MainWindow::on_tab_double_clicked);
 
 	connect(static_cast<QApplication *>(QCoreApplication::instance()),
 		SIGNAL(focusChanged(QWidget*, QWidget*)),
@@ -2543,6 +2689,11 @@ void MainWindow::on_get_repeat_acquisition(bool& is_repeat_acquisition_state)
 static void start_capture_on(const shared_ptr<Session> &session, int mode)
 {
 	if (!session || !session->main_bar())
+		return;
+
+	/* A page whose board is away cannot start; its mask goes away with the
+	 * pass, and the run shortcut must not get round it. */
+	if (session->main_bar()->is_device_offline())
 		return;
 
 	session->is_repeat_acquisition_ = (mode == Session::Repeat);
@@ -2971,8 +3122,15 @@ private:
 void MainWindow::update_session_tabs()
 {
 	const QFontMetrics fm(session_selector_.tabBar()->font());
-	/* What a tab may take in all, buttons included. */
-	const int max_width = 210;
+	/*
+	 * What a tab may take in all, buttons included: enough for the longest
+	 * name a board gives a page - "WeAct Studio Logic Analyzer V2
+	 * ch375/6-3" - to be shown whole. A name cut in the middle no longer
+	 * says which board the page is on. The two 14 px buttons and a little
+	 * room for the frame come on top.
+	 */
+	const int max_width = int(util::text_width(fm,
+		QString::fromLatin1(util::WeActV2ModelName) + " ch375/6-3")) + 34;
 
 	for (int i = 0; i < session_selector_.count(); i++) {
 		const shared_ptr<Session> session = get_tab_session(i);
@@ -3112,7 +3270,6 @@ void MainWindow::update_session_tabs()
 	}
 }
 
-
 void MainWindow::on_open_file_requested(QString file_name)
 {
 	if (file_name.isEmpty())
@@ -3175,8 +3332,19 @@ void MainWindow::on_device_new_session_requested(QString identity)
 
 QString MainWindow::copy_session_name(const shared_ptr<Session> &source)
 {
-	QString device = source->main_bar() ?
-		source->main_bar()->get_vendorName() : QString();
+	const shared_ptr<sigrok::Device> sr_dev =
+		source->device() ? source->device()->device() : nullptr;
+
+	/*
+	 * The model, not what the driver calls its vendor: a WCH board says
+	 * "CH32H417" there, which is the chip rather than the board the
+	 * capture came from.
+	 */
+	QString device;
+	if (sr_dev)
+		device = QString::fromStdString(sr_dev->model());
+	if (device.isEmpty() && source->main_bar())
+		device = source->main_bar()->get_vendorName();
 	if (device.isEmpty() && source->device())
 		device = QString::fromStdString(
 			source->device()->display_name(*device_manager_.load()));
@@ -3186,8 +3354,6 @@ QString MainWindow::copy_session_name(const shared_ptr<Session> &source)
 	 * apart by it, and a page named after the model alone would leave
 	 * the user guessing which of them the capture came from.
 	 */
-	const shared_ptr<sigrok::Device> sr_dev =
-		source->device() ? source->device()->device() : nullptr;
 	if (sr_dev) {
 		const QString port = QString::fromStdString(sr_dev->connection_id());
 		if (!port.isEmpty() && !device.contains(port))
@@ -3337,6 +3503,12 @@ bool MainWindow::copy_session_to_new_session(shared_ptr<Session> source)
 			copy->load_file(path);
 			copy->set_name(copy_session_name(source));
 			copy->set_snapshot(true);
+			/*
+			 * The file this page was made from is a copy in the temp
+			 * directory, swept away on the way out. Saving the page has to
+			 * ask for a place of its own instead of writing there.
+			 */
+			copy->set_save_path(QString());
 			/* Still open in the session that now holds it; the window
 			 * sweeps it away on the way out. */
 			copy_temp_files_ << path;
@@ -3419,6 +3591,89 @@ void MainWindow::on_tab_close_requested(int index)
 		update_acq_button(nullptr);
 }
 
+/*
+ * The capture page is the first tab and stays there. Its place is put back
+ * when the drag is over - doing it while the drag is still running would
+ * have the tab bar and this window moving the same tab turn after turn.
+ */
+void MainWindow::keep_capture_tab_first()
+{
+	QMainWindow *window = nullptr;
+	const auto entry = session_windows_.find(default_session_);
+	if (entry != session_windows_.end())
+		window = entry->second;
+	if (!window)
+		return;
+
+	const int index = session_selector_.indexOf(window);
+	if (index > 0)
+		session_selector_.tabBar()->moveTab(index, 0);
+}
+
+void MainWindow::on_tab_double_clicked(int index)
+{
+	const shared_ptr<Session> session = get_tab_session(index);
+
+	/*
+	 * Only a page that was exported into is renamed: the others are named
+	 * after the board they hold, and a name of their own would hide which
+	 * board that is.
+	 */
+	if (!session || !session->is_snapshot())
+		return;
+
+	finish_tab_rename(false);
+
+	QTabBar *const bar = session_selector_.tabBar();
+	QLineEdit *const edit = new QLineEdit(bar);
+	edit->setText(session->name());
+	edit->selectAll();
+	/* The name is edited where it is read, so the editor takes the place of
+	 * the tab instead of covering the strip with a dialog. */
+	edit->setGeometry(bar->tabRect(index).adjusted(2, 3, -2, -3));
+	edit->installEventFilter(this);
+
+	tab_rename_edit_ = edit;
+	tab_rename_session_ = session;
+
+	connect(edit, &QLineEdit::editingFinished,
+		this, &MainWindow::on_tab_rename_finished);
+
+	edit->show();
+	edit->setFocus(Qt::MouseFocusReason);
+}
+
+void MainWindow::on_tab_rename_finished()
+{
+	finish_tab_rename(true);
+}
+
+void MainWindow::finish_tab_rename(bool apply)
+{
+	QLineEdit *const edit = tab_rename_edit_;
+	const shared_ptr<Session> session = tab_rename_session_;
+
+	if (!edit)
+		return;
+
+	/* Cleared first: taking the editor away can report the edit finished
+	 * once more, and there is nothing left to finish by then. */
+	tab_rename_edit_ = nullptr;
+	tab_rename_session_.reset();
+
+	edit->removeEventFilter(this);
+	const QString name = edit->text().trimmed();
+	/* Hidden here as well: a delete can be held back for a turn of the
+	 * event loop, and the editor would sit over the tab until then. */
+	edit->hide();
+	edit->deleteLater();
+
+	if (!apply || !session || name.isEmpty() || name == session->name())
+		return;
+
+	session->set_name(name);
+}
+
 void MainWindow::on_show_decoder_selector(Session *session)
 {
 #ifdef ENABLE_DECODE
@@ -3432,14 +3687,20 @@ void MainWindow::on_show_decoder_selector(Session *session)
 			sub_windows_.erase(dock);
 			sub_window_types_.erase(dock);
 			dock->close();
+			/* The button is pressed exactly while this dock is open. */
+			if (session->main_bar())
+				session->main_bar()->set_decoder_button_checked(false);
 			return;
 		}
 	}
 
 	// We get a pointer and need a reference
 	for (shared_ptr<Session>& s : sessions_)
-		if (s.get() == session)
+		if (s.get() == session) {
 			add_subwindow(subwindows::SubWindowTypeDecoderSelector, *s);
+			if (s->main_bar())
+				s->main_bar()->set_decoder_button_checked(true);
+		}
 #else
 	(void)session;
 #endif
@@ -3457,6 +3718,23 @@ void MainWindow::on_sub_window_close_clicked()
 	        break;
 	    w = w->parent();
 	}
+	/* A decoder dock that is closed from its own button - or with the
+	 * escape key, which presses that button - releases the one in the bar
+	 * that opened it. */
+	if (dock) {
+		const auto entry = sub_windows_.find(dock);
+		if (entry != sub_windows_.end()) {
+			shared_ptr<subwindows::decoder_selector::SubWindow> decoder =
+				dynamic_pointer_cast<subwindows::decoder_selector::SubWindow>(
+					entry->second);
+			if (decoder) {
+				Session &session = decoder->session();
+				if (session.main_bar())
+					session.main_bar()->set_decoder_button_checked(false);
+			}
+		}
+	}
+
 	sub_windows_.erase(dock);
 	dock->close();
 
@@ -3519,6 +3797,29 @@ void MainWindow::on_close_decoder_dock(Session *session)
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
+    if (obj == tab_rename_edit_ && event->type() == QEvent::KeyPress)
+    {
+        /* Taken here rather than left to the line edit: the two keys have
+         * to end the rename the same way whichever widget has the focus. */
+        const int key = static_cast<QKeyEvent *>(event)->key();
+        if (key == Qt::Key_Escape) {
+            /* Escape drops what was typed and leaves the name as it was. */
+            finish_tab_rename(false);
+            return true;
+        }
+        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+            finish_tab_rename(true);
+            return true;
+        }
+    }
+
+    if (obj == session_selector_.tabBar() &&
+            event->type() == QEvent::MouseButtonRelease)
+    {
+        /* After the tab bar has finished the drag, not before it. */
+        QTimer::singleShot(0, this, [this]() { keep_capture_tab_first(); });
+    }
+
     if (event->type() == QEvent::Show)
     {
         if (QWidget *w = qobject_cast<QWidget*>(obj))

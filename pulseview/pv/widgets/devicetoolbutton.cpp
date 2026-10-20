@@ -343,6 +343,23 @@ void DeviceToolButton::update_device_list()
 
 	if (selected_device_ != nullptr)
 		setToolTip(QString::fromStdString(selected_device_->full_name()));
+
+	/* New rows need their style again. Only the first list gets it ahead of
+	 * time: a device coming or going must not cost half a second. */
+	if (!menu_prepared_once_) {
+		if (!menu_prepare_timer_) {
+			menu_prepare_timer_ = new QTimer(this);
+			menu_prepare_timer_->setSingleShot(true);
+			connect(menu_prepare_timer_, &QTimer::timeout, this, [this]() {
+				menu_prepared_once_ = true;
+				prepare_menu();
+			});
+		}
+
+		/* Restarted by every rebuild: the start-up list is built twice, and
+		 * preparing rows that are about to go is wasted work. */
+		menu_prepare_timer_->start(200);
+	}
 }
 
 void DeviceToolButton::update_device_mamager(DeviceManager * dev_manager)
@@ -374,6 +391,16 @@ void DeviceToolButton::on_menu_hover_timeout()
 		return;
 
 	QToolTip::showText(QCursor::pos(), device_tooltip_);
+}
+
+/* The rows are styled the first time the menu is shown, which is what
+ * made the first click feel slow. Done ahead of it, nothing waits. */
+void DeviceToolButton::prepare_menu()
+{
+	menu_.ensurePolished();
+	for (QWidget *row : menu_.findChildren<QWidget *>())
+		row->ensurePolished();
+	menu_.sizeHint();
 }
 
 void DeviceToolButton::on_button_clicked()

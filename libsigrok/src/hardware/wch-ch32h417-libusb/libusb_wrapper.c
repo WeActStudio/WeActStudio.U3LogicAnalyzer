@@ -1061,6 +1061,14 @@ int ch32h417_libusb_read_endpoint(unsigned long index, unsigned long pipe_num,
 {
 	struct usb_device *du = device_by_index(index);
 	struct usb_stream *stream;
+	const uint8_t ep = pipe_to_in_ep(pipe_num);
+	/* 1024 is the widest bulk packet there is (SuperSpeed); 64 full speed,
+	 * 512 high speed. */
+	uint8_t bounce[1024];
+	unsigned long want;
+	void *target = buffer;
+	int size;
+	int mps;
 	int transferred = 0;
 	int ret;
 
@@ -1073,8 +1081,22 @@ int ch32h417_libusb_read_endpoint(unsigned long index, unsigned long pipe_num,
 	if (stream && stream->enabled)
 		return stream_drain(stream, buffer, length);
 
-	ret = libusb_bulk_transfer(du->handle, pipe_to_in_ep(pipe_num),
-							   buffer, (int)*length, &transferred,
+	want = *length;
+	size = (int)*length;
+
+	/*
+	 * WinUSB fails a bulk read outright when the buffer is smaller than the
+	 * endpoint's max packet size - the 32 byte command reply against a 512
+	 * or 1024 byte packet. One packet is read instead and what fits handed
+	 * back; command channel only, a wider read would lose the rest.
+	 */
+	mps = libusb_get_max_packet_size(du->device, ep);
+	if (mps > 0 && want < (unsigned long)mps && (size_t)mps <= sizeof(bounce)) {
+		target = bounce;
+		size = mps;
+	}
+
+	ret = libusb_bulk_transfer(du->handle, ep, target, size, &transferred,
 							   (unsigned int)du->timeout_read);
 	if (ret == LIBUSB_ERROR_TIMEOUT) {
 		/* No data is not an error: the command channel polls this way. */
@@ -1085,6 +1107,13 @@ int ch32h417_libusb_read_endpoint(unsigned long index, unsigned long pipe_num,
 		sr_dbg("Bulk read from pipe %lu failed: %s", pipe_num, libusb_error_name(ret));
 		*length = 0;
 		return LIBUSB_FALSE;
+	}
+
+	if (target == bounce) {
+		/* The caller's buffer is the limit, not the packet that was read. */
+		if ((unsigned long)transferred > want)
+			transferred = (int)want;
+		memcpy(buffer, bounce, (size_t)transferred);
 	}
 
 	*length = (unsigned long)transferred;

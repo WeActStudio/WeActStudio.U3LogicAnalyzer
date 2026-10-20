@@ -83,6 +83,14 @@ public:
 		const map<string, string> search_info);
 
 	/*
+	 * The board a saved page was on, or nothing when it is not here. A
+	 * WeAct board is named by its serial number; any other board of that
+	 * vendor may report one serial for all of them, so its port is used.
+	 */
+	const shared_ptr<devices::HardwareDevice> find_saved_device(
+		const map<string, string> &info);
+
+	/*
 	 * A driver that does not answer a scan in time is left alone from then
 	 * on: the call that is stuck still holds it, so asking again would
 	 * either queue behind it or hang in the same place, and every later

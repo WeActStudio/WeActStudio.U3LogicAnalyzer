@@ -641,29 +641,13 @@ void Session::restore_settings(QSettings &settings)
 		settings.endGroup();
 
 		/*
-		 * The connection id is the port the board sits in, and it is what
-		 * tells two boards of one model apart. find_device_from_info()
-		 * tries the serial number first, which firmware is free to write
-		 * the same into every board - so ask by the port before falling
-		 * back to it.
+		 * The board this page was on: a WeAct one by the serial number that
+		 * is its own, any other by the port it sits in. A page whose board
+		 * is not here gets none - another board of the same model must not
+		 * stand in for it.
 		 */
-		shared_ptr<devices::HardwareDevice> saved_device;
-		const auto conn = dev_info.find("connection_id");
-		if (conn != dev_info.end())
-			for (const shared_ptr<devices::HardwareDevice>& dev :
-					device_manager_.load()->devices()) {
-				const shared_ptr<sigrok::Device> sr_dev = dev->device();
-				if (sr_dev && sr_dev->connection_id() == conn->second) {
-					saved_device = dev;
-					break;
-				}
-			}
-
-		if (!saved_device && dev_info.count("model") > 0)
-			saved_device = device_manager_.load()->find_device_from_info(dev_info);
-
-		if (saved_device)
-			device = saved_device;
+		if (dev_info.count("model") > 0)
+			device = device_manager_.load()->find_saved_device(dev_info);
 
 		/*
 		 * A page that already holds a board keeps it. What is being restored

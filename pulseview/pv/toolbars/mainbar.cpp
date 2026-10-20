@@ -27,6 +27,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
+#include <set>
+#include <string>
 #include <cstdarg>
 
 #include <QProgressDialog>
@@ -113,6 +115,10 @@ namespace pv
 	namespace toolbars
 	{
 	MainBar *MainBar::s_mainbar_instance = nullptr;
+	atomic<int> MainBar::s_captures_running{ 0 };
+	atomic<bool> MainBar::s_attach_deferred{ false };
+	std::mutex MainBar::s_capture_mutex;
+	QSet<QString> MainBar::s_capturing_identities;
 		const uint64_t MainBar::MinSampleCount = 12500ULL;
 		const uint64_t MainBar::MaxSampleCount = 1000000000000ULL;
 		const uint64_t MainBar::DefaultSampleCount = 1000000;
@@ -435,6 +441,9 @@ namespace pv
 #ifdef ENABLE_DECODE
 			add_decoder_button_->setIcon(QIcon(":/icons/add-decoder.png"));
 			add_decoder_button_->setPopupMode(QToolButton::InstantPopup);
+			/* Stays pressed while the decoder dock it opens is up, the way
+			 * the cursor button does for its own. */
+			add_decoder_button_->setCheckable(true);
 			add_decoder_button_->setShortcut(QKeySequence(Qt::Key_D));
 			add_decoder_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 
@@ -488,6 +497,11 @@ namespace pv
 			connect(&session, SIGNAL(device_changed()),
 					this, SLOT(on_device_changed()));
 
+			/* The poll reads this from its own thread. Seeded here as well: the
+			 * page can already hold a board by the time the bar exists. */
+			set_device_identity(
+				widgets::DeviceToolButton::device_identity(session_.device()));
+
 			/* CH32H417 device event signal/slot connections */
 			connect(this, SIGNAL(ch32h417_device_event_signal(unsigned long)),
 					this, SLOT(on_ch32h417_device_event(unsigned long)));
@@ -517,6 +531,11 @@ namespace pv
 			menu_file_export_->setTitle(tr("&Export"));
 		if (menu_file_import_)
 			menu_file_import_->setTitle(tr("&Import"));
+
+		/* The mask is built once and keeps its words; they are set again
+		 * here so that a language change reaches it too. */
+		if (offline_mask_label_)
+			offline_mask_label_->setText(offline_mask_text());
 
 		/* New view entries are created empty and named here, so that
 		 * they follow the language as well. */
@@ -563,7 +582,6 @@ namespace pv
 		QToolBar::changeEvent(event);
 	}
 
-
 	MainBar::~MainBar()
 		{
 			/*
@@ -572,6 +590,19 @@ namespace pv
 			 * the shared instance here would leave the callback with
 			 * nowhere to report to, and boards would stop being noticed.
 			 */
+			/* A page closed while it was capturing must not leave the count up. */
+			if (capture_running_)
+			{
+				capture_running_ = false;
+
+				std::lock_guard<std::mutex> lock(s_capture_mutex);
+				--s_captures_running;
+
+				const QString id = get_device_identity();
+				if (!id.isEmpty())
+					s_capturing_identities.remove(id);
+			}
+
 			const bool owns_listener = (s_mainbar_instance == this);
 			if (owns_listener)
 			{
@@ -635,6 +666,90 @@ namespace pv
 			return m_device_driver;
 		}
 
+		void MainBar::set_device_identity(QString identity)
+		{
+			std::lock_guard<std::mutex> lock(vendorName_mutex);
+			m_device_identity = identity;
+		}
+
+		QString MainBar::get_device_identity()
+		{
+			std::lock_guard<std::mutex> lock(vendorName_mutex);
+			return m_device_identity;
+		}
+
+		QString MainBar::offline_mask_text() const
+		{
+			return QString("<div style=\"text-align:center;\">"
+				"<span style=\"font-size:14pt;font-weight:600;\">%1</span>"
+				"<br/><br/>%2</div>")
+			.arg(tr("Device offline"),
+				tr("Waiting for the capture in the other session to end"));
+		}
+
+		bool MainBar::is_device_offline() const
+		{
+			return device_offline_;
+		}
+
+		void MainBar::set_device_offline(bool offline, QWidget *page)
+		{
+			/* Still offline with its mask in place: nothing to do. The mask can
+			 * be gone while the flag is up, since it lives on the page. */
+			if (offline == device_offline_ && (!offline || offline_mask_))
+				return;
+			device_offline_ = offline;
+
+			QWidget *const frame = page ? page : window();
+			if (!frame)
+				return;
+
+			if (!offline)
+			{
+				if (offline_mask_)
+					offline_mask_->hide();
+				return;
+			}
+
+			if (offline_mask_ && offline_mask_page_ != frame)
+			{
+				offline_mask_->setParent(frame);
+				offline_mask_page_ = frame;
+				frame->installEventFilter(this);
+			}
+
+			if (!offline_mask_)
+			{
+				QWidget *const mask = new QWidget(frame);
+				mask->setAutoFillBackground(true);
+
+				QVBoxLayout *const layout = new QVBoxLayout(mask);
+				layout->setContentsMargins(24, 24, 24, 24);
+				QLabel *const label = new QLabel(mask);
+				label->setAlignment(Qt::AlignCenter);
+				label->setWordWrap(true);
+				label->setText(offline_mask_text());
+				layout->addWidget(label);
+
+				/* A shade of the window colour: the mask follows a light and a dark
+				 * theme without a colour of its own. */
+				QPalette pal = mask->palette();
+				QColor shade = pal.color(QPalette::Window);
+				shade.setAlpha(210);
+				pal.setColor(QPalette::Window, shade);
+				mask->setPalette(pal);
+
+				frame->installEventFilter(this);
+				offline_mask_ = mask;
+				offline_mask_label_ = label;
+				offline_mask_page_ = frame;
+			}
+			/* Eats the clicks: nothing on a page whose board is gone works. */
+			offline_mask_->setGeometry(frame->rect());
+			offline_mask_->show();
+			offline_mask_->raise();
+		}
+
 		uint16_t MainBar::get_channel_number() const
 		{
 			return channel_number_;
@@ -694,6 +809,42 @@ namespace pv
 
 		void MainBar::set_capture_state(pv::Session::capture_state state)
 		{
+			const bool running = (state != pv::Session::Stopped);
+			bool resume = false;
+
+			if (running != capture_running_)
+			{
+				capture_running_ = running;
+
+				/* The count, the boards it is about and the flag that says a pass
+				 * is owed are one reading to the poll, so they change together. */
+				std::lock_guard<std::mutex> lock(s_capture_mutex);
+				if (running)
+					++s_captures_running;
+				else
+					--s_captures_running;
+
+				const QString id = get_device_identity();
+				if (!id.isEmpty())
+				{
+					if (running)
+						s_capturing_identities.insert(id);
+					else
+						s_capturing_identities.remove(id);
+				}
+
+				/* The last capture ended: the pass it held back is run now. */
+				if (!running && s_captures_running <= 0 &&
+					s_attach_deferred.exchange(false))
+					resume = true;
+			}
+
+			if (resume)
+			{
+				set_device_offline(false);
+				device_attached();
+			}
+
 			bool ui_enabled = (state == pv::Session::Stopped) ? true : false;
 
 			device_selector_.setEnabled(ui_enabled);
@@ -743,12 +894,31 @@ namespace pv
 		void MainBar::set_busy_devices(const QSet<QString> &busy,
 			const QString &own)
 		{
+			/* The poll needs the whole set: a chain that went away is only a
+			 * board it can point at if it knows whose board it was. */
+			{
+				std::lock_guard<std::mutex> lock(vendorName_mutex);
+				m_busy_identities = busy;
+			}
+
 			device_selector_.set_busy_devices(busy, own);
+		}
+
+		QSet<QString> MainBar::get_busy_identities()
+		{
+			std::lock_guard<std::mutex> lock(vendorName_mutex);
+			return m_busy_identities;
 		}
 
 		QString MainBar::last_save_directory()
 		{
 			return QSettings().value(SettingSaveDirectory).toString();
+		}
+
+		void MainBar::set_decoder_button_checked(bool on)
+		{
+			if (add_decoder_button_)
+				add_decoder_button_->setChecked(on);
 		}
 
 		void MainBar::remember_save_directory(const QString &path)
@@ -950,8 +1120,14 @@ namespace pv
 				g_variant_unref(gvar_list);
 			}
 			updating_sample_rate_ = false;
-			commit_sample_rate();
+
+			/*
+			 * A rebuilt list starts at its first entry, not at the rate the device
+			 * runs at, so the value goes back in before it is committed - and this
+			 * runs every time the options are closed.
+			 */
 			update_sample_rate_selector_value();
+			commit_sample_rate();
 		}
 
 		void MainBar::update_sample_rate_selector_value()
@@ -1473,13 +1649,12 @@ namespace pv
 				return;
 
 			/*
-			 * Only the WCH boards keep their settings between runs. A demo
-			 * device or an open file writes nothing, or its sample rate
-			 * would be handed to the board that comes after it.
+			 * Every board keeps its settings between runs now. The group
+			 * carries the model and the port, so the values only ever go
+			 * back to the board that wrote them. An open file has nothing
+			 * to write.
 			 */
-			QString vendorName = get_vendorName();
-			if (vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] &&
-				vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
+			if (session_.using_file_device() || !session_.device())
 				return;
 
 			/*
@@ -1501,14 +1676,41 @@ namespace pv
 			if (restoring_defaults_)
 				return;
 
-			QString vendorName = get_vendorName();
-			if (vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] &&
-				vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
+			const shared_ptr<devices::Device> device = session_.device();
+			if (!device || !device->device() || session_.using_file_device())
 				return;
+
+			/*
+			 * The demo device stands in for a board that is not there, and
+			 * writing for it would put its own model into the page's group -
+			 * the board that comes back would then find settings that are
+			 * not its own and start from the defaults.
+			 */
+			const shared_ptr<devices::HardwareDevice> hw_device =
+				dynamic_pointer_cast<devices::HardwareDevice>(device);
+			if (!hw_device ||
+					hw_device->hardware_device()->driver()->name() == "demo")
+				return;
+
+			const QString vendorName = get_vendorName();
+			const bool is_wch =
+				vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] ||
+				vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)];
 
 			QSettings settings;
 			// Store the configuration
 			settings.beginGroup(setting_group());
+
+			/*
+			 * Which board these belong to travels with them: the page may
+			 * come up on another one - a session that was switched, or a
+			 * board that was replaced - and nothing may be put back then.
+			 * The serial number is what names a board; the port is only
+			 * there for a board that reports the same one as every other.
+			 */
+			settings.setValue("model", QString::fromStdString(device->device()->model()));
+			settings.setValue("serial_num", QString::fromStdString(device->device()->serial_number()));
+			settings.setValue("connection_id", QString::fromStdString(device->device()->connection_id()));
 
 			if (vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 			{
@@ -1518,7 +1720,7 @@ namespace pv
 				GlobalSettings gs;
 				gs.setValue(GlobalSettings::Key_ThresholdLevel, thresholdValue_ch32h417_);
 			}
-			else
+			else if (is_wch)
 			{
 				// CH569 keeps its original two-threshold settings
 				settings.setValue("Threshold_bank_1", QString::number(thresholdValue_1_));
@@ -1527,9 +1729,14 @@ namespace pv
 
 			settings.setValue("sample_count_index", QString::number(sample_count_.get_current_index()));
 			settings.setValue("sample_rate_index", QString::number(sample_rate_.get_current_index()));
-			settings.setValue("channel_number", QString::number(channel_number_));
-			settings.setValue("channel_mode_index", QString::number(channel_mode_index_));
 			settings.setValue("pre_trigger", QString::number(pre_trigger_));
+
+			/* The channel width and the mode are WCH hardware only. */
+			if (is_wch)
+			{
+				settings.setValue("channel_number", QString::number(channel_number_));
+				settings.setValue("channel_mode_index", QString::number(channel_mode_index_));
+			}
 			settings.endGroup();
 		}
 
@@ -1566,12 +1773,84 @@ namespace pv
 		QString MainBar::setting_group() const
 		{
 			/*
-			 * Every page keeps what the device page offers under its own
-			 * number. One group for all of them meant the page that wrote
-			 * last decided what every other page came up with - the options
-			 * of one session were pushed to the board of another.
+			 * The settings belong to the board rather than to the page: a page
+			 * can be pointed at another board, and two boards take turns on
+			 * one page, so a group per page would have them overwrite each
+			 * other. A WeAct board carries a serial number of its own; every
+			 * other board is told apart by the port it sits in.
 			 */
+			const shared_ptr<devices::Device> device = session_.device();
+			const shared_ptr<sigrok::Device> sr_dev =
+				device ? device->device() : nullptr;
+
+			if (sr_dev) {
+				QString board = QString::fromStdString(sr_dev->model());
+				const QString sn =
+					QString::fromStdString(sr_dev->serial_number());
+				const QString port =
+					QString::fromStdString(sr_dev->connection_id());
+
+				if (board.contains(util::WeActV2ModelName) &&
+						!sn.isEmpty() && sn != "0")
+					board += "_" + sn;
+				else if (!port.isEmpty())
+					board += "_" + port;
+
+				/* A group name is a key: the separators of a path cannot be
+				 * in it. */
+				for (QChar &ch : board)
+					if (ch == '/' || ch == '\\' || ch == ' ' || ch == ':')
+						ch = '_';
+
+				if (!board.isEmpty())
+					return "Settings/Board_" + board;
+			}
+
+			/* No board behind the page - a file, or one that did not open. */
 			return QString("Settings/%1").arg(session_.id());
+		}
+
+		/*
+		 * A page's settings belong to the board that wrote them. Sessions
+		 * can be pointed at another board, and a board can be replaced by
+		 * one of a different model, so the board has to be the same one
+		 * before anything is put back. The serial number says which board
+		 * it is; a board that reports the same serial as every other one
+		 * of its kind falls back to the port it is plugged into.
+		 */
+		bool MainBar::setting_group_is_ours(QSettings &settings, const QString &group)
+		{
+			const shared_ptr<devices::Device> device = session_.device();
+			if (!device || !device->device())
+				return false;
+
+			if (!settings.contains(group + "/model"))
+			{
+				/* Groups written before the model was stored came from a
+				 * WCH board, and only those ever wrote one. */
+				const QString vendorName = get_vendorName();
+				return vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] ||
+					vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)];
+			}
+
+			const shared_ptr<sigrok::Device> sr_dev = device->device();
+			if (settings.value(group + "/model").toString() !=
+					QString::fromStdString(sr_dev->model()))
+				return false;
+
+			const QString saved_sn = settings.value(group + "/serial_num").toString();
+			/*
+			 * Only the WeAct Studio Logic Analyzer V2 gives every board a
+			 * serial number of its own; every other board of this vendor
+			 * may report one and the same, and then the port decides.
+			 */
+			const bool serial_is_an_id = QString::fromStdString(sr_dev->model())
+				.contains(util::WeActV2ModelName);
+			if (serial_is_an_id && !saved_sn.isEmpty() && saved_sn != "0")
+				return saved_sn == QString::fromStdString(sr_dev->serial_number());
+
+			return settings.value(group + "/connection_id").toString() ==
+				QString::fromStdString(sr_dev->connection_id());
 		}
 
 		void MainBar::get_setting_default()
@@ -1579,16 +1858,42 @@ namespace pv
 			QSettings settings;
 			QString group = setting_group();
 
+			const QString vendorName = get_vendorName();
+			const bool is_wch =
+				vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] ||
+				vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)];
+
+			/*
+			 * Builds before this one wrote the settings per page. A board
+			 * whose own group is empty takes over what its page still holds,
+			 * so an installation does not come up with the defaults once.
+			 */
+			if (!settings.contains(group + "/sample_count_index")) {
+				const QString page_group =
+					QString("Settings/%1").arg(session_.id());
+				if (page_group != group &&
+						settings.contains(page_group + "/sample_count_index") &&
+						setting_group_is_ours(settings, page_group)) {
+					settings.beginGroup(page_group);
+					const QStringList keys = settings.childKeys();
+					settings.endGroup();
+					for (const QString &key : keys)
+						settings.setValue(group + "/" + key,
+							settings.value(page_group + "/" + key));
+				}
+			}
+
 			/*
 			 * The first page also reads the group older versions kept for
 			 * the whole program, so that an installation does not come up
 			 * with the defaults once. Any other page starts from its own.
 			 */
 			if (!settings.contains(group + "/sample_count_index") &&
-				session_.id() == 0)
+				session_.id() == 0 && is_wch)
 				group = "Settings";
 
-			if (settings.contains(group + "/sample_count_index"))
+			if (settings.contains(group + "/sample_count_index") &&
+				setting_group_is_ours(settings, group))
 			{
 				// CH569 threshold settings
 				threshold_bank_1_default_ = settings.value(group + "/Threshold_bank_1").toFloat();
@@ -1603,11 +1908,14 @@ namespace pv
 					channel_mode_index_ = 3;
 				is_count_setting_default_ = true;
 				is_rate_setting_default_ = true;
+				has_setting_default_ = true;
 			}
 			else
 			{
 				is_count_setting_default_ = false;
 				is_rate_setting_default_ = false;
+				has_setting_default_ = false;
+				pre_trigger_default_ = 0;
 				return;
 			}
 		}
@@ -1787,11 +2095,16 @@ namespace pv
 			if (!channels_)
 				return;
 
-			// restore settings
-			QString vendorName = get_vendorName();
-			// Supports both the CH569 and the CH32H417
-			if (vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] && vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
-				return;
+			/*
+			 * The rate, the capture length and the pre-trigger are put back
+			 * for every board: they mean the same thing whatever driver is
+			 * behind it. Only the thresholds, the channel width and the mode
+			 * belong to the WCH hardware.
+			 */
+			const QString vendorName = get_vendorName();
+			const bool is_wch =
+				vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH569)] ||
+				vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)];
 
 			restoring_defaults_ = true;
 
@@ -1826,7 +2139,7 @@ namespace pv
 				}
 				channels_->set_default_bank_threshold(threshold_ch32h417_default_, threshold_bank_2_default_);
 			}
-			else
+			else if (is_wch)
 			{
 				channels_->set_default_bank_threshold(threshold_bank_1_default_, threshold_bank_2_default_);
 			}
@@ -1839,7 +2152,7 @@ namespace pv
 			 * the signals - and a board that only got a new instance from
 			 * a rescan was still using all of that.
 			 */
-			if (channels_)
+			if (is_wch)
 			{
 				int showing = -1;
 				for (int i = 0; i < 4; i++)
@@ -1852,9 +2165,9 @@ namespace pv
 				if (showing != channel_mode_index_ &&
 					channels_->radioChannels[channel_mode_index_])
 					channels_->radioChannels[channel_mode_index_]->click();
-			}
 
-			commit_channel_number(channel_number_);
+				commit_channel_number(channel_number_);
+			}
 
 			if (is_rate_setting_default_)
 			{
@@ -1869,8 +2182,15 @@ namespace pv
 				commit_sample_count();
 			}
 
-			channels_->set_default_pre_trigger(pre_trigger_default_);
-			on_update_pre_trigger(pre_trigger_default_);
+			/*
+			 * Nothing saved for this board means it keeps what its driver
+			 * holds - which is what the page was built from.
+			 */
+			if (has_setting_default_)
+			{
+				channels_->set_default_pre_trigger(pre_trigger_default_);
+				on_update_pre_trigger(pre_trigger_default_);
+			}
 			restoring_defaults_ = false;
 			// end
 		}
@@ -1928,6 +2248,11 @@ namespace pv
 		{
 			const shared_ptr<devices::Device> device = session_.device();
 			if (!device)
+				return;
+
+			/* A file has no device behind it to configure, and the rate
+			 * read from its header is not one to hand over. */
+			if (session_.using_file_device())
 				return;
 
 			if (!push_sample_rate(device->device()))
@@ -2099,6 +2424,23 @@ namespace pv
 				pv::util::message_box_icon(QMessageBox::Warning));
 		}
 
+		/*
+		 * A page is named after its board, and that name carries the port -
+		 * "usb/2-2.2", "ch375/4-8". A slash in it would make a path point
+		 * into a directory that does not exist, so the name is turned into
+		 * a plain file name here, with the separators turned into '_'.
+		 */
+		static QString to_file_name(const QString &name, const QString &suffix)
+		{
+			QString file = name;
+			for (QChar &ch : file)
+				if (QString("/\\:*?\"<>|").contains(ch))
+					ch = '_';
+			if (!suffix.isEmpty() && !file.endsWith(suffix, Qt::CaseInsensitive))
+				file += suffix;
+			return file;
+		}
+
 		void MainBar::export_file(shared_ptr<OutputFormat> format, bool selection_only, QString file_name)
 		{
 			using pv::dialogs::StoreProgress;
@@ -2159,9 +2501,16 @@ namespace pv
 			else
 				filter += QString("(*.%1);;%2 (*)").arg(QString::fromStdString(join(exts, ", *.")), tr("All Files"));
 
+			/* The whole name is offered, made into a file name; a slash in
+			 * it would otherwise cut the suggestion short at the port. */
+			const QString suggested = to_file_name(session_.name(),
+				exts.empty() ? QString() :
+					"." + QString::fromStdString(exts.front()));
+
 			// Show the file dialog
 			if (file_name.isEmpty())
-				file_name = QFileDialog::getSaveFileName(this, tr("Save File"), dir, filter);
+				file_name = QFileDialog::getSaveFileName(this, tr("Save File"),
+					QDir(dir).filePath(suggested), filter);
 
 			if (file_name.isEmpty())
 				return;
@@ -2278,7 +2627,6 @@ namespace pv
 				device_switch_allowed_ = true;
 			}
 
-
 			const shared_ptr<sigrok::Device> sr_dev = device->device();
 			if (!sr_dev) {
 				return false;
@@ -2306,7 +2654,6 @@ namespace pv
 				return false;
 			}
 
-
 			device_selector_.set_current_device(session_.device());
 
 			if (vendor == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]) {
@@ -2330,42 +2677,49 @@ namespace pv
 			return true;
 		}
 
+
 		void MainBar::hot_plug_listen()
 		{
 			/*
-			 * The boards this poll watches. A board that is not listed here is
-			 * one whose arrival and departure the device list never notices,
-			 * so a new driver means a line here.
+			 * Only how many boards of each build are on the bus is compared: a
+			 * second libusb context numbers buses and ports its own way, so paths
+			 * cannot be matched. Which board it was is the main thread's work -
+			 * it rescans and matches every page by identity.
 			 *
-			 * wch_type is what the WCH boards are matched by - it covers both
-			 * CH32H417 back ends, the vendor driver and libusb - and driver
-			 * what every other board is matched by. The CH375SetDeviceNotify
-			 * callback only reports devices the vendor driver owns, so polling
-			 * is the only source for the rest.
+			 * The count is read against where it started rather than against the
+			 * poll before, and only once it has held still: a board that was just
+			 * plugged re-enumerates a few times, and the dip in between would
+			 * otherwise read as a board leaving.
 			 */
 			struct HotPlugId {
 				uint16_t vid;
 				uint16_t pid;
 				WchDeviceType wch_type;
-				const char *driver;
 			};
 
 			const HotPlugId hot_plug_ids[] = {
-				{ WCH_VID, WCH_PID_CH32H417, WchDeviceType::CH32H417, nullptr },
-				{ WCH_VID, WCH_PID_CH569, WchDeviceType::CH569, nullptr },
-				{ 0x1d50, 0x608c, WchDeviceType::None, "fx2lafw" },
-				{ 0x1d50, 0x608d, WchDeviceType::None, "fx2lafw" },
+				{ WCH_VID, WCH_PID_CH32H417, WchDeviceType::CH32H417 },
+				{ WCH_VID, WCH_PID_CH569, WchDeviceType::CH569 },
+				{ 0x1d50, 0x608c, WchDeviceType::None },
+				{ 0x1d50, 0x608d, WchDeviceType::None },
 			};
 			const size_t hot_plug_count = G_N_ELEMENTS(hot_plug_ids);
 
-			bool present[G_N_ELEMENTS(hot_plug_ids)] = { false };
-			bool present_pre[G_N_ELEMENTS(hot_plug_ids)] = { false };
+			int count[G_N_ELEMENTS(hot_plug_ids)] = { 0 };
+			int base[G_N_ELEMENTS(hot_plug_ids)] = { 0 };
+			int last[G_N_ELEMENTS(hot_plug_ids)] = { 0 };
+			/* The chain of ports each watched board sits in, and the same when the
+			 * last change was handled: this page's own board is told from the rest
+			 * by it, and two boards on one chain cannot be told apart at all. */
+			std::map<std::string, int> chains_now;
+			std::map<std::string, int> chains_base;
+			bool primed = false;
+			int stable = 0;
 
 			libusb_device **devlist = NULL;
 			libusb_context *libusb_ctx = NULL;
 			int device_count = 0;
 			int index = 0;
-			int index_time = 0;
 
 			/* The libusb context must be initialized explicitly: passing
 			 * NULL to libusb_get_device_list() is undefined behaviour (older versions dereference a null pointer). */
@@ -2374,13 +2728,15 @@ namespace pv
 				qWarning() << "hot_plug_listen: libusb_init failed";
 				return;
 			}
+			poll_running_ = true;
 
 			while (hot_plug_listen_)
 			{
 				device_count = libusb_get_device_list(libusb_ctx, &devlist);
 
 				for (size_t i = 0; i < hot_plug_count; i++)
-					present[i] = false;
+					count[i] = 0;
+				chains_now.clear();
 
 				for (index = 0; index < device_count; index++)
 				{
@@ -2388,152 +2744,198 @@ namespace pv
 
 					if (libusb_get_device_descriptor(devlist[index], &des) != 0)
 						continue;
+
 					for (size_t i = 0; i < hot_plug_count; i++)
-						if (des.idVendor == hot_plug_ids[i].vid &&
-							des.idProduct == hot_plug_ids[i].pid)
-							present[i] = true;
+					{
+						if (des.idVendor != hot_plug_ids[i].vid ||
+							des.idProduct != hot_plug_ids[i].pid)
+								continue;
+
+						count[i]++;
+
+						uint8_t ports[8];
+						const int depth = libusb_get_port_numbers(devlist[index], ports, 8);
+						std::string chain;
+						for (int k = 0; k < depth; k++)
+						{
+							if (k)
+								chain += '.';
+							chain += std::to_string(ports[k]);
+						}
+						if (!chain.empty())
+							chains_now[chain]++;
+					}
 				}
 				if (device_count >= 0)
 					libusb_free_device_list(devlist, 1);
 				devlist = NULL;
 
-				if (index_time < 3)
+				/*
+				 * Safety net: the upgrade flag is cleared by the device coming
+				 * back, and a device that never does would leave hot-plug deaf
+				 * for this board forever. Give up after a minute.
+				 */
+				if (iap_upgrading_ &&
+					g_get_monotonic_time() >= iap_upgrade_deadline_.load())
 				{
-					index_time++;
+					qWarning() << "Firmware upgrade flag timed out, "
+								"resuming CH32H417 hot-plug detection";
+					iap_upgrading_ = false;
+				}
+
+				if (!primed)
+				{
+					for (size_t i = 0; i < hot_plug_count; i++)
+						base[i] = count[i];
+					chains_base = chains_now;
+					primed = true;
 				}
 				else
 				{
-					/*
-					 * Safety net: the upgrade flag is cleared by the device
-					 * coming back, and a device that never does would leave
-					 * hot-plug deaf for this board forever. Give up after a
-					 * minute so normal detection resumes.
-					 */
-					if (iap_upgrading_ &&
-						g_get_monotonic_time() >= iap_upgrade_deadline_.load())
-					{
-						qWarning() << "Firmware upgrade flag timed out, "
-									  "resuming CH32H417 hot-plug detection";
-						iap_upgrading_ = false;
-					}
-
-					/*
-					 * Which device the session holds, told apart by the
-					 * driver it came from. That stays put while a board is
-					 * away, unlike the name the tool bar shows, and the WCH
-					 * boards are matched by type so that both of their back
-					 * ends count.
-					 */
-					const QString current_driver = get_device_driver();
-					const WchDeviceType current_type =
-						get_wch_device_type_by_driver(current_driver.toStdString());
-
-					/*
-					 * What changed, and does it involve the device in use?
-					 * A change of anything else is a list refresh: the session
-					 * does not hold it, so it neither stops a capture nor moves
-					 * the selection.
-					 */
-					bool arrived_in_use = false;
-					bool left_in_use = false;
-					bool ch32h417_arrived_in_use = false;
-					bool ch32h417_left_in_use = false;
-					bool other_changed = false;
+					bool moving = false;
+					bool changed = false;
 
 					for (size_t i = 0; i < hot_plug_count; i++)
 					{
-						if (present[i] == present_pre[i])
-							continue;
-
-						const HotPlugId &id = hot_plug_ids[i];
-						bool in_use = false;
-						if (id.wch_type != WchDeviceType::None)
-							in_use = (current_type == id.wch_type);
-						else
-							in_use = (!current_driver.isEmpty() &&
-								current_driver == QString::fromLatin1(id.driver));
-
-						if (!in_use) {
-							other_changed = true;
-							continue;
-						}
-
-						if (present[i]) {
-							arrived_in_use = true;
-							if (id.wch_type == WchDeviceType::CH32H417)
-								ch32h417_arrived_in_use = true;
-						} else {
-							left_in_use = true;
-							if (id.wch_type == WchDeviceType::CH32H417)
-								ch32h417_left_in_use = true;
-						}
+						if (count[i] != last[i])
+							moving = true;
+						if (count[i] != base[i])
+							changed = true;
 					}
 
-					/*
-					 * An upgrade makes the CH32H417 re-enumerate as a HID
-					 * (PID 0xFE17); that window is ignored, the same way the
-					 * CH375 notify callback does.
-					 */
-					const bool upgrade_window =
-						iap_upgrading_ && ch32h417_left_in_use;
-
-					if (left_in_use && !upgrade_window)
+					if (moving || !changed)
 					{
+						stable = 0;
+					}
+					else if (++stable >= 3)
+					{
+						stable = 0;
+
+						int ch32h417_delta = 0;
+						bool wch_changed = false;
+						bool list_changed = false;
+
+						for (size_t i = 0; i < hot_plug_count; i++)
+						{
+							const int delta = count[i] - base[i];
+							if (!delta)
+								continue;
+
+							if (hot_plug_ids[i].wch_type == WchDeviceType::None)
+								list_changed = true;
+							else
+								wch_changed = true;
+
+							if (hot_plug_ids[i].wch_type == WchDeviceType::CH32H417)
+								ch32h417_delta = delta;
+						}
+
+						for (size_t i = 0; i < hot_plug_count; i++)
+							base[i] = count[i];
+
 						/*
-						 * The board in use went away: ask for the pass an
-						 * arrival asks for instead of acting on the report
-						 * alone. That pass reads the bus first, so a report
-						 * that is repeated - the vendor driver does that -
-						 * does not end in a question about a board that is
-						 * still there.
+						 * An upgrade makes the CH32H417 re-enumerate as a HID
+						 * (PID 0xFE17); that window is ignored, the same way the
+						 * CH375 notify callback does. The board coming back is
+						 * handed to the slot that callback uses: it clears the
+						 * upgrade flag, reports success and refreshes the list.
 						 */
-						set_vendorName("");
-						device_attached();
-						index_time = 0;
-					}
-					else if (arrived_in_use)
-					{
-						if (iap_upgrading_ && ch32h417_arrived_in_use)
+						if (iap_upgrading_ && ch32h417_delta != 0)
+						{
+							if (ch32h417_delta > 0)
+								QMetaObject::invokeMethod(this, "on_ch32h417_device_event",
+														  Qt::QueuedConnection,
+														  Q_ARG(unsigned long, CH375_DEVICE_ARRIVAL));
+						}
+						else if (wch_changed)
 						{
 							/*
-							 * The device is back from a firmware upgrade. Hand
-							 * it to the same slot the CH375 notify callback
-							 * uses: that is what clears the upgrade flag,
-							 * reports success and refreshes the device list,
-							 * and it has to run on the main thread. Without
-							 * this the libusb backend would never announce the
-							 * device again after an upgrade, because the CH375
-							 * callback only fires for devices the vendor
-							 * driver owns.
+							 * Which pages lost their board: a chain that was there when the last
+							 * change was handled and is gone now. A chain two boards share says
+							 * nothing and is left out; the pass settles that case anyway.
 							 */
-							QMetaObject::invokeMethod(this, "on_ch32h417_device_event",
-													  Qt::QueuedConnection,
-													  Q_ARG(unsigned long, CH375_DEVICE_ARRIVAL));
+							QStringList gone;
+							const QSet<QString> busy = get_busy_identities();
+							for (const QString &identity : busy)
+							{
+								const int dash = identity.startsWith("usb/") ? identity.indexOf('-') : -1;
+								if (dash < 0)
+									continue;
+
+								const std::string chain = identity.mid(dash + 1).toStdString();
+								const auto before = chains_base.find(chain);
+								if (before != chains_base.end() && before->second == 1 &&
+									chains_now.find(chain) == chains_now.end())
+									gone << identity;
+							}
+
+							/*
+							 * A pass closes the device in use, so while a capture runs it
+							 * waits for that capture to end - unless the board behind that
+							 * capture was the one that went: nothing is left to capture on
+							 * then and it runs at once.
+							 *
+							 * The pages that did lose a board are told, so that they can say
+							 * so instead of sitting there looking alive.
+							 *
+							 * A captured board the chains cannot describe (the vendor back
+							 * end) is taken as gone: acting at once is the safe side.
+							 */
+							/*
+							 * Decided and recorded under the lock the count is under: a
+							 * capture that ends while this is deciding has to see the
+							 * flag, or the pass it should have triggered is lost and the
+							 * pages stay masked until something else happens.
+							 */
+							bool defer = false;
+							{
+								std::lock_guard<std::mutex> lock(s_capture_mutex);
+
+								int captures = s_captures_running;
+								bool captured_went = false;
+								for (const QString &id : s_capturing_identities)
+									if (!id.startsWith("usb/") || gone.contains(id))
+										captured_went = true;
+
+								defer = (captures > 0 && !captured_went);
+								s_attach_deferred = defer;
+							}
+
+							if (defer)
+							{
+								/* A page keeps its mask until the pass runs: a board that came
+								 * back is only listed, the page still holds the instance the
+								 * scan of that pass replaces. */
+								if (!gone.isEmpty())
+									Q_EMIT devices_went_offline(gone);
+							}
+							else
+								device_attached();
 						}
-						else
+						else if (list_changed)
 						{
-							/* Refresh the device list only, do not switch
+							/* Refresh the list only, do not switch
 							 * automatically. */
-							device_attached();
+							refresh_device_list();
 						}
-						index_time = 0;
-					}
-					else if (other_changed)
-					{
-						refresh_device_list();
-						index_time = 0;
+						/* Only now is it the state the next change is
+						 * measured against. */
+						chains_base = chains_now;
 					}
 				}
 
 				g_usleep(100000);
 				for (size_t i = 0; i < hot_plug_count; i++)
-					present_pre[i] = present[i];
+					last[i] = count[i];
 			}
+			poll_running_ = false;
 			libusb_exit(libusb_ctx);
 		}
 
 		void MainBar::on_device_changed()
 		{
+			set_device_offline(false);
+
 			/* The change is through: the next one asks again. */
 			device_switch_allowed_ = false;
 
@@ -2542,6 +2944,8 @@ namespace pv
 			set_device_driver(hw_device ?
 				QString::fromStdString(
 					hw_device->hardware_device()->driver()->name()) : QString());
+			set_device_identity(
+				widgets::DeviceToolButton::device_identity(session_.device()));
 
 			/* Rebuilds the selector, which ends by rebuilding the device
 			 * page as well; calling that again here would throw the page
@@ -2570,6 +2974,11 @@ namespace pv
 			update_device_status_icon();
 		}
 
+		MainBar *MainBar::hot_plug_owner()
+		{
+			return s_mainbar_instance;
+		}
+
 		void MainBar::hot_plug_start()
 		{
 			/* Set the static instance pointer */
@@ -2595,6 +3004,7 @@ namespace pv
 				t_hot_plug.join();
 			}
 			hot_plug_listen_ = true;
+
 			usleep(10000);
 			t_hot_plug = std::thread(&MainBar::hot_plug_listen, this);
 		}
@@ -2723,7 +3133,8 @@ namespace pv
 				return;
 			}
 
-			QFileInfo fi = QFileInfo(QDir(session_.save_path()), session_.name());
+			QFileInfo fi = QFileInfo(QDir(session_.save_path()),
+				to_file_name(session_.name(), ".sr"));
 			export_file(session_.device_manager().context()->output_formats()["srzip"], false,
 						fi.absoluteFilePath());
 		}
@@ -2824,6 +3235,13 @@ namespace pv
 
 		bool MainBar::eventFilter(QObject *watched, QEvent *event)
 		{
+			if (offline_mask_ && offline_mask_page_ == watched &&
+				event->type() == QEvent::Resize)
+			{
+				offline_mask_->setGeometry(offline_mask_page_->rect());
+				offline_mask_->raise();
+			}
+
 			if (sample_count_supported_ && (watched == &sample_count_ || watched == &sample_rate_) &&
 				(event->type() == QEvent::ToolTip))
 			{
@@ -3156,6 +3574,15 @@ namespace pv
 		/* CH32H417 device event handler - runs on the main thread */
 		void MainBar::on_ch32h417_device_event(unsigned long eventStatus)
 		{
+			/*
+			 * The poll covers arrivals and departures on its own, from either back
+			 * end, and the vendor driver reports each of them a second time. Only the
+			 * upgrade window needs this callback: it clears the flag and reports
+			 * success.
+			 */
+			if (poll_running_ && !iap_upgrading_)
+				return;
+
 			if (eventStatus == CH375_DEVICE_ARRIVAL)
 			{
 				if (iap_upgrading_)

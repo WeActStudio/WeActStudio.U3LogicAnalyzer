@@ -36,6 +36,7 @@ using std::shared_ptr;
 using std::vector;
 using std::weak_ptr;
 
+class QTimer;
 struct srd_decoder;
 
 namespace pv {
@@ -174,6 +175,13 @@ Q_SIGNALS:
 	void device_new_session_requested(QString identity);
 
 private:
+	/* Applies the style to the menu and lays it out, so that the first
+	 * click does not have to. */
+	void prepare_menu();
+	/* Runs prepare_menu() once the list has stopped being rebuilt. */
+	QTimer *menu_prepare_timer_ = nullptr;
+	bool menu_prepared_once_ = false;
+
 	DeviceManager * device_manager_;
 	QAction *const connect_action_;
 

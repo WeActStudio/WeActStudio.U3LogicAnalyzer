@@ -36,6 +36,7 @@
 #include <QStringList>
 #include <QCheckBox>
 #include <QDialog>
+#include <QLineEdit>
 #include <QPointer>
 #include <future>
 #include "devicemanager.hpp"
@@ -126,7 +127,10 @@ public:
 	 * data going away with the instance. The session whose board is gone is
 	 * returned for the detach question.
 	 */
-	shared_ptr<Session> adopt_device_in_sessions();
+	/* Fills in every page whose board the scan did not find, and returns
+	 * the first of them: the one the question about saving is asked for. */
+	shared_ptr<Session> adopt_device_in_sessions(
+		std::vector<shared_ptr<Session>> *lost = nullptr);
 
 	/**
 	 * Looks the device up by its identity, which is what tells two boards
@@ -153,6 +157,9 @@ public:
 	void save_sessions();
 	void restore_sessions();
 	void add_default_setting();
+	/* Starts the hot-plug poll on the page in front. It is not tied to a board
+	 * page: a run that only opens files still has to notice a board later. */
+	void start_hot_plug();
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
@@ -191,6 +198,8 @@ public Q_SLOTS:
 	void on_get_repeat_acquisition(bool& is_repeat_acquisition_state);
 	void on_device_attached();
 	void run_device_attached();
+	/* Pages whose board went while a capture keeps the pass waiting. */
+	void on_devices_went_offline(const QStringList &identities);
 
 private:
 	void do_device_detach_switch(const shared_ptr<Session> &session);
@@ -268,6 +277,12 @@ private Q_SLOTS:
 
 	void on_tab_changed(int index);
 	void on_tab_close_requested(int index);
+	/* Puts the capture page back at the left end after a drag. */
+	void keep_capture_tab_first();
+	void on_tab_double_clicked(int index);
+	void on_tab_rename_finished();
+	/* Ends the rename, keeping the typed name only when apply is set. */
+	void finish_tab_rename(bool apply);
 
 	/* A file was chosen in a session's menu: it always gets a session of
 	 * its own, the capture page never shows a file. */
@@ -339,6 +354,9 @@ private:
 	QToolButton *run_stop_button_, *settings_button_;
 	QCheckBox* repeat_acquisition_button_;
 	QTabWidget session_selector_;
+	/* The editor an exported page is renamed with, and the page it is on. */
+	QLineEdit *tab_rename_edit_ = nullptr;
+	shared_ptr<Session> tab_rename_session_;
 
 	QIcon icon_red_;
 	QIcon icon_green_;

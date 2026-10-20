@@ -1040,6 +1040,19 @@ static gpointer data_read_thread(gpointer arg)
 }
 
 /* Finish acquisition */
+/*
+ * Take the sample ring down. It has to go with any start that failed after it
+ * was put up as well as with the end of an acquisition: with nothing to carry,
+ * every transfer times out and is sent again, and the commands that follow
+ * wait behind that until the device is told to start once more.
+ */
+static void stop_upload_ring(struct dev_context *devc, unsigned long pipe_num)
+{
+	if (!ch32h417_libusb_set_buf_upload_ex(devc->device_index, 0, pipe_num, 0))
+		sr_warn("Failed to stop upload buffer pipe %lu for device at index %d",
+			pipe_num, devc->device_index);
+}
+
 static void finish_acquisition(struct sr_dev_inst *sdi)
 {
 	struct dev_context *devc;
@@ -1067,6 +1080,14 @@ static void finish_acquisition(struct sr_dev_inst *sdi)
 		std_session_send_df_end(sdi);
 		devc->acq_started = FALSE;
 	}
+
+	/*
+	 * The samples have stopped, so the ring goes with them. Left in flight
+	 * it would have every transfer time out half a second later and be sent
+	 * again, and that churn is what a command sent in between waits for.
+	 */
+	stop_upload_ring(devc,
+		(devc->mode == MODE_LOGIC_ANALYZER) ? PIPE_LOGIC_DATA : PIPE_ADC_DATA);
 
 	sr_dbg("devc->read_thread EXIT");
 
@@ -1169,12 +1190,12 @@ SR_PRIV int ch32h417_libusb_acquisition_start(const struct sr_dev_inst *sdi)
 		sr_warn("Failed to set upload buffer pipe %d for device at index %d", PIPE_ADC_DATA, devc->device_index);
 	}
 
-	if (!ch32h417_libusb_set_buf_upload_ex(devc->device_index, 1, PIPE_LOGIC_DATA, devc->buffer_size)) {
-		sr_warn("Failed to set upload buffer pipe %d for device at index %d", PIPE_LOGIC_DATA, devc->device_index);
-	}
-	if (!ch32h417_libusb_set_buf_upload_ex(devc->device_index, 1, PIPE_ADC_DATA, devc->buffer_size)) {
-		sr_warn("Failed to set upload buffer pipe %d for device at index %d", PIPE_ADC_DATA, devc->device_index);
-	}
+	/*
+	 * The ring is put back up at the end of the setup below, just before the
+	 * device is told to start: while it is in flight on an idle device every
+	 * transfer waits out the timeout and is sent again, and the commands in
+	 * between would queue behind that.
+	 */
 
 	/* Configure the channels */
 	if (devc->mode == MODE_LOGIC_ANALYZER)
@@ -1215,11 +1236,17 @@ SR_PRIV int ch32h417_libusb_acquisition_start(const struct sr_dev_inst *sdi)
 		// 	}
 		// }
 
+		/* The samples are about to flow: this is where the ring goes up. */
+		if (!ch32h417_libusb_set_buf_upload_ex(devc->device_index, 1, pipe_num, devc->buffer_size)) {
+			sr_warn("Failed to set upload buffer pipe %lu for device at index %d", pipe_num, devc->device_index);
+		}
+
 		/* Start logic acquisition */
 		ret = ch32h417_libusb_start_logic(sdi);
 		if (ret != SR_OK)
 		{
 			sr_err("Failed to start logic acquisition.");
+			stop_upload_ring(devc, pipe_num);
 			return ret;
 		}
 	}
@@ -1266,11 +1293,17 @@ SR_PRIV int ch32h417_libusb_acquisition_start(const struct sr_dev_inst *sdi)
 			return ret;
 		}
 
+		/* The samples are about to flow: this is where the ring goes up. */
+		if (!ch32h417_libusb_set_buf_upload_ex(devc->device_index, 1, pipe_num, devc->buffer_size)) {
+			sr_warn("Failed to set upload buffer pipe %lu for device at index %d", pipe_num, devc->device_index);
+		}
+
 		/* Start ADC acquisition */
 		ret = ch32h417_libusb_start_adc(sdi);
 		if (ret != SR_OK)
 		{
 			sr_err("Failed to start ADC acquisition.");
+			stop_upload_ring(devc, pipe_num);
 			return ret;
 		}
 	}
@@ -1283,7 +1316,10 @@ SR_PRIV int ch32h417_libusb_acquisition_start(const struct sr_dev_inst *sdi)
 			pre_trigger_samples = (devc->capture_ratio * devc->limit_samples) / 100;
 		devc->stl = soft_trigger_logic_new(sdi, trigger, pre_trigger_samples);
 		if (!devc->stl)
+		{
+			stop_upload_ring(devc, pipe_num);
 			return SR_ERR_MALLOC;
+		}
 		devc->trigger_fired = FALSE;
 	}
 	else

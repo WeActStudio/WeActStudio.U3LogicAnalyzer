@@ -61,6 +61,13 @@ static const char* const DeviceModelNames[] =
     "CH32H417",
 };
 
+/*
+ * The one board that gives every unit a serial number of its own: it is
+ * named by that number, wherever it is plugged in. Every other board of
+ * this vendor may report one and the same, and is told apart by its port.
+ */
+static const char* const WeActV2ModelName = "WeAct Studio Logic Analyzer V2";
+
 WchDeviceType get_wch_device_type(const QString& vendorName);
 WchDeviceType get_wch_device_type_by_driver(const string& driverName);
 bool is_wch_device(const QString& vendorName);

@@ -81,7 +81,15 @@ string HardwareDevice::display_name(
 	(void)device_manager;
 
 	vector<string> parts = {};
-	if (device_->vendor().length() > 0)
+
+	/*
+	 * The model first: the vendor of a WCH board is "CH32H417", which is
+	 * the chip every one of them carries and says nothing about which
+	 * board it is.
+	 */
+	if (device_->model().length() > 0)
+		parts.push_back(device_->model());
+	else if (device_->vendor().length() > 0)
 		parts.push_back(device_->vendor());
 	else
 		parts.push_back("Demo device");

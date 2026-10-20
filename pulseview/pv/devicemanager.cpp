@@ -438,6 +438,63 @@ const shared_ptr<devices::HardwareDevice> DeviceManager::find_device_from_info(
 	return last_resort_dev;
 }
 
+const shared_ptr<devices::HardwareDevice> DeviceManager::find_saved_device(
+	const map<string, string> &info)
+{
+	const auto model = info.find("model");
+	const auto sn = info.find("serial_num");
+	const auto conn = info.find("connection_id");
+
+	/*
+	 * Only the WeAct Studio Logic Analyzer V2 gives every board a serial
+	 * number of its own. The other boards of this vendor may report one and
+	 * the same, and a serial they all carry names none of them.
+	 */
+	const bool serial_is_an_id = model != info.end() &&
+		model->second.find(util::WeActV2ModelName) != string::npos &&
+		sn != info.end() && !sn->second.empty() && sn->second != "0";
+
+	if (serial_is_an_id) {
+		shared_ptr<devices::HardwareDevice> found;
+		string found_port;
+		bool ambiguous = false;
+
+		for (const shared_ptr<devices::HardwareDevice> &dev : devices_) {
+			const shared_ptr<sigrok::Device> sr_dev = dev->device();
+			if (!sr_dev || sr_dev->serial_number() != sn->second ||
+					sr_dev->model() != model->second)
+				continue;
+
+			if (!found) {
+				found = dev;
+				found_port = sr_dev->connection_id();
+			} else if (sr_dev->connection_id() != found_port) {
+				/* One serial, two ports: it is not a serial of its own
+				 * after all, and the port is what tells them apart. */
+				ambiguous = true;
+			}
+		}
+
+		/* Nothing found means that board is not here, and nothing else may
+		 * be put in its place. */
+		if (!ambiguous)
+			return found;
+	}
+
+	if (conn != info.end())
+		for (const shared_ptr<devices::HardwareDevice> &dev : devices_) {
+			const shared_ptr<sigrok::Device> sr_dev = dev->device();
+			if (sr_dev && sr_dev->connection_id() == conn->second)
+				return dev;
+		}
+
+	/*
+	 * Such a board cannot be told from its brothers anyway, so one of the
+	 * same model in another port is the best this can do.
+	 */
+	return find_device_from_info(info);
+}
+
 bool DeviceManager::compare_devices(shared_ptr<devices::Device> a,
 	shared_ptr<devices::Device> b)
 {

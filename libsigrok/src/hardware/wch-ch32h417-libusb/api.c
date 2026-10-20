@@ -167,13 +167,14 @@ static void ch32h417_libusb_init_comm_params(struct dev_context *devc)
 		sr_warn("Failed to set timeout ex for device at index %d", devc->device_index);
 	}
 
-	/* Configure the buffered upload pipe */
-	if (!ch32h417_libusb_set_buf_upload_ex(devc->device_index, 1, PIPE_LOGIC_DATA, devc->buffer_size)) {
-		sr_warn("Failed to set upload buffer pipe %d for device at index %d", PIPE_LOGIC_DATA, devc->device_index);
-	}
-	if (!ch32h417_libusb_set_buf_upload_ex(devc->device_index, 1, PIPE_ADC_DATA, devc->buffer_size)) {
-		sr_warn("Failed to set upload buffer pipe %d for device at index %d", PIPE_ADC_DATA, devc->device_index);
-	}
+	/*
+	 * The sample rings are not submitted here, unlike the CH375 buffered
+	 * upload. A ring in flight with nothing to carry times every one of its
+	 * transfers out and puts them straight back, and the event thread spends
+	 * its time on that - a command sent meanwhile waits behind the batch for
+	 * the timeout to expire. The rings go up when an acquisition starts and
+	 * come down when it ends.
+	 */
 	/*
 	 * No set_buf_download_ex() counterpart either: buffered download is a
 	 * CH375DLL-side feature for OUT transfers. Plain libusb bulk writes are

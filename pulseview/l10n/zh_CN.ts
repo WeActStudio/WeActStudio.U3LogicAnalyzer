@@ -4,7 +4,7 @@
 <context>
     <name>QApplication</name>
     <message>
-        <location filename="../pv/devicemanager.cpp" line="342"/>
+        <location filename="../pv/devicemanager.cpp" line="349"/>
         <source>Error when scanning device driver &apos;%1&apos;: %2</source>
         <translation>扫描设备驱动程序时出错 &apos;%1&apos;: %2</translation>
     </message>
@@ -35,17 +35,17 @@
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../main.cpp" line="142"/>
+        <location filename="../main.cpp" line="129"/>
         <source>Stack trace of previous crash:</source>
         <translation>跟踪上次崩溃日志：</translation>
     </message>
     <message>
-        <location filename="../main.cpp" line="156"/>
+        <location filename="../main.cpp" line="143"/>
         <source>Don&apos;t show this message again</source>
         <translation>不再显示此消息</translation>
     </message>
     <message>
-        <location filename="../main.cpp" line="159"/>
+        <location filename="../main.cpp" line="146"/>
         <source>When %1 last crashed, it created a stack trace.
 A human-readable form has been saved to disk and was written to the log. You may access it from the settings dialog.</source>
         <translation>上次崩溃时 %1 ，创建了日志文件。
@@ -57,7 +57,7 @@ A human-readable form has been saved to disk and was written to the log. You may
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../pv/devicemanager.cpp" line="112"/>
+        <location filename="../pv/devicemanager.cpp" line="119"/>
         <source>Scanning for devices that driver %1 can access...</source>
         <translation>正在扫描驱动程序 %1 可以访问的设备...</translation>
     </message>
@@ -65,129 +65,145 @@ A human-readable form has been saved to disk and was written to the log. You may
 <context>
     <name>pv::MainWindow</name>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="192"/>
+        <location filename="../pv/mainwindow.cpp" line="206"/>
         <source>Current available memory size is less than 4GB and will affect usage effect. 
 Do you want to continue to use?</source>
         <translation>当前可用内存不足4GB，将可能会影响使用，
 是否继续使用?</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="534"/>
-        <location filename="../pv/mainwindow.cpp" line="1333"/>
+        <location filename="../pv/mainwindow.cpp" line="769"/>
+        <location filename="../pv/mainwindow.cpp" line="2181"/>
         <source>Decoder Selector</source>
         <translation>协议解码器</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="601"/>
+        <location filename="../pv/mainwindow.cpp" line="836"/>
         <source>Session %1</source>
         <translation>会话 %1</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="773"/>
+        <location filename="../pv/mainwindow.cpp" line="1192"/>
         <source>device detached!
 Do you want to save the session?</source>
         <translation>设备拔出!
 是否保存当前会话?</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="978"/>
+        <location filename="../pv/mainwindow.cpp" line="1264"/>
+        <source>Save File</source>
+        <translation>保存文件</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="1533"/>
         <source>Device scan timed out</source>
         <translation>设备扫描超时</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="979"/>
+        <location filename="../pv/mainwindow.cpp" line="1534"/>
         <source>Scanning these drivers took too long, so the software started without waiting for them:</source>
         <translation>以下驱动扫描时间过长，软件已不再等待它们，直接启动:</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="981"/>
+        <location filename="../pv/mainwindow.cpp" line="1536"/>
         <source>Their devices are not in the list. Unplug and replug the analyzer - or close whatever else is using it - and scan again.</source>
         <translation>这些设备不会出现在设备列表里。请拔插一次分析仪（或关掉正在占用它的程序）后重新扫描。</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1316"/>
-        <location filename="../pv/mainwindow.cpp" line="1383"/>
+        <location filename="../pv/mainwindow.cpp" line="2131"/>
+        <source>Sessions not restored</source>
+        <translation>会话未恢复</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="2132"/>
+        <source>These boards are not connected, so the pages they held are not here:</source>
+        <translation>这些板子没有连接，原来在它们上面的页面不在这里：</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="2135"/>
+        <source>Plug the board in, or close the program that is using it, then open the page again.</source>
+        <translation>插上板子，或者关掉正在使用它的程序，再重新打开该页面。</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="2164"/>
+        <location filename="../pv/mainwindow.cpp" line="2235"/>
         <source>Start/Stop Acquisition</source>
         <translation>开始/停止 采集</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1457"/>
-        <location filename="../pv/mainwindow.cpp" line="1642"/>
+        <location filename="../pv/mainwindow.cpp" line="2317"/>
+        <location filename="../pv/mainwindow.cpp" line="2523"/>
         <source>Reload</source>
         <translation>重复采集</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1319"/>
-        <location filename="../pv/mainwindow.cpp" line="1394"/>
+        <location filename="../pv/mainwindow.cpp" line="2167"/>
+        <location filename="../pv/mainwindow.cpp" line="2246"/>
         <source>Settings</source>
         <translation>设置</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1457"/>
-        <location filename="../pv/mainwindow.cpp" line="1465"/>
-        <location filename="../pv/mainwindow.cpp" line="1642"/>
+        <location filename="../pv/mainwindow.cpp" line="2317"/>
+        <location filename="../pv/mainwindow.cpp" line="2325"/>
+        <location filename="../pv/mainwindow.cpp" line="2523"/>
         <source>Run</source>
         <translation>开始</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1471"/>
+        <location filename="../pv/mainwindow.cpp" line="2331"/>
         <source>Stop</source>
         <translation>停止</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1317"/>
-        <location filename="../pv/mainwindow.cpp" line="1318"/>
-        <location filename="../pv/mainwindow.cpp" line="1386"/>
-        <location filename="../pv/mainwindow.cpp" line="1387"/>
+        <location filename="../pv/mainwindow.cpp" line="2165"/>
+        <location filename="../pv/mainwindow.cpp" line="2166"/>
+        <location filename="../pv/mainwindow.cpp" line="2238"/>
+        <location filename="../pv/mainwindow.cpp" line="2239"/>
         <source>Repeat Acquisition</source>
         <translation>重复采样</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="202"/>
-        <location filename="../pv/mainwindow.cpp" line="785"/>
-        <location filename="../pv/mainwindow.cpp" line="1548"/>
+        <location filename="../pv/mainwindow.cpp" line="216"/>
+        <location filename="../pv/mainwindow.cpp" line="1218"/>
+        <location filename="../pv/mainwindow.cpp" line="2403"/>
+        <location filename="../pv/mainwindow.cpp" line="3293"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="784"/>
+        <location filename="../pv/mainwindow.cpp" line="1217"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="171"/>
-        <location filename="../pv/mainwindow.cpp" line="748"/>
-        <location filename="../pv/mainwindow.cpp" line="1528"/>
+        <location filename="../pv/mainwindow.cpp" line="185"/>
+        <location filename="../pv/mainwindow.cpp" line="1157"/>
+        <location filename="../pv/mainwindow.cpp" line="2383"/>
         <source>Warning</source>
         <translation>警告</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1521"/>
-        <source>Untitled</source>
-        <translation>未命名</translation>
-    </message>
-    <message>
-        <location filename="../pv/mainwindow.cpp" line="1540"/>
+        <location filename="../pv/mainwindow.cpp" line="2395"/>
         <source>&lt;h3&gt;Unsaved Capture Data&lt;/h3&gt;&lt;p&gt;Data will be permanently lost on exit.&lt;/p&gt;</source>
         <translation>&lt;h3&gt;有未保存的采集数据&lt;/h3&gt;&lt;p&gt;退出后数据将永久丢失。&lt;/p&gt;</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1547"/>
+        <location filename="../pv/mainwindow.cpp" line="2402"/>
         <source>Discard &amp;&amp; Exit</source>
         <translation>放弃并退出</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1592"/>
+        <location filename="../pv/mainwindow.cpp" line="2473"/>
         <source>Capture Failed</source>
         <translation>采集失败</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1657"/>
+        <location filename="../pv/mainwindow.cpp" line="2538"/>
         <source>Device stopped sending data</source>
         <translation>设备已停止发送数据</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1658"/>
+        <location filename="../pv/mainwindow.cpp" line="2539"/>
         <source>The device stopped sending samples before the capture was due to end, usually because the USB link cannot sustain the configured %1.
 
 The acquisition was stopped. The data captured before that may be incomplete or wrong. Try a lower sample rate, fewer channels, or another USB port.</source>
@@ -196,20 +212,20 @@ The acquisition was stopped. The data captured before that may be incomplete or 
 采集已停止。在此之前采集到的数据可能不完整或不正确。请降低采样率、减少通道数，或换一个 USB 端口。</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="201"/>
-        <location filename="../pv/mainwindow.cpp" line="1898"/>
-        <location filename="../pv/mainwindow.cpp" line="1924"/>
+        <location filename="../pv/mainwindow.cpp" line="215"/>
+        <location filename="../pv/mainwindow.cpp" line="2802"/>
+        <location filename="../pv/mainwindow.cpp" line="3434"/>
         <source>Confirm</source>
         <translation>确认</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1899"/>
-        <location filename="../pv/mainwindow.cpp" line="1925"/>
+        <location filename="../pv/mainwindow.cpp" line="2803"/>
+        <location filename="../pv/mainwindow.cpp" line="3435"/>
         <source>This session contains unsaved data. Close anyway?</source>
         <translation>此会话包含未保存的数据。确定关闭？</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="232"/>
+        <location filename="../pv/mainwindow.cpp" line="246"/>
         <source>No udev access rules were found for:
 %1
 
@@ -226,17 +242,17 @@ Enter your administrator password to install:
 %2</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="243"/>
+        <location filename="../pv/mainwindow.cpp" line="257"/>
         <source>Administrator privileges required</source>
         <translation>需要管理员权限</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="252"/>
+        <location filename="../pv/mainwindow.cpp" line="266"/>
         <source>Access rules installed</source>
         <translation>权限规则已安装</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="253"/>
+        <location filename="../pv/mainwindow.cpp" line="267"/>
         <source>The udev rules have been installed.
 
 If the device is already plugged in, unplug and replug it before scanning again.</source>
@@ -245,12 +261,12 @@ If the device is already plugged in, unplug and replug it before scanning again.
 若设备此时已经插上，请拔插一次后再扫描。</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="260"/>
+        <location filename="../pv/mainwindow.cpp" line="274"/>
         <source>Installation failed</source>
         <translation>安装失败</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="261"/>
+        <location filename="../pv/mainwindow.cpp" line="275"/>
         <source>Could not install the udev rules:
 
 %1
@@ -263,12 +279,12 @@ Please try again, or cancel to skip.</source>
 请重试，或选择取消跳过。</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="267"/>
+        <location filename="../pv/mainwindow.cpp" line="281"/>
         <source>Skipped installing access rules</source>
         <translation>已跳过权限规则安装</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="268"/>
+        <location filename="../pv/mainwindow.cpp" line="282"/>
         <source>The udev rules are not installed, so the device may not be detected.
 
 You can run this application as root later, or copy the rule files from the repository to /etc/udev/rules.d/ and replug the device.</source>
@@ -277,58 +293,71 @@ You can run this application as root later, or copy the rule files from the repo
 可之后以管理员身份运行本软件，或把仓库中的规则文件复制到 /etc/udev/rules.d/ 后拔插设备。</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1240"/>
+        <location filename="../pv/mainwindow.cpp" line="3353"/>
+        <location filename="../pv/mainwindow.cpp" line="3376"/>
+        <source>Could not copy the capture: %1</source>
+        <translation>无法复制采集数据：%1</translation>
+    </message>
+    <message>
+        <location filename="../pv/mainwindow.cpp" line="3408"/>
+        <location filename="../pv/mainwindow.cpp" line="3420"/>
         <source>Could not save the session: %1</source>
         <translation>无法保存会话：%1</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="1234"/>
+        <location filename="../pv/mainwindow.cpp" line="1265"/>
         <source>Session files (*.sr);;All Files (*)</source>
         <translation>会话文件 (*.sr);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="3175"/>
+        <location filename="../pv/mainwindow.cpp" line="3023"/>
         <source>Shows a session file</source>
         <translation>显示的是会话文件</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="3178"/>
+        <location filename="../pv/mainwindow.cpp" line="3030"/>
         <source>Port: %1</source>
         <translation>端口：%1</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="3182"/>
+        <location filename="../pv/mainwindow.cpp" line="3035"/>
         <source>Board: %1</source>
         <translation>设备：%1</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="3186"/>
+        <location filename="../pv/mainwindow.cpp" line="3040"/>
         <source>SN: %1</source>
         <translation>序列号：%1</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="3190"/>
+        <location filename="../pv/mainwindow.cpp" line="3050"/>
         <source>Decoders: %1</source>
         <translation>解码器：%1</translation>
     </message>
     <message>
-        <location filename="../pv/mainwindow.cpp" line="3198"/>
+        <location filename="../pv/mainwindow.cpp" line="3131"/>
         <source>Close Session</source>
         <translation>关闭会话</translation>
     </message>
     <message>
+        <location filename="../pv/mainwindow.cpp" line="3128"/>
         <source>Export the capture to a new session</source>
         <translation>将采集数据导出到新会话</translation>
     </message>
     <message>
+        <location filename="../pv/mainwindow.cpp" line="3127"/>
+        <location filename="../pv/mainwindow.cpp" line="3293"/>
+        <location filename="../pv/mainwindow.cpp" line="3323"/>
         <source>Exporting the capture... %1%</source>
         <translation>正在导出采集数据… %1%</translation>
     </message>
     <message>
+        <location filename="../pv/mainwindow.cpp" line="3295"/>
         <source>Export to a New Session</source>
         <translation>导出到新会话</translation>
     </message>
     <message>
+        <location filename="../pv/mainwindow.cpp" line="1215"/>
         <source>Export Only the Capture to a New Session</source>
         <translation>仅将采集数据导出到新会话</translation>
     </message>
@@ -336,62 +365,62 @@ You can run this application as root later, or copy the rule files from the repo
 <context>
     <name>pv::Session</name>
     <message>
-        <location filename="../pv/session.cpp" line="475"/>
+        <location filename="../pv/session.cpp" line="521"/>
         <source>Can&apos;t restore generated signal of unknown type %1 (%2)</source>
         <translation>无法还原生成的未知类型的信号 %1 (%2)</translation>
     </message>
     <message>
-        <location filename="../pv/session.cpp" line="924"/>
+        <location filename="../pv/session.cpp" line="1110"/>
         <source>Error</source>
         <translation>错误</translation>
     </message>
     <message>
-        <location filename="../pv/session.cpp" line="925"/>
+        <location filename="../pv/session.cpp" line="1111"/>
         <source>Unexpected input format: %1</source>
         <translation>不支持的输入格式： %1</translation>
     </message>
     <message>
-        <location filename="../pv/session.cpp" line="961"/>
+        <location filename="../pv/session.cpp" line="1147"/>
         <source>Failed to load %1</source>
         <translation>无法加载 %1</translation>
     </message>
     <message>
-        <location filename="../pv/session.cpp" line="1003"/>
+        <location filename="../pv/session.cpp" line="1189"/>
         <source>No active device set, can&apos;t start acquisition.</source>
         <translation>未设置活动设备，无法采集。</translation>
     </message>
     <message>
-        <location filename="../pv/session.cpp" line="1018"/>
+        <location filename="../pv/session.cpp" line="1204"/>
         <source>No channels enabled.</source>
         <translation>未启用任何通道。</translation>
     </message>
     <message>
-        <location filename="../pv/session.cpp" line="697"/>
+        <location filename="../pv/session.cpp" line="742"/>
         <source>Out of memory, acquisition stopped.</source>
         <translation>内存不足，采集停止。</translation>
     </message>
     <message>
-        <location filename="../pv/session.cpp" line="702"/>
+        <location filename="../pv/session.cpp" line="747"/>
         <source>this feature is currently not supported.</source>
         <translation>此功能暂不支持。</translation>
     </message>
     <message>
-        <location filename="../pv/session.cpp" line="2088"/>
+        <location filename="../pv/session.cpp" line="2275"/>
         <source>Can&apos;t handle more than 64 logic channels.</source>
         <translation>无法处理超过64个逻辑通道。</translation>
     </message>
     <message>
-        <location filename="../pv/session.cpp" line="797"/>
+        <location filename="../pv/session.cpp" line="880"/>
         <source>Failed to open device</source>
         <translation>无法打开设备</translation>
     </message>
     <message>
-        <location filename="../pv/session.cpp" line="791"/>
+        <location filename="../pv/session.cpp" line="874"/>
         <source>The device is already in use, or this user has no access to it. Close the program that holds it, then try again.</source>
         <translation>设备已被其他程序占用，或当前用户无权访问。请关闭占用它的程序后重试。</translation>
     </message>
     <message>
-        <location filename="../pv/session.cpp" line="794"/>
+        <location filename="../pv/session.cpp" line="877"/>
         <source>The device could not be opened.</source>
         <translation>无法打开设备。</translation>
     </message>
@@ -442,33 +471,33 @@ You can run this application as root later, or copy the rule files from the repo
 <context>
     <name>pv::data::DecodeSignal</name>
     <message>
-        <location filename="../pv/data/decodesignal.cpp" line="244"/>
+        <location filename="../pv/data/decodesignal.cpp" line="257"/>
         <source>No decoders</source>
         <translation>没有解码器</translation>
     </message>
     <message>
-        <location filename="../pv/data/decodesignal.cpp" line="251"/>
+        <location filename="../pv/data/decodesignal.cpp" line="264"/>
         <source>There are no channels assigned to this decoder</source>
         <translation>解码器没有选择通道</translation>
     </message>
     <message>
-        <location filename="../pv/data/decodesignal.cpp" line="265"/>
+        <location filename="../pv/data/decodesignal.cpp" line="278"/>
         <source>One or more required channels have not been specified</source>
         <translation>解码器缺少一个或多个通道</translation>
     </message>
     <message>
-        <location filename="../pv/data/decodesignal.cpp" line="281"/>
+        <location filename="../pv/data/decodesignal.cpp" line="294"/>
         <source>No input data</source>
         <translation>无数据输入</translation>
     </message>
     <message>
-        <location filename="../pv/data/decodesignal.cpp" line="1617"/>
-        <location filename="../pv/data/decodesignal.cpp" line="1702"/>
+        <location filename="../pv/data/decodesignal.cpp" line="1648"/>
+        <location filename="../pv/data/decodesignal.cpp" line="1733"/>
         <source>Decoder reported an error</source>
         <translation>解码器解码错误</translation>
     </message>
     <message>
-        <location filename="../pv/data/decodesignal.cpp" line="1908"/>
+        <location filename="../pv/data/decodesignal.cpp" line="1956"/>
         <source>Failed to create decoder instance</source>
         <translation>无法创建的解码器实例</translation>
     </message>
@@ -506,52 +535,52 @@ You can run this application as root later, or copy the rule files from the repo
 <context>
     <name>pv::data::SignalBase</name>
     <message>
-        <location filename="../pv/data/signalbase.cpp" line="521"/>
+        <location filename="../pv/data/signalbase.cpp" line="537"/>
         <source>Signal average</source>
         <translation>平均信号电平</translation>
     </message>
     <message>
-        <location filename="../pv/data/signalbase.cpp" line="522"/>
+        <location filename="../pv/data/signalbase.cpp" line="538"/>
         <source>0.9V (for 1.8V CMOS)</source>
         <translation>0.9V（适用于 1.8V CMOS）</translation>
     </message>
     <message>
-        <location filename="../pv/data/signalbase.cpp" line="523"/>
+        <location filename="../pv/data/signalbase.cpp" line="539"/>
         <source>1.8V (for 3.3V CMOS)</source>
         <translation>1.8V（适用于 3.3V CMOS）</translation>
     </message>
     <message>
-        <location filename="../pv/data/signalbase.cpp" line="524"/>
+        <location filename="../pv/data/signalbase.cpp" line="540"/>
         <source>2.5V (for 5.0V CMOS)</source>
         <translation>2.5V（适用于 5.0V CMOS）</translation>
     </message>
     <message>
-        <location filename="../pv/data/signalbase.cpp" line="525"/>
+        <location filename="../pv/data/signalbase.cpp" line="541"/>
         <source>1.5V (for TTL)</source>
         <translation>1.5V（适用于 TTL）</translation>
     </message>
     <message>
-        <location filename="../pv/data/signalbase.cpp" line="530"/>
+        <location filename="../pv/data/signalbase.cpp" line="546"/>
         <source>Signal average +/- 15%</source>
         <translation>平均信号电平 +/- 15%</translation>
     </message>
     <message>
-        <location filename="../pv/data/signalbase.cpp" line="531"/>
+        <location filename="../pv/data/signalbase.cpp" line="547"/>
         <source>0.3V/1.2V (for 1.8V CMOS)</source>
         <translation>0.3V/1.2V（适用于 1.8V CMOS）</translation>
     </message>
     <message>
-        <location filename="../pv/data/signalbase.cpp" line="532"/>
+        <location filename="../pv/data/signalbase.cpp" line="548"/>
         <source>0.7V/2.5V (for 3.3V CMOS)</source>
         <translation>0.7V/2.5V（适用于 3.3V CMOS）</translation>
     </message>
     <message>
-        <location filename="../pv/data/signalbase.cpp" line="533"/>
+        <location filename="../pv/data/signalbase.cpp" line="549"/>
         <source>1.3V/3.7V (for 5.0V CMOS)</source>
         <translation>1.3V/3.7V（适用于 5.0V CMOS）</translation>
     </message>
     <message>
-        <location filename="../pv/data/signalbase.cpp" line="534"/>
+        <location filename="../pv/data/signalbase.cpp" line="550"/>
         <source>0.8V/2.0V (for TTL)</source>
         <translation>0.8V/2.0V（适用于 TTL）</translation>
     </message>
@@ -890,7 +919,7 @@ Please check the device connection and firmware file.</source>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="394"/>
-        <location filename="../pv/mainwindow.cpp" line="1986"/>
+        <location filename="../pv/mainwindow.cpp" line="3496"/>
         <source>Use colored trace &amp;background</source>
         <translation>使用彩色通道背景 ( &amp;B )</translation>
     </message>
@@ -911,7 +940,7 @@ Please check the device connection and firmware file.</source>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="410"/>
-        <location filename="../pv/mainwindow.cpp" line="1996"/>
+        <location filename="../pv/mainwindow.cpp" line="3506"/>
         <source>Always keep &amp;newest samples at the right edge during capture</source>
         <translation>采集过程中始终跟踪右侧最新数据 ( &amp;N )</translation>
     </message>
@@ -922,7 +951,7 @@ Please check the device connection and firmware file.</source>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="418"/>
-        <location filename="../pv/mainwindow.cpp" line="2006"/>
+        <location filename="../pv/mainwindow.cpp" line="3516"/>
         <source>Show data &amp;sampling points</source>
         <translation>显示数据采样点 ( &amp;S )</translation>
     </message>
@@ -938,7 +967,7 @@ Please check the device connection and firmware file.</source>
     </message>
     <message>
         <location filename="../pv/dialogs/settings.cpp" line="433"/>
-        <location filename="../pv/mainwindow.cpp" line="2016"/>
+        <location filename="../pv/mainwindow.cpp" line="3526"/>
         <source>Show analog minor grid in addition to div grid</source>
         <translation>模拟通道除了div网格之外，还显示更多垂直细分网格</translation>
     </message>
@@ -1156,252 +1185,253 @@ Please check the device connection and firmware file.</source>
 <context>
     <name>pv::popups::Channels</name>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="1142"/>
+        <location filename="../pv/popups/channels.cpp" line="1203"/>
         <source>The current mode does not support opening this channel.</source>
         <translation>当前模式不支持该通道</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="469"/>
-        <location filename="../pv/popups/channels.cpp" line="1284"/>
+        <location filename="../pv/popups/channels.cpp" line="523"/>
+        <location filename="../pv/popups/channels.cpp" line="1346"/>
         <source>Logic Analyzer</source>
         <translation>逻辑分析仪</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="472"/>
-        <location filename="../pv/popups/channels.cpp" line="1286"/>
+        <location filename="../pv/popups/channels.cpp" line="526"/>
+        <location filename="../pv/popups/channels.cpp" line="1348"/>
         <source>ADC</source>
         <translation>ADC</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="480"/>
-        <location filename="../pv/popups/channels.cpp" line="1272"/>
+        <location filename="../pv/popups/channels.cpp" line="534"/>
+        <location filename="../pv/popups/channels.cpp" line="1334"/>
         <source>Device Mode</source>
         <translation>设备模式</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="219"/>
-        <location filename="../pv/popups/channels.cpp" line="309"/>
-        <location filename="../pv/popups/channels.cpp" line="1270"/>
+        <location filename="../pv/popups/channels.cpp" line="228"/>
+        <location filename="../pv/popups/channels.cpp" line="326"/>
+        <location filename="../pv/popups/channels.cpp" line="1331"/>
         <source>Model:</source>
         <translation>型号:</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="339"/>
-        <location filename="../pv/popups/channels.cpp" line="536"/>
-        <location filename="../pv/popups/channels.cpp" line="1273"/>
+        <location filename="../pv/popups/channels.cpp" line="382"/>
+        <location filename="../pv/popups/channels.cpp" line="590"/>
+        <location filename="../pv/popups/channels.cpp" line="1335"/>
         <source>Pre-trigger</source>
         <translation>预触发</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="334"/>
-        <location filename="../pv/popups/channels.cpp" line="533"/>
-        <location filename="../pv/popups/channels.cpp" line="1275"/>
+        <location filename="../pv/popups/channels.cpp" line="377"/>
+        <location filename="../pv/popups/channels.cpp" line="587"/>
+        <location filename="../pv/popups/channels.cpp" line="1337"/>
         <source>With a repeating signal the trigger point floats: this is a limit rather than a fixed place.</source>
         <translation>对周期信号触发点会浮动，此处是上限而非固定位置。</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="225"/>
-        <location filename="../pv/popups/channels.cpp" line="1259"/>
+        <location filename="../pv/popups/channels.cpp" line="234"/>
+        <location filename="../pv/popups/channels.cpp" line="1320"/>
         <source>Options</source>
         <translation>选项</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="623"/>
-        <location filename="../pv/popups/channels.cpp" line="689"/>
-        <location filename="../pv/popups/channels.cpp" line="1261"/>
-        <location filename="../pv/popups/channels.cpp" line="1263"/>
+        <location filename="../pv/popups/channels.cpp" line="677"/>
+        <location filename="../pv/popups/channels.cpp" line="743"/>
+        <location filename="../pv/popups/channels.cpp" line="1322"/>
+        <location filename="../pv/popups/channels.cpp" line="1324"/>
         <source>Channels</source>
         <translation>通道</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="540"/>
-        <location filename="../pv/popups/channels.cpp" line="1289"/>
+        <location filename="../pv/popups/channels.cpp" line="594"/>
+        <location filename="../pv/popups/channels.cpp" line="1351"/>
         <source>ADC Channel 0</source>
         <translation>ADC通道0</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="541"/>
-        <location filename="../pv/popups/channels.cpp" line="1290"/>
+        <location filename="../pv/popups/channels.cpp" line="595"/>
+        <location filename="../pv/popups/channels.cpp" line="1352"/>
         <source>ADC Channel 1</source>
         <translation>ADC通道1</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="545"/>
-        <location filename="../pv/popups/channels.cpp" line="1266"/>
+        <location filename="../pv/popups/channels.cpp" line="599"/>
+        <location filename="../pv/popups/channels.cpp" line="1327"/>
         <source>ADC Channel</source>
         <translation>ADC通道</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="521"/>
-        <location filename="../pv/popups/channels.cpp" line="1281"/>
+        <location filename="../pv/popups/channels.cpp" line="575"/>
+        <location filename="../pv/popups/channels.cpp" line="1343"/>
         <source>Input Level</source>
         <translation>输入电平</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="503"/>
+        <location filename="../pv/popups/channels.cpp" line="557"/>
         <source>Always match this to the level of the signal being measured, or the samples will be read at the wrong level.</source>
         <translation>请务必与被测信号的电平保持一致，否则采样得到的电平会判错。</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="521"/>
-        <location filename="../pv/popups/channels.cpp" line="1225"/>
-        <location filename="../pv/popups/channels.cpp" line="1281"/>
-        <location filename="../pv/popups/channels.cpp" line="1299"/>
+        <location filename="../pv/popups/channels.cpp" line="575"/>
+        <location filename="../pv/popups/channels.cpp" line="1286"/>
+        <location filename="../pv/popups/channels.cpp" line="1343"/>
+        <location filename="../pv/popups/channels.cpp" line="1361"/>
         <source>Threshold Level</source>
         <translation>阈值电平</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="1228"/>
-        <location filename="../pv/popups/channels.cpp" line="1302"/>
+        <location filename="../pv/popups/channels.cpp" line="1289"/>
+        <location filename="../pv/popups/channels.cpp" line="1364"/>
         <source>Buffer Board</source>
         <translation>缓冲板</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="398"/>
-        <location filename="../pv/popups/channels.cpp" line="1346"/>
+        <location filename="../pv/popups/channels.cpp" line="452"/>
+        <location filename="../pv/popups/channels.cpp" line="1408"/>
         <source>Use 8 channels (Max 40MHz)</source>
         <translation>使用8通道(最高 40MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="399"/>
-        <location filename="../pv/popups/channels.cpp" line="1347"/>
+        <location filename="../pv/popups/channels.cpp" line="453"/>
+        <location filename="../pv/popups/channels.cpp" line="1409"/>
         <source>Use 16 channels (Max 20MHz)</source>
         <translation>使用16通道(最高 20MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="415"/>
-        <location filename="../pv/popups/channels.cpp" line="1361"/>
+        <location filename="../pv/popups/channels.cpp" line="469"/>
+        <location filename="../pv/popups/channels.cpp" line="1423"/>
         <source>Use 2 channels (Max 500MHz)</source>
         <translation>使用2通道(最高 500MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="416"/>
-        <location filename="../pv/popups/channels.cpp" line="1362"/>
+        <location filename="../pv/popups/channels.cpp" line="470"/>
+        <location filename="../pv/popups/channels.cpp" line="1424"/>
         <source>Use 4 channels (Max 250MHz)</source>
         <translation>使用4通道(最高 250MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="417"/>
-        <location filename="../pv/popups/channels.cpp" line="1363"/>
+        <location filename="../pv/popups/channels.cpp" line="471"/>
+        <location filename="../pv/popups/channels.cpp" line="1425"/>
         <source>Use 8 channels (Max 125MHz)</source>
         <translation>使用8通道(最高 125MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="418"/>
-        <location filename="../pv/popups/channels.cpp" line="1364"/>
+        <location filename="../pv/popups/channels.cpp" line="472"/>
+        <location filename="../pv/popups/channels.cpp" line="1426"/>
         <source>Use 16 channels (Max 62.5MHz)</source>
         <translation>使用16通道(最高 62.5MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="454"/>
-        <location filename="../pv/popups/channels.cpp" line="1278"/>
+        <location filename="../pv/popups/channels.cpp" line="508"/>
+        <location filename="../pv/popups/channels.cpp" line="1340"/>
         <source>Trigger Threshold(0~7 Channel)</source>
         <translation>触发阈值(0~7 通道)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="462"/>
-        <location filename="../pv/popups/channels.cpp" line="1279"/>
+        <location filename="../pv/popups/channels.cpp" line="516"/>
+        <location filename="../pv/popups/channels.cpp" line="1341"/>
         <source>Trigger Threshold(8~15 Channel)</source>
         <translation>触发阈值(8~15 通道)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="402"/>
-        <location filename="../pv/popups/channels.cpp" line="1349"/>
+        <location filename="../pv/popups/channels.cpp" line="456"/>
+        <location filename="../pv/popups/channels.cpp" line="1411"/>
         <source>Use 2 channels (Max 200MHz)</source>
         <translation>使用2通道 (最高 200MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="403"/>
-        <location filename="../pv/popups/channels.cpp" line="1350"/>
+        <location filename="../pv/popups/channels.cpp" line="457"/>
+        <location filename="../pv/popups/channels.cpp" line="1412"/>
         <source>Use 4 channels (Max 200MHz)</source>
         <translation>使用4通道 (最高 200MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="404"/>
-        <location filename="../pv/popups/channels.cpp" line="1351"/>
+        <location filename="../pv/popups/channels.cpp" line="458"/>
+        <location filename="../pv/popups/channels.cpp" line="1413"/>
         <source>Use 8 channels (Max 200MHz)</source>
         <translation>使用8通道 (最高 200MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="405"/>
-        <location filename="../pv/popups/channels.cpp" line="1352"/>
+        <location filename="../pv/popups/channels.cpp" line="459"/>
+        <location filename="../pv/popups/channels.cpp" line="1414"/>
         <source>Use 16 channels (Max 200MHz)</source>
         <translation>使用16通道 (最高 200MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="409"/>
-        <location filename="../pv/popups/channels.cpp" line="1355"/>
+        <location filename="../pv/popups/channels.cpp" line="463"/>
+        <location filename="../pv/popups/channels.cpp" line="1417"/>
         <source>Use 2 channels (Max 1GHz)</source>
         <translation>使用2通道 (最高 1GHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="410"/>
-        <location filename="../pv/popups/channels.cpp" line="1356"/>
+        <location filename="../pv/popups/channels.cpp" line="464"/>
+        <location filename="../pv/popups/channels.cpp" line="1418"/>
         <source>Use 4 channels (Max 500MHz)</source>
         <translation>使用4通道 (最高 500MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="411"/>
-        <location filename="../pv/popups/channels.cpp" line="1357"/>
+        <location filename="../pv/popups/channels.cpp" line="465"/>
+        <location filename="../pv/popups/channels.cpp" line="1419"/>
         <source>Use 8 channels (Max 250MHz)</source>
         <translation>使用8通道 (最高 250MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="412"/>
-        <location filename="../pv/popups/channels.cpp" line="1358"/>
+        <location filename="../pv/popups/channels.cpp" line="466"/>
+        <location filename="../pv/popups/channels.cpp" line="1420"/>
         <source>Use 16 channels (Max 125MHz)</source>
         <translation>使用16通道 (最高 125MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="551"/>
-        <location filename="../pv/popups/channels.cpp" line="1294"/>
+        <location filename="../pv/popups/channels.cpp" line="605"/>
+        <location filename="../pv/popups/channels.cpp" line="1356"/>
         <source>8-bit</source>
         <translation>8 位</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="552"/>
-        <location filename="../pv/popups/channels.cpp" line="1295"/>
+        <location filename="../pv/popups/channels.cpp" line="606"/>
+        <location filename="../pv/popups/channels.cpp" line="1357"/>
         <source>10-bit</source>
         <translation>10 位</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="556"/>
-        <location filename="../pv/popups/channels.cpp" line="1268"/>
+        <location filename="../pv/popups/channels.cpp" line="610"/>
+        <location filename="../pv/popups/channels.cpp" line="1329"/>
         <source>ADC Precision</source>
         <translation>ADC精度</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="1141"/>
+        <location filename="../pv/popups/channels.cpp" line="1202"/>
         <source>Information</source>
         <translation>信息</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="1143"/>
+        <location filename="../pv/popups/channels.cpp" line="1204"/>
         <source>Confirm</source>
         <translation>确定</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="396"/>
-        <location filename="../pv/popups/channels.cpp" line="1344"/>
+        <location filename="../pv/popups/channels.cpp" line="450"/>
+        <location filename="../pv/popups/channels.cpp" line="1406"/>
         <source>Use 2 channels (Max 40MHz)</source>
         <translation>使用2通道 (最高 40MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="397"/>
-        <location filename="../pv/popups/channels.cpp" line="1345"/>
+        <location filename="../pv/popups/channels.cpp" line="451"/>
+        <location filename="../pv/popups/channels.cpp" line="1407"/>
         <source>Use 4 channels (Max 40MHz)</source>
         <translation>使用4通道 (最高 40MHz)</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="223"/>
-        <location filename="../pv/popups/channels.cpp" line="315"/>
-        <location filename="../pv/popups/channels.cpp" line="1271"/>
+        <location filename="../pv/popups/channels.cpp" line="232"/>
+        <location filename="../pv/popups/channels.cpp" line="332"/>
+        <location filename="../pv/popups/channels.cpp" line="1332"/>
         <source>SN:</source>
         <translation>序列号:</translation>
     </message>
     <message>
-        <location filename="../pv/popups/channels.cpp" line="228"/>
+        <location filename="../pv/popups/channels.cpp" line="223"/>
         <location filename="../pv/popups/channels.cpp" line="320"/>
+        <location filename="../pv/popups/channels.cpp" line="1333"/>
         <source>Port:</source>
         <translation>端口:</translation>
     </message>
@@ -1505,340 +1535,348 @@ Please check the device connection and firmware file.</source>
 <context>
     <name>pv::toolbars::MainBar</name>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1933"/>
+        <source>Device offline</source>
+        <translation>设备已离线</translation>
+    </message>
+    <message>
+        <source>Waiting for the capture in the other session to end</source>
+        <translation>等待其他会话的采集结束后继续</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2358"/>
         <source>Switch device</source>
         <translation>切换设备</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1950"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2359"/>
         <source>Switch device? The captured data and its decoders will be lost.</source>
         <translation>切换设备？已采集的数据和其上的解码器都会丢失。</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2616"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3104"/>
         <source>Warning</source>
         <translation>警告</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="504"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="532"/>
         <source>Settings</source>
         <translation>设置</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="480"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="508"/>
         <source>&amp;Open...</source>
         <translation>打开... ( &amp;O )</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="511"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="539"/>
         <source>Open</source>
         <translation>打开</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="481"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="509"/>
         <source>Restore Session Setu&amp;p...</source>
         <translation>从文件打开会话设置...</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="483"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="511"/>
         <source>Save &amp;As...</source>
         <translation>另存为... ( &amp;A )</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="484"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="512"/>
         <source>Save Selected &amp;Range As...</source>
         <translation>将所选范围另存为... ( &amp;R )</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="485"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="513"/>
         <source>Save Session Setu&amp;p...</source>
         <translation>保存会话设置...</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="489"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="517"/>
         <source>&amp;Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="491"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="519"/>
         <source>&amp;Import</source>
         <translation>导入</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="486"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="514"/>
         <source>&amp;Connect to Device...</source>
         <translation>连接到设备...</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2305"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2765"/>
         <source>Start</source>
         <translation>开始</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="514"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="542"/>
         <source>Add protocol decoder</source>
         <translation>添加协议解码器</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="517"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="519"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="545"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="547"/>
         <source>Configure Channels</source>
         <translation>配置</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="518"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="520"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="546"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="548"/>
         <source>Option</source>
         <translation>配置</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="748"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1303"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="875"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1443"/>
         <source>Failed to get sample rate list:</source>
         <translation>无法获取采样率列表：</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1968"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2416"/>
         <source>Failed to set CH32H417 mode on device switch:</source>
         <translation>设备切换时设置 CH32H417 模式失败：</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2330"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2790"/>
         <source>sigrok Sessions (*.sr);;All Files (*)</source>
         <translation>sigrok 会话 (*.sr);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2372"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2388"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2838"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2854"/>
         <source>PulseView Session Setups (*.pvs);;All Files (*)</source>
         <translation>PulseView 会话设置 (*.pvs);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2458"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2924"/>
         <source>Total Sampling Count: %1</source>
         <translation>总采样数：%1</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="479"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="507"/>
         <source>Decoding Result</source>
         <translation>解码结果</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="482"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="512"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="510"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="540"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="502"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="530"/>
         <source>Single</source>
         <translation>单次</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="503"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="531"/>
         <source>Repeat</source>
         <translation>重复</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="505"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2575"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="533"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3063"/>
         <source>Version Info</source>
         <translation>版本信息</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="506"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="534"/>
         <source>FW Update</source>
         <translation>固件升级</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="509"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="537"/>
         <source>Help</source>
         <translation>帮助</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="510"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="538"/>
         <source>Model</source>
         <translation>模式</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="515"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="543"/>
         <source>Decoder</source>
         <translation>解码器</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="905"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1041"/>
         <source>Failed to get sample limit list:</source>
         <translation>无法获取采样限制列表：</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1134"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1260"/>
         <source>Failed to configure pattern mode:</source>
         <translation>配置工作模式失败：</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1155"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1281"/>
         <source>Failed to configure ADC channel:</source>
         <translation>配置 ADC 通道失败：</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1178"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1304"/>
         <source>Failed to configure ADC precision:</source>
         <translation>配置 ADC 精度失败：</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1630"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1981"/>
         <source>Failed to configure samplerate:</source>
         <translation>无法配置采样率：</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1776"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2174"/>
         <source>Failed to configure sample count:</source>
         <translation>无法配置采样计数：</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1813"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2213"/>
         <source>Missing Cursors</source>
         <translation>缺少光标</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1813"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2213"/>
         <source>You need to set the cursors before you can save the data enclosed by them to a session file (e.g. using the Show Cursors button).</source>
         <translation>您需要设置光标，然后才能将光标范围内的数据保存到会话文件中（例如，使用“显示光标”按钮）。</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1832"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2232"/>
         <source>Invalid Range</source>
         <translation>无效的范围</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1832"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2232"/>
         <source>The cursors don&apos;t define a valid range of samples.</source>
         <translation>光标没有定义有效的采样范围。</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1846"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2246"/>
         <source>%1 files </source>
         <translation>%1 文件 </translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1851"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1902"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2251"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2302"/>
         <source>All Files</source>
         <translation>所有文件</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1855"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2372"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2255"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2838"/>
         <source>Save File</source>
         <translation>保存文件</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1868"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2268"/>
         <source>Export %1</source>
         <translation>导出 %1</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1900"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2300"/>
         <source>%1 files</source>
         <translation>%1 文件</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1910"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2310"/>
         <source>Import File</source>
         <translation>导入文件</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1920"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2320"/>
         <source>Import %1</source>
         <translation>导入 %1</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2539"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2558"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2570"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3027"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3046"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3058"/>
         <source>&lt;b&gt;Software Version:&lt;/b&gt; %1&lt;br/&gt;</source>
         <translation>&lt;b&gt;软件版本：&lt;/b&gt; %1&lt;br/&gt;</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2559"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2571"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3047"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3059"/>
         <source>&lt;b&gt;Firmware Version:&lt;/b&gt; %1&lt;br/&gt;</source>
         <translation>&lt;b&gt;固件版本：&lt;/b&gt; %1&lt;br/&gt;</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2617"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3105"/>
         <source>The current device does not support firmware upgrade.
 Please connect the CH32H417 device and try again.</source>
         <translation>当前设备不支持固件升级。
 请连接CH32H417设备后重试。</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2624"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3112"/>
         <source>Select firmware file</source>
         <translation>选择固件文件</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2626"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3114"/>
         <source>Firmware File (*.bin *.BIN *.hex *.HEX);;All Files (*.*)</source>
         <translation>固件文件 (*.bin *.BIN *.hex *.HEX);;所有文件 (*.*)</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2641"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3129"/>
         <source>Firmware update in progress, do not disconnect the USB connection</source>
         <translation>正在升级固件，请勿断开USB连接！</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2641"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3129"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2642"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3130"/>
         <source>Firmware Update</source>
         <translation>固件升级</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2712"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3200"/>
         <source>Information</source>
         <translation>提示信息</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="507"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2743"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="535"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3231"/>
         <source>About</source>
         <translation>关于</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2767"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3255"/>
         <source>Update Success</source>
         <translation>更新成功</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2768"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3256"/>
         <source>Firmware Update Success!
 Device already restart.</source>
         <translation>固件升级成功！
 设备已重新启动。</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2686"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3174"/>
         <source>Update Failed</source>
         <translation>升级失败</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2687"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3175"/>
         <source>Firmware Update Failed!
 Please check the device connection and firmware file.</source>
         <translation>固件升级失败！
 请检查设备连接和固件文件。</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2723"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3211"/>
         <source>Open Failed</source>
         <translation>打开失败</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2724"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3212"/>
         <source>The PDF file could not be opened. Make sure a PDF reader is installed.</source>
         <translation>无法打开PDF文件，请确认系统已安装PDF阅读器。</translation>
     </message>
@@ -1848,89 +1886,89 @@ Please check the device connection and firmware file.</source>
         <translation>确定</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2310"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2770"/>
         <source>Stop</source>
         <translation>停止</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2330"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2388"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2790"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2854"/>
         <source>Open File</source>
         <translation>打开文件</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2485"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2958"/>
         <source>Device Options</source>
         <translation>设备选项</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1213"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1232"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1278"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1353"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1372"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1418"/>
         <source>Demo</source>
         <translation>演示</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1214"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1233"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1279"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1354"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1373"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1419"/>
         <source>Device Status: Demo</source>
         <translation>设备状态：演示</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="851"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="987"/>
         <source>Failed to get sample rate value:</source>
         <translation>获取采样率数值失败：</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1106"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1231"/>
         <source>Failed to configure pre-trigger:</source>
         <translation>配置预触发失败：</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1220"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1360"/>
         <source>File</source>
         <translation>文件</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1221"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1361"/>
         <source>Device Status: File</source>
         <translation>设备状态：文件</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1265"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1405"/>
         <source>USB2.0</source>
         <translation>USB2.0</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1266"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1406"/>
         <source>Device Status: USB 2.0</source>
         <translation>设备状态：USB 2.0</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1269"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1274"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1409"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1414"/>
         <source>USB3.0</source>
         <translation>USB3.0</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1270"/>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1275"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1410"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1415"/>
         <source>Device Status: USB 3.0</source>
         <translation>设备状态：USB 3.0</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="1789"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="2189"/>
         <source>Error</source>
         <translation>错误</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2572"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3060"/>
         <source>&lt;b&gt;FPGA Version:&lt;/b&gt; %1</source>
         <translation>&lt;b&gt;FPGA 版本：&lt;/b&gt;%1</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="2713"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3201"/>
         <source>PDF file not found:
 %1
 
@@ -1941,14 +1979,9 @@ Make sure the doc directory and the user manual are present.</source>
 请确认 doc 目录和用户手册文件是否存在。</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="390"/>
+        <location filename="../pv/toolbars/mainbar.cpp" line="399"/>
         <source>Export to a New Session</source>
         <translation>导出到新会话</translation>
-    </message>
-    <message>
-        <location filename="../pv/mainwindow.cpp" line="2340"/>
-        <source>Could not copy the capture: %1</source>
-        <translation>无法复制已采集的数据：%1</translation>
     </message>
 </context>
 <context>
@@ -1972,42 +2005,42 @@ Make sure the doc directory and the user manual are present.</source>
 <context>
     <name>pv::views::decoder_binary::View</name>
     <message>
-        <location filename="../pv/views/decoder_binary/view.cpp" line="56"/>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="57"/>
         <source>Binary</source>
         <translation>二进制</translation>
     </message>
     <message>
-        <location filename="../pv/views/decoder_binary/view.cpp" line="57"/>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="58"/>
         <source>Hex Dump, plain</source>
         <translation>十六进制转储（无偏移）</translation>
     </message>
     <message>
-        <location filename="../pv/views/decoder_binary/view.cpp" line="58"/>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="59"/>
         <source>Hex Dump, with offset</source>
         <translation>十六进制转储（带偏移）</translation>
     </message>
     <message>
-        <location filename="../pv/views/decoder_binary/view.cpp" line="59"/>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="60"/>
         <source>Hex Dump, canonical</source>
         <translation>十六进制转储（规范格式）</translation>
     </message>
     <message>
-        <location filename="../pv/views/decoder_binary/view.cpp" line="92"/>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="93"/>
         <source>Decoder:</source>
         <translation>解码器：</translation>
     </message>
     <message>
-        <location filename="../pv/views/decoder_binary/view.cpp" line="100"/>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="101"/>
         <source>Show data as</source>
         <translation>数据显示格式</translation>
     </message>
     <message>
-        <location filename="../pv/views/decoder_binary/view.cpp" line="108"/>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="109"/>
         <source>Hexdump</source>
         <translation>十六进制转储</translation>
     </message>
     <message>
-        <location filename="../pv/views/decoder_binary/view.cpp" line="122"/>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="123"/>
         <source>&amp;Save...</source>
         <translation>保存... ( &amp;S )</translation>
     </message>
@@ -2103,7 +2136,7 @@ Make sure the doc directory and the user manual are present.</source>
 <context>
     <name>pv::views::tabular_decoder::ColumnFilterPopup</name>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="651"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="593"/>
         <source>Clear filter</source>
         <translation>清除筛选</translation>
     </message>
@@ -2111,82 +2144,82 @@ Make sure the doc directory and the user manual are present.</source>
 <context>
     <name>pv::views::tabular_decoder::View</name>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="73"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="74"/>
         <source>CSV, commas escaped</source>
         <translation>CSV，逗号转义</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="74"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="75"/>
         <source>CSV, fields quoted</source>
         <translation>CSV，字段加引号</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="78"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="79"/>
         <source>Show all</source>
         <translation>显示全部</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="79"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="80"/>
         <source>Show all and focus on newest</source>
         <translation>显示全部并聚焦最新</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="81"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="82"/>
         <source>Show visible in main view</source>
         <translation>显示主视图中可见的部分</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="766"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="708"/>
         <source>Decoder:</source>
         <translation>解码器：</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="793"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="735"/>
         <source>Filter rows</source>
         <translation>筛选行</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="832"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="774"/>
         <source>Colors</source>
         <translation>配色</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="833"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="775"/>
         <source>Colored annotation rows</source>
         <translation>按解码类别为行着色</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="839"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="781"/>
         <source>&amp;Save</source>
         <translation>保存</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="1170"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="1110"/>
         <source>%1 rows</source>
         <translation>%1 条</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="1171"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="1111"/>
         <source>%1 of %2 rows</source>
         <translation>%1 / %2 条</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="1206"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="1146"/>
         <source>Save Annotations as CSV</source>
         <translation>将解码数据另存为CSV</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="1206"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="1146"/>
         <source>CSV Files (*.csv);;Text Files (*.txt);;All Files (*)</source>
         <translation>CSV文件 (*.csv);;文本文件 (*.txt);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="1274"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="1214"/>
         <source>Error</source>
         <translation>错误</translation>
     </message>
     <message>
-        <location filename="../pv/views/tabular_decoder/view.cpp" line="1274"/>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="1214"/>
         <source>File %1 could not be written to.</source>
         <translation>文件 %1 无法保存。</translation>
     </message>
@@ -3135,12 +3168,12 @@ until (condition)
         <translation>在此处创建标记</translation>
     </message>
     <message>
-        <location filename="../pv/views/trace/trace.cpp" line="390"/>
+        <location filename="../pv/views/trace/trace.cpp" line="400"/>
         <source>Color</source>
         <translation>颜色</translation>
     </message>
     <message>
-        <location filename="../pv/views/trace/trace.cpp" line="455"/>
+        <location filename="../pv/views/trace/trace.cpp" line="465"/>
         <source>Name</source>
         <translation>名称</translation>
     </message>
@@ -3196,22 +3229,29 @@ until (condition)
         <location filename="../pv/widgets/devicetoolbutton.cpp" line="89"/>
         <location filename="../pv/widgets/devicetoolbutton.cpp" line="105"/>
         <location filename="../pv/widgets/devicetoolbutton.cpp" line="112"/>
+        <location filename="../pv/widgets/devicetoolbutton.cpp" line="221"/>
+        <location filename="../pv/widgets/devicetoolbutton.cpp" line="228"/>
         <source>&lt;No Device&gt;</source>
         <translation>&lt;无设备&gt;</translation>
     </message>
     <message>
         <location filename="../pv/widgets/devicetoolbutton.cpp" line="83"/>
-        <location filename="../pv/widgets/devicetoolbutton.cpp" line="198"/>
+        <location filename="../pv/widgets/devicetoolbutton.cpp" line="339"/>
         <source>Refresh Device List</source>
         <translation>刷新设备列表</translation>
     </message>
     <message>
-        <location filename="../pv/widgets/devicetoolbutton.cpp" line="203"/>
+        <location filename="../pv/widgets/devicetoolbutton.cpp" line="298"/>
+        <source>This device is in use by another session</source>
+        <translation>这个设备已被其他会话使用</translation>
+    </message>
+    <message>
+        <location filename="../pv/widgets/devicetoolbutton.cpp" line="312"/>
         <source>Open this device in a new session</source>
         <translation>在新会话中打开此设备</translation>
     </message>
     <message>
-        <location filename="../pv/widgets/devicetoolbutton.cpp" line="205"/>
+        <location filename="../pv/widgets/devicetoolbutton.cpp" line="311"/>
         <source>This device is already open in another session</source>
         <translation>此设备已在另一个会话中打开</translation>
     </message>

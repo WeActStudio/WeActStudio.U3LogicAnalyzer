@@ -553,6 +553,13 @@ int main(int argc, char *argv[])
 			else{
 				for (string& open_file : open_files)
 					w.add_session_with_file(open_file, open_file_format, open_setup_file);
+
+				/*
+				 * A page holding a file has no board, but the poll is what
+				 * notices one being plugged in afterwards, and nothing else
+				 * starts it on this path.
+				 */
+				w.start_hot_plug();
 			}
 #ifdef ENABLE_SIGNALS
 			if (SignalHandler::prepare_signals()) {
