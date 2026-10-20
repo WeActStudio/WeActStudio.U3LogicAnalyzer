@@ -190,6 +190,11 @@ public:
 	/// survives being saved, unlike the flag above.
 	bool data_held() const;
 
+	/* Whether what this page captured can be copied into a session of its own:
+	 * the data has to be held, the capture that writes it has to have stopped,
+	 * and a repeated acquisition counts as running even between its runs. */
+	bool can_export_capture() const;
+
 	void save_setup(QSettings &settings) const;
 	void save_settings(QSettings &settings) const;
 	void restore_setup(QSettings &settings);

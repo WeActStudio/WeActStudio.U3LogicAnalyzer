@@ -33,7 +33,10 @@ void HoverToolButton::enterEvent(QEvent *event)
 {
     QToolButton::enterEvent(event);
 
-	QToolButton::showMenu();
+	/* A disabled button has nothing to offer. "Model" is disabled while a
+	 * capture runs, "Decoding Result" is not. */
+	if (isEnabled())
+		QToolButton::showMenu();
 }
 
 bool HoverToolButton::eventFilter(QObject *watched, QEvent *event)

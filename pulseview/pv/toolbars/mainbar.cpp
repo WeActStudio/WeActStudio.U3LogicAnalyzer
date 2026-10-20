@@ -407,7 +407,8 @@ namespace pv
 					this, &MainBar::copy_session_requested);
 			connect(export_menu, &QMenu::aboutToShow, this, [this, export_menu]() {
 				action_copy_to_new_session_->setVisible(!session_.using_file_device());
-				action_copy_to_new_session_->setEnabled(session_.data_held());
+				action_copy_to_new_session_->setEnabled(
+					session_.can_export_capture());
 			});
 			if (!export_menu->actions().isEmpty()) {
 				export_menu->insertAction(export_menu->actions().first(),
@@ -872,6 +873,11 @@ namespace pv
 			}
 			if (model_change_button_)
 				model_change_button_->setEnabled(ui_enabled);
+			/* Its menu asks the same question when it opens; this is what makes
+			 * the entry gray for a capture that starts while it is shown. */
+			if (action_copy_to_new_session_)
+				action_copy_to_new_session_->setEnabled(
+					session_.can_export_capture());
 		}
 
 		void MainBar::reset_device_selector()

@@ -285,6 +285,13 @@ bool Session::data_held() const
 	return data_held_;
 }
 
+bool Session::can_export_capture() const
+{
+	/* A repeated acquisition is still going between its runs: it reads Stopped
+	 * there, and a copy would stop the loop and take the run it landed in. */
+	return data_held_ && (capture_state_ == Stopped) && !is_repeat_acquisition_;
+}
+
 
 void Session::save_setup(QSettings &settings) const
 {

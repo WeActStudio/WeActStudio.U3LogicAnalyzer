@@ -77,6 +77,7 @@
 #include "devices/hardwaredevice.hpp"
 #include "dialogs/settings.hpp"
 #include "globalsettings.hpp"
+#include "fluentui3colors.h"
 #include "toolbars/mainbar.hpp"
 #include "widgets/devicetoolbutton.hpp"
 #include "storesession.hpp"
@@ -422,6 +423,63 @@ protected:
 		}
 #endif
 		return QDockWidget::nativeEvent(type, message, result);
+	}
+};
+
+/*
+ * Outlines the decoder selector panel: FluentUI3 gives it none, and Fusion loses
+ * it at the bottom, so only the lines Fusion does not draw are painted here.
+ * A style sheet is no use - a widget that carries one is left out of the palette
+ * and style changes and keeps the last theme.
+ */
+class DockFrame : public QWidget
+{
+public:
+	DockFrame(QWidget *parent) : QWidget(parent) {}
+
+	/* The margins are the pixels the lines are drawn in, and which lines are
+	 * drawn depends on the style, so they move with it. */
+	void update_margins()
+	{
+		if (QLayout *l = layout()) {
+			const int side = paints_sides() ? 1 : 0;
+			l->setContentsMargins(side, 0, side, 1);
+		}
+	}
+
+protected:
+	void paintEvent(QPaintEvent *) override
+	{
+		/* FluentUI3's frame colour, or the tone of the palette under Fusion:
+		 * its dark Mid sits just above Base, where the line would vanish. */
+		const bool dark = GlobalSettings::current_theme_is_dark();
+		const bool fluent = paints_sides();
+		const QColor line = fluent ?
+			(dark ? WINUI3ColorsDark : WINUI3ColorsLight)[WINUI3Color::frameColorLight] :
+			palette().color(dark ? QPalette::Midlight : QPalette::Mid);
+
+		QPainter p(this);
+		p.setPen(line);
+		if (fluent) {
+			p.drawLine(0, 0, 0, height() - 1);
+			p.drawLine(width() - 1, 0, width() - 1, height() - 1);
+		}
+		p.drawLine(0, height() - 1, width() - 1, height() - 1);
+	}
+
+	void changeEvent(QEvent *event) override
+	{
+		if (event->type() == QEvent::StyleChange)
+			update_margins();
+		QWidget::changeEvent(event);
+	}
+
+private:
+	/* Fusion draws the sides of the panel itself, FluentUI3 does not. The name
+	 * of the style class is the only thing that tells the two apart. */
+	static bool paints_sides()
+	{
+		return qApp->style()->inherits("FluentUI3Style");
 	}
 };
 
@@ -804,7 +862,18 @@ shared_ptr<subwindows::SubWindowBase> MainWindow::add_subwindow(
 	sub_windows_[dock] = w;
 	sub_window_types_[dock] = (int)type;
 	dock_main->setCentralWidget(w.get());
-	dock->setWidget(dock_main);
+
+	/*
+	 * The dock sizes its widget from this one now, and a plain widget asks for
+	 * its hint rather than for the room it is given.
+	 */
+	DockFrame *dock_frame = new DockFrame(dock);
+	dock_frame->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+	QVBoxLayout *dock_frame_layout = new QVBoxLayout(dock_frame);
+	dock_frame_layout->setSpacing(0);
+	dock_frame_layout->addWidget(dock_main);
+	dock_frame->update_margins();
+	dock->setWidget(dock_frame);
 
 	dock->setContextMenuPolicy(Qt::PreventContextMenu);
 
@@ -3263,6 +3332,10 @@ void MainWindow::update_session_tabs()
 				copy->setToolTip(busy
 					? tr("Exporting the capture... %1%").arg(percent)
 					: tr("Export the capture to a new session"));
+				/* Grey with the page capturing or with a copy already on its
+				 * way: a copy would stop the capture it is taken from. */
+				copy->setEnabled(session && !busy &&
+					session->can_export_capture());
 			}
 			if (buttons->close())
 				buttons->close()->setToolTip(tr("Close Session"));
@@ -3392,7 +3465,12 @@ void MainWindow::on_copy_session_requested()
  */
 bool MainWindow::copy_session_to_new_session(shared_ptr<Session> source)
 {
-	if (!source || !source->data_held() || source->using_file_device())
+	if (!source || source->using_file_device())
+		return false;
+
+	/* A copy takes the data the page holds, and a capture that is still running
+	 * has not written all of it - the write below would stop it halfway. */
+	if (!source->can_export_capture())
 		return false;
 
 	/* One export per page is enough: the tab says it is busy, and a
