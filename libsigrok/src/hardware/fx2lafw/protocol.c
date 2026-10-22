@@ -148,6 +148,7 @@ SR_PRIV int fx2lafw_dev_open(struct sr_dev_inst *sdi, struct sr_dev_driver *di)
 	struct drv_context *drvc;
 	struct version_info vi;
 	int ret = SR_ERR, i, device_count;
+	gboolean opened = FALSE;
 	uint8_t revid;
 	char connection_id[64];
 
@@ -183,6 +184,7 @@ SR_PRIV int fx2lafw_dev_open(struct sr_dev_inst *sdi, struct sr_dev_driver *di)
 		}
 
 		if (!(ret = libusb_open(devlist[i], &usb->devhdl))) {
+			opened = TRUE;
 			if (usb->address == 0xff)
 				/*
 				 * First time we touch this device after FW
@@ -272,6 +274,17 @@ SR_PRIV int fx2lafw_dev_open(struct sr_dev_inst *sdi, struct sr_dev_driver *di)
 	}
 
 	libusb_free_device_list(devlist, 1);
+
+	/*
+	 * The device was let go of on a path that is not the end of a good open:
+	 * a board pulled out between the open and the version read leaves the
+	 * handle behind, and every later open of it answers LIBUSB_ERROR_ACCESS
+	 * - the scan then stops listing the board altogether.
+	 */
+	if (opened && usb->devhdl && ret != SR_OK) {
+		libusb_close(usb->devhdl);
+		usb->devhdl = NULL;
+	}
 
 	return ret;
 }

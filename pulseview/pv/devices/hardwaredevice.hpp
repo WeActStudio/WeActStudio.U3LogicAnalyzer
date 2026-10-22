@@ -59,6 +59,11 @@ public:
 
 	void close();
 
+	/* An instance the scan already opened is taken over as it is: opening
+	 * it again would close and re-open the board, which an FX2 answers with
+	 * a firmware upload and seconds of waiting. */
+	bool is_open() const { return device_open_; }
+
 private:
 	const shared_ptr<sigrok::Context> context_;
 	bool device_open_;

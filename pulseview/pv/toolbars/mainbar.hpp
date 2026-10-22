@@ -119,6 +119,11 @@ public:
 		pv::views::trace::View *view);
 	~MainBar();
 	void update_device_list();
+	/* The one list every refresh builds: who is on the bus, plus the board
+	 * this page holds when the scan no longer hands it back. With keep_label
+	 * the name of that board is left as it is - for a page the scan could not
+	 * give its board back, whose menu is all that has to catch up. */
+	void rebuild_device_list(bool keep_label = false);
 	/*
 	 * Refreshes what the selector offers without touching the device page
 	 * or the view. For a session that kept its board: a rescan hands that
@@ -159,7 +164,7 @@ public:
 	/* Keeps the decoder button pressed while its dock is open. */
 	void set_decoder_button_checked(bool on);
 	void hot_plug_start();
-	/* The page hosting the poll, if any: it goes with that page, and the window
+	/* The page hosting the watcher, if any: it goes with that page, and the window
 	 * hands it to one of the pages that are left. */
 	static MainBar *hot_plug_owner();
 	void hot_plug_stop();
@@ -172,7 +177,7 @@ public:
 	void set_device_selector_role(bool new_session_allowed,
 		bool single_device_only);
 	void set_busy_devices(const QSet<QString> &busy, const QString &own);
-	/* What every page holds, for the poll: it has to tell whose board a
+	/* What every page holds, for the watcher: it has to tell whose board a
 	 * chain belonged to. */
 	QSet<QString> get_busy_identities();
 	/* Covers the page while its board is away and a capture elsewhere keeps
@@ -180,7 +185,26 @@ public:
 	 * The page is handed in: a session lives in a tab, so window() would be
 	 * the whole program and not this page. */
 	void set_device_offline(bool offline, QWidget *page = nullptr);
+	/* Says the page is being re-initialized, in the mask a missing board
+	 * uses: the scan behind it blocks the window for seconds. */
+	void set_device_busy(bool busy, QWidget *page = nullptr);
+	/* The page it is on is writing firmware: the mask says so and eats the
+	 * clicks, and the tab cannot be closed while it is up. Its progress is
+	 * pushed in with set_upgrade_progress(). */
+	void set_device_upgrading(bool upgrading, QWidget *page = nullptr);
+	void set_upgrade_progress(int percent);
 	bool is_device_offline() const;
+	/* The board of this page is off the bus on purpose: a running upgrade has
+	 * it in its bootloader. A pass that finds it missing is not a board that
+	 * went away, so nothing is asked about the page. */
+	bool is_device_upgrading() const;
+	/* The board a running upgrade took off the bus, by identity; empty when
+	 * none is. Static: the page that started the upgrade is not the one whose
+	 * watcher sees the board go. */
+	static bool upgrade_running();
+	static bool captures_running();
+	static void begin_upgrade(const QString &identity);
+	static void end_upgrade();
 
 	/**
 	 * Hands the capture values this page shows to the device. Needed
@@ -237,17 +261,35 @@ private:
 	 * drivers that are not in use, so it is cached here. */
 	void set_device_driver(QString driver);
 	QString get_device_driver();
-	/* Which board this page holds, as the poll must see it: whether the one
+	/* Which board this page holds, as the watcher must see it: whether the one
 	 * in use is still there decides if a pass can wait for a capture. */
 	void set_device_identity(QString identity);
 	QString get_device_identity();
 
+	/* What the mask is there for: one page has one, and the three callers
+	 * must not take each other's down. */
+	enum class MaskKind { None, Offline, Busy, Upgrade };
 	QString offline_mask_text() const;
+	QString upgrade_mask_text(int percent) const;
+	/* The two ways the mask is put up and taken down - nothing else touches
+	 * the widget, so a mask cannot be left standing by a state that another
+	 * caller has since overwritten. */
+	void show_mask(MaskKind kind, const QString &html, QWidget *page);
+	void hide_mask();
 	/* QPointer: a page can be closed before its bar, and the mask is a child
 	 * of that page. */
 	QPointer<QWidget> offline_mask_;
 	QPointer<QWidget> offline_mask_page_;
 	QPointer<QLabel> offline_mask_label_;
+	MaskKind mask_kind_ = MaskKind::None;
+	bool mask_busy_ = false;
+	/* This page is writing firmware right now: its worker's progress is the
+	 * only thing that may raise the mask, and it stops at the last block. */
+	bool upgrade_writing_ = false;
+	int upgrade_percent_ = -1;
+	/* The upgrade owns the mask: set with it, cleared with it, and the only
+	 * thing is_device_upgrading() reports. */
+	bool upgrade_mask_up_ = false;
 	bool device_offline_ = false;
 	void renew_samplecount_samplerate(uint64_t samplerate,uint64_t samplerate_max);
 	void get_decoder_list_default(QString decoder_name);
@@ -255,7 +297,11 @@ private:
 	/* Whether a saved group was written by the board this page is on. */
 	bool setting_group_is_ours(QSettings &settings, const QString &group);
 
-	static void ch32h417_notify_callback(unsigned long eventStatus);
+	/* The firmware-upgrade entry belongs to the CH32H417 alone: on a page
+	 * holding an FX2 there is nothing to upgrade, so the entry is not shown
+	 * at all instead of failing once it is picked. */
+	void update_upgrade_action();
+
 	static MainBar* s_mainbar_instance;
 
 private Q_SLOTS:
@@ -330,13 +376,20 @@ Q_SIGNALS:
 	/* The boards these identities stood for are gone; the pages that hold
 	 * them can say so while a pass waits for a capture to end. */
 	void devices_went_offline(QStringList identities);
+	/* The board a capture runs on is gone: that capture has to end by
+	 * itself, the same way the stop button ends it. */
+	void capture_board_gone(QStringList identities);
+	/* The page this bar belongs to started or finished writing firmware, or
+	 * has written that much of it. The window owns the page, so it is the
+	 * one that puts the mask on: the bar cannot tell its own tab from the
+	 * whole program. Percent is -1 when the upgrade is over. */
+	void device_upgrading(bool active, int percent);
 
 	/* A board came or went in a driver the session is not using, so only the
 	 * device list has to catch up. */
 	void refresh_device_list();
 	void run_stop_button_clicked();
 	void settings_triggered();
-	void ch32h417_device_event_signal(unsigned long eventStatus);
 
 	/* A file was picked in this bar's menu. Whether it lands in this session
 	 * or in a new one is the window's decision, not the bar's. */
@@ -408,28 +461,29 @@ private:
 	bool sample_count_supported_;
 
 	atomic<bool> hot_plug_listen_;
-	/* The poll is the hot-plug source once it runs; the CH375 callback is
-	 * a fallback and the upgrade report only. */
-	atomic<bool> poll_running_{ false };
-	/* A capture on this page; the poll leaves a pass to the end of it. */
+	/* A capture on this page; the watcher leaves a pass to the end of it. */
 	atomic<bool> capture_running_{ false };
 	/* Captures running over all pages, and a pass put off until the last of
-	 * them ends. Static: the poll of one page sees the captures of the others. */
+	 * them ends. Static: the watcher of one page sees the captures of the others. */
 	static atomic<int> s_captures_running;
 	static atomic<bool> s_attach_deferred;
-	/* Which boards those captures are on, read by the poll under the same lock
+	/* Which boards those captures are on, read by the watcher under the same lock
 	 * as the count: what matters is whether a captured board was the one that
 	 * went, not whether this page's own board did. */
 	static std::mutex s_capture_mutex;
 	static QSet<QString> s_capturing_identities;
-	/* Read from the hot-plug polling thread as well as the main thread. */
-	atomic<bool> iap_upgrading_;
+	/* The boards a bus event said have gone; see declare_gone(). */
+	static std::mutex s_gone_mutex;
+	static QSet<QString> s_declared_gone;
+	/* Read from the bus watcher thread as well as the main thread. */
+	static std::mutex s_upgrade_mutex;
+	static QString s_upgrade_target;
 	/*
-	 * Monotonic deadline after which the upgrade flag is cleared even if the
-	 * device never came back, so a lost device cannot silence hot-plug for
-	 * good. Written on the main thread, read from the polling thread.
+	 * Monotonic deadline after which a running upgrade is given up on even if
+	 * the device never came back, so a lost device cannot keep its page quiet
+	 * for good. Written on the main thread, read from the watcher thread.
 	 */
-	atomic<int64_t> iap_upgrade_deadline_;
+	static atomic<int64_t> s_upgrade_deadline;
 
 	bool is_count_setting_default_;
 	bool is_rate_setting_default_;
@@ -467,6 +521,20 @@ private:
 	uint64_t hardware_version_ = 0;
 
 public:
+	/*
+	 * Boards a bus event said have gone, handed to the pass that answers it.
+	 * A scan that still lists one of them was read before the host finished
+	 * taking the board away.
+	 */
+	static void declare_gone(const QStringList &identities);
+	static QSet<QString> take_declared_gone();
+	/*
+	 * Clears the "a pass is owed" flag when nothing is capturing any more.
+	 * A capture that ended without saying so would otherwise keep every
+	 * later pass waiting, and the pages masked with nobody asked about them.
+	 */
+	static bool take_deferred_if_idle();
+
 	pv::popups::Channels*  channels_;
 	/* Holds the device bindings; the config_changed signal is reported
 	 * through it, so it lives as long as the device it describes. */

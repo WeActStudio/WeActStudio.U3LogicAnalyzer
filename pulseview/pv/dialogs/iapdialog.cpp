@@ -254,11 +254,12 @@ void IAPDialog::on_upgrade_finished(bool success)
 
 IAPWorker::IAPWorker(int device_index, const QString &firmware_path,
                      uint16_t iap_vid, uint16_t iap_pid, bool already_in_hid_mode,
-                     bool use_libusb_backend)
+                     bool use_libusb_backend, const QString &target_serial)
     : device_index_(device_index)
     , firmware_path_(firmware_path)
     , iap_vid_(iap_vid)
     , iap_pid_(iap_pid)
+    , target_serial_(target_serial)
     , hid_handle_(nullptr)
     , already_in_hid_mode_(already_in_hid_mode)
     , use_libusb_backend_(use_libusb_backend)
@@ -304,7 +305,34 @@ bool IAPWorker::init_hid()
         hid_initialized = true;
     }
 
-    hid_handle_ = ::hid_open(iap_vid_, iap_pid_, NULL);
+    /*
+     * More than one board can sit in its bootloader at the same time: the one
+     * this upgrade is for is the one carrying the serial the page knows. A
+     * bootloader that reports no serial leaves nothing to pick by, and the
+     * first one found is taken then.
+     */
+    if (!target_serial_.isEmpty()) {
+        struct hid_device_info *list = ::hid_enumerate(iap_vid_, iap_pid_);
+
+        for (struct hid_device_info *dev = list; dev; dev = dev->next) {
+            if (!dev->serial_number)
+                continue;
+            if (target_serial_.compare(
+                    QString::fromWCharArray(dev->serial_number),
+                    Qt::CaseInsensitive) != 0)
+                continue;
+
+            hid_handle_ = ::hid_open_path(dev->path);
+            break;
+        }
+
+        if (list)
+            ::hid_free_enumeration(list);
+    }
+
+    if (!hid_handle_)
+        hid_handle_ = ::hid_open(iap_vid_, iap_pid_, NULL);
+
     if (!hid_handle_) {
         log(QStringLiteral("IAP device not found (VID=0x%1, PID=0x%2)")
             .arg(iap_vid_, 4, 16, QChar('0'))

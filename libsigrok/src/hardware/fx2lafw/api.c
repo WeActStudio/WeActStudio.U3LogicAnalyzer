@@ -22,6 +22,50 @@
 #include "protocol.h"
 #include <math.h>
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
+/*
+ * A stream that falls behind needs the WinUSB RAW_IO pipe policy, and libusb
+ * turns it on only when asked. The symbol is looked up at run time: the header
+ * this builds against and older DLLs do not know it.
+ */
+typedef int (LIBUSB_CALL *fx2_raw_io_fn)(libusb_device_handle *, uint8_t, int);
+
+static void fx2lafw_enable_raw_io(libusb_device_handle *devhdl)
+{
+#if defined(_WIN32)
+	static fx2_raw_io_fn set_raw_io;
+	static gboolean looked_up = FALSE;
+
+	if (!looked_up) {
+		HMODULE lib;
+
+		looked_up = TRUE;
+		lib = GetModuleHandleA("libusb-1.0.dll");
+		if (lib)
+			set_raw_io = (fx2_raw_io_fn)(void *)GetProcAddress(lib,
+				"libusb_endpoint_set_raw_io");
+		if (!set_raw_io)
+			sr_info("libusb cannot set RAW_IO; the higher sample rates "
+				"may stop early.");
+	}
+
+	if (set_raw_io) {
+		/* The bulk IN endpoint the acquisition reads from. */
+		const int ret = set_raw_io(devhdl, 2 | LIBUSB_ENDPOINT_IN, 1);
+
+		if (ret != 0)
+			sr_warn("Unable to enable RAW_IO: %d.", ret);
+		else
+			sr_info("RAW_IO enabled on the acquisition endpoint.");
+	}
+#else
+	(void)devhdl;	/* Only WinUSB has this policy. */
+#endif
+}
+
 static const struct fx2lafw_profile supported_fx2[] = {
 	/*
 	 * CWAV USBee AX
@@ -441,7 +485,14 @@ static int dev_open(struct sr_dev_inst *sdi)
 	 * milliseconds for the FX2 to renumerate.
 	 */
 	ret = SR_ERR;
-	if (devc->fw_updated > 0) {
+	/*
+	 * A board that was flashed has to renumerate, and only that case needs
+	 * the wait. Whoever opens it may have done it already (the scan does),
+	 * so try once first: waiting without a reason blocks the window for
+	 * two seconds every time a board comes back.
+	 */
+	if (devc->fw_updated > 0 &&
+	    (ret = fx2lafw_dev_open(sdi, di)) != SR_OK) {
 		sr_info("Waiting for device to reset.");
 		/* Takes >= 300ms for the FX2 to be gone from the USB bus. */
 		g_usleep(300 * 1000);
@@ -460,7 +511,7 @@ static int dev_open(struct sr_dev_inst *sdi)
 			return SR_ERR;
 		}
 		sr_info("Device came back after %" PRIi64 "ms.", timediff_ms);
-	} else {
+	} else if (devc->fw_updated == 0) {
 		sr_info("Firmware upload was not needed.");
 		ret = fx2lafw_dev_open(sdi, di);
 	}
@@ -493,6 +544,8 @@ static int dev_open(struct sr_dev_inst *sdi)
 		/* Samplerate hasn't been set; default to the slowest one. */
 		devc->cur_samplerate = devc->samplerates[0];
 	}
+
+	fx2lafw_enable_raw_io(usb->devhdl);
 
 	return SR_OK;
 }

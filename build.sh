@@ -14,7 +14,9 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILD_DIR="${SCRIPT_DIR}/build_cmake"
+# U3_BUILD_DIR keeps the tree off the sources: a build can be put on another
+# disk without touching this script.
+BUILD_DIR="${U3_BUILD_DIR:-${SCRIPT_DIR}/build_cmake}"
 PREFIX="${SCRIPT_DIR}/install"
 DIST_DIR="${SCRIPT_DIR}/dist/U3LogicAnalyzer"
 CLEAN=0
@@ -112,7 +114,11 @@ if [ $DEBUG -eq 1 ]; then
     # A tree of its own: -O0 objects and release objects do not belong in the
     # same directory, and switching back and forth would rebuild everything
     # anyway. Symbols stay in, which is the point - gdb needs them.
-    BUILD_DIR="${SCRIPT_DIR}/build_cmake_debug"
+    if [ -n "${U3_BUILD_DIR:-}" ]; then
+        BUILD_DIR="${U3_BUILD_DIR}_debug"
+    else
+        BUILD_DIR="${SCRIPT_DIR}/build_cmake_debug"
+    fi
 fi
 
 # ============================================================================
@@ -267,8 +273,8 @@ if [ $IS_WINDOWS -eq 1 ]; then
     for dll in $SYSTEM_DLLS "$PYDLL"; do
         cp "/mingw64/bin/$dll" "$PVDIR/" 2>/dev/null || true
     done
-    # Override the system libusb: the stock one cannot stream an FX2 above
-    # 12 MHz (see driver/libusb/README.md).
+    # Override the system libusb: the MSYS2 one has no raw-IO API, and an FX2
+    # stops mid-capture without that policy (see driver/libusb/README.md).
     LIBUSB_VENDORED="$SCRIPT_DIR/driver/libusb/libusb-1.0.dll"
     if [ -f "$LIBUSB_VENDORED" ]; then
         cp -f "$LIBUSB_VENDORED" "$PVDIR/"
@@ -328,8 +334,8 @@ if [ $PACKAGE -eq 1 ]; then
         for dll in $SYSTEM_DLLS "$PYDLL"; do
             cp "/mingw64/bin/$dll" "$DIST_DIR/" 2>/dev/null || true
         done
-        # Override the system libusb: the stock one cannot stream an FX2
-        # above 12 MHz (see driver/libusb/README.md).
+        # Override the system libusb: the MSYS2 one has no raw-IO API, and an
+        # FX2 stops mid-capture without that policy (see driver/libusb/README.md).
         LIBUSB_VENDORED="$SCRIPT_DIR/driver/libusb/libusb-1.0.dll"
         if [ -f "$LIBUSB_VENDORED" ]; then
             cp -f "$LIBUSB_VENDORED" "$DIST_DIR/"

@@ -1,7 +1,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILD_DIR="${SCRIPT_DIR}/build_cmake"
+BUILD_DIR="${U3_BUILD_DIR:-${SCRIPT_DIR}/build_cmake}"
 PREFIX="${SCRIPT_DIR}/install"
 DIST_DIR="${SCRIPT_DIR}/dist/U3LogicAnalyzer"
 CLEAN=0

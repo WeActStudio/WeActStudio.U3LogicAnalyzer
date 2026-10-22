@@ -170,10 +170,14 @@ public:
      * @param use_libusb_backend Send the "enter IAP" command through the libusb
      *        driver instead of the CH375 DLL. The command has to go out on the
      *        backend that currently owns the device, otherwise the write fails.
+     * @param target_serial Serial number of the board this upgrade is for: the
+     *        IAP channel carries no port, so this is what picks the board out
+     *        when more than one of them sits in its bootloader.
      */
     IAPWorker(int device_index, const QString &firmware_path,
               uint16_t iap_vid, uint16_t iap_pid, bool already_in_hid_mode = false,
-              bool use_libusb_backend = false);
+              bool use_libusb_backend = false,
+              const QString &target_serial = QString());
     ~IAPWorker();
 
     void start();
@@ -219,6 +223,7 @@ private:
     QString firmware_path_;
     uint16_t iap_vid_;
     uint16_t iap_pid_;
+    QString target_serial_;         /* Board the upgrade is for, "" if unknown */
 
     void *hid_handle_;              /* hidapi device handle */
     bool already_in_hid_mode_;      /* Whether the device is already in HID mode */

@@ -360,6 +360,29 @@ const char* ch375_get_device_name(unsigned long index)
     return (const char*)pCH375GetDeviceName(index);
 }
 
+/* "USB\VID_1A86&PID_5537\<instance>" against the "vid_1a86&pid_5537" piece of
+ * the interface name the DLL handed out. */
+static int same_vid_pid(const char *devnode_id, const char *idsig)
+{
+    if (idsig[0] == '\0')
+        return 1;
+
+    const char *first = strchr(devnode_id, '\\');
+    const char *second = first ? strchr(first + 1, '\\') : NULL;
+    if (!first || !second)
+        return 0;
+
+    const size_t len = (size_t)(second - first - 1);
+    if (len == 0 || len >= 64)
+        return 0;
+
+    char vid_pid[64];
+    memcpy(vid_pid, first + 1, len);
+    vid_pid[len] = '\0';
+
+    return _stricmp(vid_pid, idsig) == 0;
+}
+
 int ch375_get_usb_path(unsigned long index, char *path, int path_len)
 {
     if (!pCH375GetDeviceName) {
@@ -385,12 +408,19 @@ int ch375_get_usb_path(unsigned long index, char *path, int path_len)
      * the end - is not part of what the enumeration reports.
      */
     char instance[512];
+    char idsig[64] = { 0 };
     {
         const char *p1 = strchr(device_name, '#');
         const char *p2 = p1 ? strchr(p1 + 1, '#') : NULL;
         const char *p3 = p2 ? strchr(p2 + 1, '#') : NULL;
         if (!p2)
             return -1;
+
+        const size_t idlen = (size_t)(p2 - p1 - 1);
+        if (idlen > 0 && idlen < sizeof(idsig)) {
+            memcpy(idsig, p1 + 1, idlen);
+            idsig[idlen] = '\0';
+        }
 
         p2++;
         const size_t len = p3 ? (size_t)(p3 - p2) : strlen(p2);
@@ -425,6 +455,15 @@ int ch375_get_usb_path(unsigned long index, char *path, int path_len)
         const char *tail = strrchr(id, '\\');
         tail = tail ? tail + 1 : id;
         if (_stricmp(tail, instance) != 0)
+            continue;
+
+        /*
+         * The serial alone is not enough: in its IAP bootloader the same board
+         * is a HID (VID_1A86&PID_FE17) with the same serial, and that devnode
+         * sits on another port. Matching it names the board by a socket it is
+         * not in, and the page then holds an identity nothing can find again.
+         */
+        if (!same_vid_pid(id, idsig))
             continue;
 
         sr_dbg("  matched devnode '%s'", id);

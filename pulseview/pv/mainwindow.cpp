@@ -67,7 +67,9 @@
 #include <QStringList>
 #include <QTime>
 #include <QElapsedTimer>
+#include <QPointer>
 #include <QTimer>
+#include <thread>
 #include <QEventLoop>
 #include <QCoreApplication>
 
@@ -110,6 +112,18 @@ using std::make_shared;
 using std::shared_ptr;
 using std::string;
 namespace pv {
+
+namespace {
+
+/* A board that is still there but could not be opened again: the question
+ * about saving the page is put at once, not after another scan. */
+bool reinit_failed = false;
+
+/* The page whose detach question was just answered: the pass that
+ * follows must not put the same question a second time. */
+QPointer<Session> detach_answered;
+
+} // namespace
 
 using toolbars::MainBar;
 #define GB (1024*1024*1024)
@@ -746,6 +760,10 @@ shared_ptr<views::ViewBase> MainWindow::add_view(views::ViewType type,
 			connect(main_bar.get(), SIGNAL(device_attached()), this, SLOT(on_device_attached()));
 			connect(main_bar.get(), SIGNAL(devices_went_offline(QStringList)),
 				this, SLOT(on_devices_went_offline(QStringList)), Qt::QueuedConnection);
+			connect(main_bar.get(), SIGNAL(capture_board_gone(QStringList)),
+				this, SLOT(on_capture_board_gone(QStringList)), Qt::QueuedConnection);
+			connect(main_bar.get(), SIGNAL(device_upgrading(bool, int)),
+				this, SLOT(on_device_upgrading(bool, int)), Qt::QueuedConnection);
 			connect(this, SIGNAL(save_session()), main_bar.get(), SLOT(on_actionSave_triggered()));
 			connect(main_bar.get(), SIGNAL(new_view(Session*, int)),
 				this, SLOT(on_new_view(Session*, int)));
@@ -1002,6 +1020,9 @@ void MainWindow::do_device_detach_switch(const shared_ptr<Session> &session)
 	 * that is pulled while the user is looking at another.
 	 */
 	if (!session || !session->main_bar()) {
+		/* The question was answered, so the events it held back have to be
+		 * let through even when there is nothing to move. */
+		resume_device_events(true);
 		return;
 	}
 
@@ -1032,6 +1053,7 @@ void MainWindow::do_device_detach_switch(const shared_ptr<Session> &session)
 			if (s && s->main_bar())
 				s->main_bar()->refresh_device_selector();
 
+		resume_device_events(true);
 		return;
 	}
 
@@ -1063,13 +1085,89 @@ void MainWindow::do_device_detach_switch(const shared_ptr<Session> &session)
 	}
 
 	/*
+	 * Only a board of the libusb back end is slow to come back: it is the
+	 * one that gets flashed. A vendor board is back in milliseconds, and a
+	 * mask over it would only flicker.
+	 */
+	if (lost_identity.startsWith(QStringLiteral("usb/"))) {
+		const auto window = session_windows_.find(session);
+		if (window != session_windows_.end())
+			session->main_bar()->set_device_busy(true, window->second);
+	}
+
+	/*
+	 * The scan is the slow half of this: an FX2 board that lost its
+	 * firmware is flashed and waited for, seconds in which the window would
+	 * look dead. It runs on a worker thread, and everything that touches a
+	 * page happens once it is back, on this thread.
+	 */
+	std::thread([this, context, driver, session, lost_identity]() {
+		pv::DeviceManager *manager = nullptr;
+
+		try {
+			manager = new pv::DeviceManager(context, driver, true);
+		} catch (...) {
+			manager = nullptr;
+		}
+
+		QMetaObject::invokeMethod(this,
+			[this, manager, session, lost_identity]() {
+				finish_device_detach_switch(manager, session,
+					lost_identity);
+			}, Qt::QueuedConnection);
+	}).detach();
+}
+
+void MainWindow::finish_device_detach_switch(pv::DeviceManager *manager,
+	const shared_ptr<Session> &session, const QString &lost_identity)
+{
+	/*
+	 * Every way out of here lets device events through again and takes the
+	 * mask down: both were held for the scan that just ran, and a mask left
+	 * behind is a page that can never be used.
+	 */
+	auto done = [this, session]() {
+		/* The mask was this scan's, not the page's: it goes with the scan.
+		 * The page it was put on is the one that asked, and nothing else
+		 * has one from here. */
+		const bool page_alive =
+			std::find(sessions_.begin(), sessions_.end(), session) !=
+			sessions_.end();
+
+		if (page_alive && session && session->main_bar()) {
+			session->main_bar()->set_device_busy(false);
+			session->main_bar()->set_device_offline(false);
+		}
+
+		/* Replayed, unlike the answer to a detach used to be: the scan above
+		 * can end before a board that was plugged in while it ran has come
+		 * up, and dropping that event would leave the board unclaimed until
+		 * the next plug. The question is not asked twice - detach_answered
+		 * covers the page that just had it. */
+		resume_device_events(true);
+		report_stalled_devices();
+	};
+
+	/*
+	 * A scan that could not even start, or a page that was closed while it
+	 * ran: there is nobody left to hand the list to.
+	 */
+	if (!manager || !session ||
+		std::find(sessions_.begin(), sessions_.end(), session) ==
+			sessions_.end()) {
+		delete manager;
+		done();
+		return;
+	}
+
+	/*
 	 * The fresh manager takes over before the old one goes: releasing it
 	 * lets signals through, and a page being built at that moment asks the
 	 * window for a manager - one that had been set aside would hand it a
 	 * null one, and the page would be built around nothing.
 	 */
 	pv::DeviceManager *const old_device_manager = device_manager_.load();
-	auto new_device_manager = new pv::DeviceManager(context, driver, true);
+	pv::DeviceManager *const new_device_manager = manager;
 	device_manager_.store(new_device_manager);
 	update_sessions_device_manager(new_device_manager);
 	if (old_device_manager)
@@ -1104,10 +1202,37 @@ void MainWindow::do_device_detach_switch(const shared_ptr<Session> &session)
 			if (dev->hardware_device()->driver()->name() == "demo")
 				continue;
 
+			/*
+			 * The board this page came from is not a replacement. Taking
+			 * one back has just been tried above and failed, which means
+			 * the board is not up yet: opening it here would wait for it a
+			 * second time - seconds of a frozen window - only to fail
+			 * again. The pass that follows takes it over when it is ready.
+			 */
+			if (!lost_identity.isEmpty() &&
+				widgets::DeviceToolButton::device_identity(dev) ==
+					lost_identity)
+				continue;
+
 			found_device_type = get_wch_device_type_by_driver(
 				dev->hardware_device()->driver()->name());
 			default_device = dev;
 			break;
+		}
+
+		/*
+		 * Nothing but that board is there. The page keeps what it had - no
+		 * demo stand-in, which would take the capture's place without being
+		 * asked - and the next pass hands its own board back.
+		 */
+		if (!default_device && !lost_identity.isEmpty()) {
+			for (const shared_ptr<devices::HardwareDevice>& dev : devices)
+				if (widgets::DeviceToolButton::device_identity(dev) ==
+					lost_identity) {
+					session->main_bar()->rebuild_device_list(true);
+					done();
+					return;
+				}
 		}
 
 		/* Every board is in use elsewhere or gone: the demo device. */
@@ -1175,6 +1300,16 @@ void MainWindow::do_device_detach_switch(const shared_ptr<Session> &session)
 				 * when it is plugged in again. */
 				waiting_for_board_ = lost_identity;
 			}
+		} else {
+			/*
+			 * The replacement would not open - the board it stands for is
+			 * still coming up, say. The page keeps what it had, and no mask
+			 * goes on it: the mask belongs to the case where a capture
+			 * elsewhere holds this pass back, not to a board that is on its
+			 * way back. Its menu has to be the scan that just ran, or it
+			 * keeps pointing at the one that was deleted.
+			 */
+			session->main_bar()->rebuild_device_list(true);
 		}
 	} else {
 		session->main_bar()->set_vendorName("No Device");
@@ -1182,21 +1317,25 @@ void MainWindow::do_device_detach_switch(const shared_ptr<Session> &session)
 		 * that described it is cleared as well. */
 		session->main_bar()->refresh_device_widgets();
 	}
+
+	done();
 }
 
 /*
  * Carries out what the answer to the detach question asks for: the device that
  * was in use is gone, so the list is read again and the session moves to what
- * is there. Device events are let through again, but the one that was held
- * back is not replayed - the rescan just done covers it, and a second pass
- * would only ask about the session again while the board is still coming up.
+ * is there. Device events stay held back until that rescan is done - a second
+ * pass while it runs would rebuild the manager under it - and the one that was
+ * held back is not replayed: the rescan covers it, and a second pass would
+ * only ask about the session again while the board is still coming up.
  */
 void MainWindow::apply_device_detach(const shared_ptr<Session> &session)
 {
 	detach_dialog_ = nullptr;
+	detach_answered = session.get();
 	do_device_detach_switch(session);
-	resume_device_events(false);
-	report_stalled_devices();
+	/* The events are let through when that rescan is done; see
+	 * finish_device_detach_switch(). */
 }
 
 void MainWindow::show_device_detach(const shared_ptr<Session> &session)
@@ -1222,7 +1361,9 @@ void MainWindow::show_device_detach(const shared_ptr<Session> &session)
 
 	attach_process_done = false;
 	QDialog* dialog = new QDialog(this);
-	dialog->setWindowTitle(tr("Warning"));
+	/* Which session is asking: several can be open, and each has its own
+	 * board on its own port. */
+	dialog->setWindowTitle(tr("Warning") + QStringLiteral(" - ") + session->name());
 
 	/*
 	 * No close button: the answer finishes the detach, and a dialog that
@@ -1254,9 +1395,33 @@ void MainWindow::show_device_detach(const shared_ptr<Session> &session)
 	iconLabel->setAlignment(Qt::AlignTop);
 	contentLayout->addWidget(iconLabel);
 
+	/*
+	 * Which board left: the page keeps its name after the device is gone, so
+	 * the model and the port are what say which board is meant - the answer
+	 * decides what is saved, and several boards look alike.
+	 */
+	QString which;
+	{
+		const shared_ptr<devices::Device> gone = session->device();
+		const shared_ptr<sigrok::Device> sr = gone ? gone->device() : nullptr;
+
+		if (sr && !sr->model().empty())
+			which = tr("Model: %1").arg(QString::fromStdString(sr->model()));
+
+		const QString port = widgets::DeviceToolButton::device_identity(gone);
+		if (!port.isEmpty())
+			which += (which.isEmpty() ? QString() : QStringLiteral("\n")) +
+				tr("Port: %1").arg(port);
+	}
+
 	// Create the text label
 	QLabel *label = new QLabel(dialog);
-	label->setText(tr("device detached!\nDo you want to save the session?"));
+	/* Which board comes first: it is what the question is about, and the
+	 * page's own name does not say which of several alike boards it was. */
+	QString question = tr("device detached!\nDo you want to save the session?");
+	if (!which.isEmpty())
+		question = which + QStringLiteral("\n\n") + question;
+	label->setText(question);
 	label->setStyleSheet(QString("font-size: %1pt;").arg(font.pointSize()));
 	label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 	contentLayout->addWidget(label, 1);
@@ -1395,18 +1560,86 @@ void MainWindow::on_device_attached()
 	});
 }
 
+shared_ptr<Session> MainWindow::session_holding(const QString &identity) const
+{
+	if (identity.isEmpty())
+		return nullptr;
+
+	for (const shared_ptr<Session> &session : sessions_)
+		if (session && session->device() &&
+			widgets::DeviceToolButton::device_identity(session->device()) == identity)
+			return session;
+
+	if (last_focused_session_ && last_focused_session_->device() &&
+		widgets::DeviceToolButton::device_identity(
+			last_focused_session_->device()) == identity)
+		return last_focused_session_;
+
+	return nullptr;
+}
+
 void MainWindow::on_devices_went_offline(const QStringList &identities)
 {
-	/* Only the pages that lost a board are marked: a mask is taken away by
-	 * the pass that settles the list, never here. */
-	for (const shared_ptr<Session> &session : sessions_)
+	/*
+	 * Only the pages that lost a board are marked: a mask is taken away by
+	 * the pass that settles the list, never here.
+	 *
+	 * A short delay only, so that a change already in flight is not answered
+	 * with a mask: an upgrade or a re-enumeration is caught by the flag the
+	 * caller keeps, not by waiting here.
+	 */
+	const QStringList lost = identities;
+	QTimer::singleShot(200, this, [this, lost]() {
+		if (device_event_pending_)
+			return;
+
+		apply_devices_went_offline(lost);
+	});
+}
+
+void MainWindow::on_capture_board_gone(const QStringList &identities)
+{
+	for (const QString &identity : identities)
 	{
+		const shared_ptr<Session> session = session_holding(identity);
+
+		if (!session || !session->main_bar())
+			continue;
+		if (session->get_capture_state() == Session::Stopped)
+			continue;
+
+		link_stop_from_unplug_ = true;
+		/*
+		 * The warning it suppresses may never come - this stop is ours, not
+		 * the driver's - so the flag must not outlive this moment: it would
+		 * swallow the next real link stop instead.
+		 */
+		QTimer::singleShot(2 * LinkStopWarnDelayMs, this,
+			[this]() { link_stop_from_unplug_ = false; });
+		session->stop_capture();
+	}
+}
+
+void MainWindow::apply_devices_went_offline(const QStringList &identities)
+{
+	/*
+	 * No capture runs any more, so the pass that was put off is owed. A
+	 * capture that ended without reporting it would otherwise keep every
+	 * later pass waiting: the pages stay masked and nobody is asked.
+	 */
+	if (toolbars::MainBar::take_deferred_if_idle())
+		QTimer::singleShot(0, this, &MainWindow::on_device_attached);
+
+	for (const QString &identity : identities)
+	{
+		const shared_ptr<Session> session = session_holding(identity);
+
 		if (!session || !session->main_bar())
 			continue;
 
-		const QString identity =
-			widgets::DeviceToolButton::device_identity(session->device());
-		if (identity.isEmpty() || !identities.contains(identity))
+		/* A board in its bootloader is not offline: the upgrade handed it
+		 * over, and it comes back on its own. */
+		if (session->main_bar()->is_device_upgrading())
 			continue;
 
 		/*
@@ -1423,6 +1656,76 @@ void MainWindow::on_devices_went_offline(const QStringList &identities)
 	}
 }
 
+void MainWindow::on_device_upgrading(bool active, int percent)
+{
+	if (!active) {
+		/* The end of an upgrade is reported by the page that hosts the bus
+		 * watcher, which need not be the one that started it - the board coming
+		 * back is seen there. So nothing is taken from the sender then: every
+		 * page masked for an upgrade is let go, and set_device_upgrading(false)
+		 * does nothing on a page that has no such mask. */
+		for (const shared_ptr<Session> &session : sessions_)
+			if (session && session->main_bar())
+				session->main_bar()->set_device_upgrading(false);
+
+		if (last_focused_session_ && last_focused_session_->main_bar())
+			last_focused_session_->main_bar()->set_device_upgrading(false);
+
+		if (upgrade_watchdog_)
+			upgrade_watchdog_->stop();
+
+		/* The tab's close button follows the mask: the worker belongs to the
+		 * page, and a page taken out from under it would leave the upgrade
+		 * without an end. */
+		update_session_tabs();
+		return;
+	}
+
+	/* Writing the image: the bar that sent it is the page, and this is the
+	 * one place that ties a bar to the widget it is drawn in. */
+	toolbars::MainBar *const bar = qobject_cast<toolbars::MainBar *>(sender());
+
+	if (!bar)
+		return;
+
+	QWidget *page = nullptr;
+	for (const auto &entry : session_windows_) {
+		if (entry.first && entry.first->main_bar().get() == bar) {
+			page = entry.second;
+			break;
+		}
+	}
+
+	if (!page)
+		return;
+
+	bar->set_device_upgrading(true, page);
+	bar->set_upgrade_progress(percent);
+
+	update_session_tabs();
+
+	/*
+	 * The page is not masked forever, whatever the worker and the bus watcher
+	 * end up saying: word of a board that came back travels between threads,
+	 * and a mask that waits for it alone may wait for good. This is the last
+	 * way out.
+	 */
+	if (!upgrade_watchdog_) {
+		upgrade_watchdog_ = new QTimer(this);
+		upgrade_watchdog_->setSingleShot(true);
+		connect(upgrade_watchdog_, &QTimer::timeout, this, [this]() {
+			qWarning() << "Firmware upgrade mask timed out, taking it down";
+			for (const shared_ptr<Session> &session : sessions_)
+				if (session && session->main_bar())
+					session->main_bar()->set_device_upgrading(false);
+			if (last_focused_session_ && last_focused_session_->main_bar())
+				last_focused_session_->main_bar()->set_device_upgrading(false);
+			update_session_tabs();
+		});
+	}
+	upgrade_watchdog_->start(UpgradeMaskMaxMs);
+}
+
 void MainWindow::run_device_attached()
 {
 	/*
@@ -1437,24 +1740,43 @@ void MainWindow::run_device_attached()
 		return;
 	}
 	attach_process_done = false;
+	reinit_failed = false;
+
+	/* What the bus said went, so that a scan which still lists it can be
+	 * told from a board that never left. */
+	const QSet<QString> declared_gone = toolbars::MainBar::take_declared_gone();
+
+	/*
+	 * Walking the bus runs here, on the GUI thread, and an FX2 board that lost
+	 * its firmware is re-flashed and waited for: a couple of seconds in which
+	 * the window would look dead.
+	 *
+	 * Only the pages that are being restored say so - the ones already under
+	 * a mask because their board is away. A page whose board never left has
+	 * nothing to report and must not flash a mask of its own.
+	 */
+	for (const shared_ptr<Session> &session : sessions_) {
+		const auto window = session_windows_.find(session);
+		if (!session || !session->main_bar() ||
+			window == session_windows_.end())
+			continue;
+
+		/*
+		 * Only a board of the libusb back end is re-opened in the background,
+		 * and only there is there something to report: a vendor board comes
+		 * back at once and keeps the mask it had.
+		 */
+		if (!session->main_bar()->is_device_offline())
+			continue;
+		const QString identity =
+			widgets::DeviceToolButton::device_identity(session->device());
+		if (identity.startsWith(QStringLiteral("usb/")))
+			session->main_bar()->set_device_busy(true, window->second);
+	}
+	QApplication::processEvents();
 
 	const shared_ptr<devices::Device> previous = last_focused_session_ ?
 		last_focused_session_->device() : nullptr;
-	const shared_ptr<devices::HardwareDevice> previous_hw =
-		dynamic_pointer_cast<devices::HardwareDevice>(previous);
-
-	/*
-	 * What is in use has to be identified before the scan, while the driver
-	 * still knows the device: the scan frees the instances, so afterwards it
-	 * can only be looked up again by the identity it reports.
-	 */
-	std::map<string, string> previous_info;
-	const QString previous_identity =
-		widgets::DeviceToolButton::device_identity(previous);
-	if (previous_hw) {
-		if (device_manager_)
-			previous_info = device_manager_.load()->get_device_info(previous);
-	}
 
 	if (previous) {
 		last_focused_session_->stop_capture();
@@ -1498,129 +1820,256 @@ void MainWindow::run_device_attached()
 		}
 	}
 
-	if (device_manager_) {
-		delete device_manager_.load();
-		device_manager_.store(nullptr);
+	/*
+	 * The old manager stays until the scan has produced a new one: the pages
+	 * read their list through it, and a pass that re-flashes an FX2 takes
+	 * seconds. Emptying it here leaves every page with nothing to show - which
+	 * is what "the device list went blank" looks like when a board is pulled
+	 * while it is being re-initialized.
+	 */
+	/*
+	 * The scan is the slow part of a pass: an FX2 board that lost its
+	 * firmware is re-flashed and waited for, which takes seconds. It runs
+	 * on a worker thread so the window keeps answering; the pages already
+	 * say what is going on. Everything that touches a page happens once it
+	 * is back, on this thread.
+	 */
+	/* Only the boards these pages hold are opened up front. */
+	QSet<QString> wanted;
+	for (const shared_ptr<Session> &session : sessions_) {
+		if (!session || !session->device())
+			continue;
+
+		const QString id =
+			widgets::DeviceToolButton::device_identity(session->device());
+		if (!id.isEmpty())
+			wanted.insert(id);
 	}
-	auto device_manager = new pv::DeviceManager(context, driver, true);
-	device_manager_.store(device_manager);
-	update_sessions_device_manager(device_manager);
 
-	/*
-	 * Look for what is in use again. It comes back as a new instance, so it
-	 * is the identity that has to match, not the pointer. Finding it means
-	 * nothing was unplugged: the selection stays where the user put it, an
-	 * arrival never moves it.
-	 *
-	 * The identity is asked first: it is the port the board sits in, and it
-	 * is what tells two boards of one model apart. Matching on the vendor,
-	 * model and serial number instead would let firmware that writes the
-	 * same serial into every board hand back the wrong one - which is a
-	 * device switch.
-	 */
-	shared_ptr<devices::HardwareDevice> same_device;
-	if (!previous_identity.isEmpty())
-		same_device = find_device_by_identity(previous_identity);
-	else if (!previous_info.empty())
-		same_device = device_manager->find_device_from_info(previous_info);
+	std::thread([this, context, driver, wanted, declared_gone]() {
+			pv::DeviceManager *device_manager = nullptr;
 
-	/*
-	 * A board that comes back is the one that is in use, so it has to be
-	 * taken over: the scan freed its instance. Any other arrival - a second
-	 * board, or the first one plugged in while the demo device stands in -
-	 * only joins the list. Picking a device is the user's to do; a board
-	 * appearing under the desk must not move the selection out of the
-	 * capture he is looking at.
-	 *
-	 * This runs before the question about a board being pulled, and has to:
-	 * a page still holding the instance the scan freed would list its board
-	 * a second time once the list is read again.
-	 */
-	/*
-	 * Every session with a board takes its new instance - including the
-	 * ones that are not in front: a session left holding the instance a
-	 * scan freed has an object no list has, and listing it beside the
-	 * board is what showed the same board twice.
-	 *
-	 * Taking a board back has to keep what the session holds: the arrival
-	 * of another board is no reason to throw a capture away. Nothing is
-	 * restored from the saved settings here on purpose: applying them
-	 * again would put back values the user has changed since - the channel
-	 * count he just lowered to eight, say, or the pre-trigger - which is
-	 * what made a board coming back look like a reset of everything.
-	 */
-	std::vector<shared_ptr<Session>> lost;
-	const shared_ptr<Session> unplugged = adopt_device_in_sessions(&lost);
+			/* A scan that cannot even start must not leave the pages under a
+			 * mask that says one is running. */
+			try {
+				device_manager = new pv::DeviceManager(context, driver, true);
+			} catch (...) {
+				device_manager = nullptr;
+			}
 
-	/*
-	 * A page that has its board back is usable again, so its mask goes. Every
-	 * page that lost one keeps its own: only the first is asked about below,
-	 * and until that is answered its mask is the truth - the other is no less
-	 * broken for not being asked. Clearing the masks before the scan would
-	 * leave those pages looking alive while their devices are the ones the
-	 * scan freed.
-	 */
-	for (const shared_ptr<Session> &masked : sessions_)
-		if (masked && masked->main_bar() &&
-			std::find(lost.begin(), lost.end(), masked) == lost.end())
-			masked->main_bar()->set_device_offline(false);
-	if (last_focused_session_ && last_focused_session_->main_bar() &&
-		std::find(lost.begin(), lost.end(), last_focused_session_) == lost.end())
-		last_focused_session_->main_bar()->set_device_offline(false);
+			if (!device_manager) {
+				QMetaObject::invokeMethod(this, [this]() {
+					for (const shared_ptr<Session> &session : sessions_)
+						if (session && session->main_bar())
+							session->main_bar()->set_device_busy(false);
+					resume_device_events();
+				}, Qt::QueuedConnection);
+				return;
+			}
 
-	/* A board came or went beside it, which changes what the selector of
-	 * each session may offer. */
-	update_session_roles();
+			/*
+			 * Opening is the slow half of a pass: a re-flashed FX2 takes
+			 * seconds to come back, and that wait belongs here, not on the
+			 * thread that draws. The session takes the instance over as it
+			 * is, already open.
+			 */
+			for (const auto &device : device_manager->devices()) {
+				const QString id =
+					widgets::DeviceToolButton::device_identity(device);
+				if (!wanted.contains(id))
+					continue;
 
-	/*
-	 * The board this page is waiting for is back: it returns to it, unless
-	 * another page took it in the meantime. A board that arrives is not
-	 * supposed to move a page, but this one was only ever on the demo
-	 * device because its own board was missing.
-	 */
-	if (!waiting_for_board_.isEmpty()) {
-		const shared_ptr<Session> page =
-			sessions_.empty() ? nullptr : sessions_.front();
-		shared_ptr<devices::HardwareDevice> back =
-			find_device_by_identity(waiting_for_board_);
+				try {
+					device->open();
+				} catch (const sigrok::Error &e) {
+					qWarning() << "Error opening a device before the pass:" << e.what();
+				} catch (const QString &msg) {
+					qWarning() << "Error opening a device before the pass:" << msg;
+				}
+			}
 
-		if (back && page && page->main_bar() &&
-			!board_taken(sessions_, page, back)) {
-			waiting_for_board_.clear();
-			page->main_bar()->switch_to_device(back, false);
+			QMetaObject::invokeMethod(this,
+				[this, device_manager, declared_gone]() {
+				pv::DeviceManager *const replaced =
+					device_manager_.exchange(device_manager);
+				update_sessions_device_manager(device_manager);
+
+				/* Every page is on the new one by now. */
+				delete replaced;
+
+			/*
+			 * A board that comes back is the one that is in use, so it has to be
+			 * taken over: the scan freed its instance. Any other arrival - a second
+			 * board, or the first one plugged in while the demo device stands in -
+			 * only joins the list. Picking a device is the user's to do; a board
+			 * appearing under the desk must not move the selection out of the
+			 * capture he is looking at.
+			 *
+			 * This runs before the question about a board being pulled, and has to:
+			 * a page still holding the instance the scan freed would list its board
+			 * a second time once the list is read again.
+			 */
+			/*
+			 * Every session with a board takes its new instance - including the
+			 * ones that are not in front: a session left holding the instance a
+			 * scan freed has an object no list has, and listing it beside the
+			 * board is what showed the same board twice.
+			 *
+			 * Taking a board back has to keep what the session holds: the arrival
+			 * of another board is no reason to throw a capture away. Nothing is
+			 * restored from the saved settings here on purpose: applying them
+			 * again would put back values the user has changed since - the channel
+			 * count he just lowered to eight, say, or the pre-trigger - which is
+			 * what made a board coming back look like a reset of everything.
+			 */
+			std::vector<shared_ptr<Session>> lost;
+			const shared_ptr<Session> unplugged = adopt_device_in_sessions(&lost);
+
+			/*
+			 * A board the bus reported gone is still handed back by the scan:
+			 * the list was read before the host finished taking it away, and
+			 * nobody is asked about that page. Worth saying out loud - it is the
+			 * one case where a board going leaves no trace at all.
+			 */
+			if (!declared_gone.isEmpty() && !unplugged) {
+				QStringList still;
+				for (const QString &identity : declared_gone)
+					if (find_device_by_identity(identity))
+						still << identity;
+
+				qDebug() << "[DETACH] reported gone but nobody asked:"
+						   << "declared" << declared_gone.values()
+						   << "still listed" << still;
+			}
+
+			/*
+			 * A page that has its board back is usable again, so its mask goes. Every
+			 * page that lost one keeps its own: only the first is asked about below,
+			 * and until that is answered its mask is the truth - the other is no less
+			 * broken for not being asked. Clearing the masks before the scan would
+			 * leave those pages looking alive while their devices are the ones the
+			 * scan freed.
+			 */
+			for (const shared_ptr<Session> &masked : sessions_)
+				if (masked && masked->main_bar() &&
+					std::find(lost.begin(), lost.end(), masked) == lost.end()) {
+					/* Its board is back, so an upgrade that was writing it is
+					 * over - whoever ended it: the mask and the tab it locks
+					 * go with the board coming back. */
+					if (masked->main_bar()->is_device_upgrading())
+						masked->main_bar()->set_device_upgrading(false);
+					masked->main_bar()->set_device_offline(false);
+				}
+			if (last_focused_session_ && last_focused_session_->main_bar() &&
+				std::find(lost.begin(), lost.end(), last_focused_session_) == lost.end()) {
+				if (last_focused_session_->main_bar()->is_device_upgrading())
+					last_focused_session_->main_bar()->set_device_upgrading(false);
+				last_focused_session_->main_bar()->set_device_offline(false);
+			}
+
+			/*
+			 * A page whose board is gone is not masked here: the mask belongs to
+			 * the case where a capture elsewhere keeps this pass waiting, and the
+			 * hot-plug watcher puts it on then. A pass that runs means nothing is
+			 * in the way, and the questions below settle the page.
+			 */
+
+			/* A board came or went beside it, which changes what the selector of
+			 * each session may offer. */
 			update_session_roles();
-		}
-	}
 
-	/*
-	 * A page other than the capture page lost its board in this scan. A
-	 * scan that ran while the bus was being re-enumerated can miss a board
-	 * that is still there, and closing a page over that is worse than one
-	 * more look: the board is asked for again before it is taken for gone.
-	 */
-	if (unplugged && !attach_retry_done_ && unplugged != sessions_.front()) {
-		attach_retry_done_ = true;
-		resume_device_events();
-		QTimer::singleShot(700, this, [this]() { on_device_attached(); });
-		return;
-	}
-	attach_retry_done_ = false;
+			/*
+			 * The board this page is waiting for is back: it returns to it, unless
+			 * another page took it in the meantime. A board that arrives is not
+			 * supposed to move a page, but this one was only ever on the demo
+			 * device because its own board was missing.
+			 */
+			if (!waiting_for_board_.isEmpty()) {
+				const shared_ptr<Session> page =
+					sessions_.empty() ? nullptr : sessions_.front();
+				shared_ptr<devices::HardwareDevice> back =
+					find_device_by_identity(waiting_for_board_);
 
-	if (unplugged) {
-		/*
-		 * The board in that session is gone: ask about saving it the way
-		 * the detach flow does. That is also what picks the replacement,
-		 * and it lets the device events through again once the question
-		 * is answered.
-		 */
-		show_device_detach(unplugged);
-		return;
-	}
+				if (back && page && page->main_bar() &&
+					!board_taken(sessions_, page, back)) {
+					waiting_for_board_.clear();
+					page->main_bar()->switch_to_device(back, false);
+					update_session_roles();
+				}
+			}
 
-	/* The list is already up to date: rebuilding the manager above put it
-	 * into the selector, and taking the board back rebuilds it again. */
-	resume_device_events();
-	report_stalled_devices();
+			/*
+			 * The re-initialization is over only now: the scan, taking the boards
+			 * back and rebuilding each page all happen above. The mask stays up for
+			 * all of it, so a click landing in the middle is not answered halfway
+			 * through - it would switch pages while their devices are still moving.
+			 */
+			for (const shared_ptr<Session> &session : sessions_)
+				if (session && session->main_bar())
+					session->main_bar()->set_device_busy(false);
+
+			/*
+			 * A page other than the capture page lost its board in this scan. A
+			 * scan that ran while the bus was being re-enumerated can miss a board
+			 * that is still there, and closing a page over that is worse than one
+			 * more look: the board is asked for again before it is taken for gone.
+			 */
+			if (unplugged && !reinit_failed && !attach_retry_done_ &&
+			unplugged != sessions_.front()) {
+				attach_retry_done_ = true;
+				resume_device_events();
+				/* A short wait only: the scan itself is the second look, and every
+				 * 100 ms here is a page that keeps a board it no longer has. */
+				QTimer::singleShot(150, this, [this]() { on_device_attached(); });
+				return;
+			}
+			attach_retry_done_ = false;
+
+			if (unplugged) {
+				/*
+				 * A board in its bootloader is off the bus on purpose: the
+				 * upgrade takes it away and hands it back when the image is
+				 * written. Nothing is asked about that page, and it keeps the
+				 * board it had - the arrival at the end of the upgrade takes
+				 * it over again.
+				 */
+				if (unplugged->main_bar() && unplugged->main_bar()->is_device_upgrading()) {
+					detach_answered = nullptr;
+					resume_device_events(false);
+					return;
+				}
+
+				/*
+				 * The board in that session is gone: ask about saving it the way
+				 * the detach flow does. That is also what picks the replacement,
+				 * and it lets the device events through again once the question
+				 * is answered.
+				 *
+				 * Unless this page has just answered that question and the board
+				 * is still away: then the mask is the answer and nothing is asked
+				 * again.
+				 */
+				if (detach_answered == unplugged.get()) {
+					detach_answered = nullptr;
+					resume_device_events(false);
+					return;
+				}
+				show_device_detach(unplugged);
+				return;
+			}
+			detach_answered = nullptr;
+
+			/*
+			 * The list is already up to date: this pass read the bus and took the
+			 * boards back after the change that started it. Anything reported
+			 * while it ran is therefore covered - answering it with another pass
+			 * closes and re-opens a board that was just re-opened, which is what
+			 * a plug-in of an FX2 looks like: two passes, 0.2 s apart.
+			 */
+			resume_device_events(false);
+			report_stalled_devices();
+				}, Qt::QueuedConnection);
+		}).detach();
 }
 
 void MainWindow::report_stalled_devices()
@@ -1781,8 +2230,13 @@ shared_ptr<Session> MainWindow::adopt_device_in_sessions(
 
 		const QString identity =
 			widgets::DeviceToolButton::device_identity(session->device());
-		if (identity.isEmpty())
+		if (identity.isEmpty()) {
+			/* A page without a board still has a menu to show: what this
+			 * scan found, not what the one before it had. */
+			if (session->main_bar())
+				session->main_bar()->rebuild_device_list(true);
 			continue;
+		}
 
 		shared_ptr<devices::HardwareDevice> again =
 			find_device_by_identity(identity);
@@ -1799,12 +2253,27 @@ shared_ptr<Session> MainWindow::adopt_device_in_sessions(
 				unplugged = session;
 			if (lost)
 				lost->push_back(session);
+			/* Its board is not in this scan: the menu is the scan's, or it
+			 * would keep pointing at the one that was deleted. */
+			if (session->main_bar())
+				session->main_bar()->rebuild_device_list(true);
 			continue;
 		}
 
 		if (!session->adopt_device_instance(again)) {
-			/* A real switch: the page and the view are rebuilt by it. */
-			session->select_device(again);
+			/*
+			 * Opening it again failed. Switching the device here would
+			 * throw the capture away without asking, so the page is taken
+			 * for one whose board went: it is masked, and the caller asks
+			 * about saving before anything is replaced.
+			 */
+			if (!unplugged)
+				unplugged = session;
+			if (lost)
+				lost->push_back(session);
+			if (session->main_bar())
+				session->main_bar()->rebuild_device_list(true);
+			reinit_failed = true;
 			continue;
 		}
 
@@ -1825,6 +2294,15 @@ shared_ptr<Session> MainWindow::adopt_device_in_sessions(
 void MainWindow::remove_session(shared_ptr<Session> session)
 {
 	/*
+	 * A page writing firmware stays: the worker that writes it belongs to
+	 * this page, and closing it would leave the upgrade with nowhere to
+	 * report, and a board that is not going to come back. The tab has no
+	 * close button while the mask is up; this covers the other ways in.
+	 */
+	if (session && session->main_bar() && session->main_bar()->is_device_upgrading())
+		return;
+
+	/*
 	 * The page cannot be closed while its tab is being renamed: the editor
 	 * would be left over the strip with nothing under it, and would keep
 	 * the page alive through the handle it holds.
@@ -1833,7 +2311,7 @@ void MainWindow::remove_session(shared_ptr<Session> session)
 		finish_tab_rename(false);
 
 	/*
-	 * Asked while the page is whole: the poll belongs to one page, and this
+	 * Asked while the page is whole: the watcher belongs to one page, and this
 	 * is the one if its bar is the host. Its bar lives as long as the
 	 * session, so at the end of this function there is no way to tell.
 	 */
@@ -1871,7 +2349,7 @@ void MainWindow::remove_session(shared_ptr<Session> session)
 	/*
 	 * A page holding a file can be the last one, and then there is nothing
 	 * left to capture with: the board page the program opens with takes its
-	 * place, and the poll with it. A page that held a board is another matter
+	 * place, and the watcher with it. A page that held a board is another matter
 	 * - that is the last board the user had, and closing it is what he meant.
 	 *
 	 * Put off for a turn: the page that just went is still alive in this
@@ -1918,9 +2396,9 @@ void MainWindow::remove_session(shared_ptr<Session> session)
 	copy_percent_.remove(session.get());
 
 	/*
-	 * The poll goes with the page that hosted it, and that page is still alive
+	 * The watcher goes with the page that hosted it, and that page is still alive
 	 * here - this function holds the session, and the bar with it. So it is
-	 * stopped where it is before another page takes it over: two polls must
+	 * stopped where it is before another page takes it over: two watchers must
 	 * never run, and the one on the dying page would go on feeding a window
 	 * that is being torn down.
 	 */
@@ -2729,15 +3207,32 @@ void MainWindow::on_sample_rate_too_low(qulonglong configured, qulonglong reason
 	qDebug() << "Capture stopped by the driver, reason" << reason
 		<< "at" << configured << "Hz";
 
-	show_session_error(tr("Device stopped sending data"),
-		tr("The device stopped sending samples before the capture was due to "
-		   "end, usually because the USB link cannot sustain the configured %1.\n\n"
-		   "The acquisition was stopped. The data captured before that may "
-		   "be incomplete or wrong. Try a lower sample rate, fewer "
-		   "channels, or another USB port.")
-			.arg(format_sample_rate(configured)), this);
+	/*
+	 * A board that was just pulled reports this as well, and the question
+	 * about saving the page is the one that matters then. Give the hot-plug
+	 * pass a moment to say the board is gone; a board that is still there
+	 * gets the warning as before.
+	 */
+	const QPointer<Session> stopped(session);
+	QTimer::singleShot(LinkStopWarnDelayMs, this, [this, stopped, configured]() {
+		link_stop_message_visible_ = false;
+		if (!stopped || !stopped->main_bar())
+			return;
+		if (stopped->main_bar()->is_device_offline())
+			return;
+		if (link_stop_from_unplug_) {
+			link_stop_from_unplug_ = false;
+			return;
+		}
 
-	link_stop_message_visible_ = false;
+		show_session_error(tr("Device stopped sending data"),
+			tr("The device stopped sending samples before the capture was due to "
+			   "end, usually because the USB link cannot sustain the configured %1.\n\n"
+			   "The acquisition was stopped. The data captured before that may "
+			   "be incomplete or wrong. Try a lower sample rate, fewer "
+			   "channels, or another USB port.")
+				.arg(format_sample_rate(configured)), this);
+	});
 }
 
 void MainWindow::on_get_repeat_acquisition(bool& is_repeat_acquisition_state)
@@ -3208,7 +3703,10 @@ void MainWindow::update_session_tabs()
 
 		/* What the tab carries on its right; the name gets the rest. */
 		const bool want_copy = session && session->data_held();
-		const bool want_close = session && session != default_session_;
+		/* A page writing firmware cannot go: its worker would be left with
+		 * no page to finish on, and the upgrade would never end. */
+		const bool want_close = session && session != default_session_ &&
+			!(session->main_bar() && session->main_bar()->is_device_upgrading());
 		const int name_width =
 			max_width - (want_copy ? 14 : 0) - (want_close ? 14 : 0);
 

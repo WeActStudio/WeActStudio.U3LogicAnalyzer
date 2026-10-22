@@ -58,7 +58,6 @@
 #include "views/trace/logicsignal.hpp"
 #include "views/trace/signal.hpp"
 #include "views/trace/view.hpp"
-#include <libusb-1.0/libusb.h>
 #include <libsigrokcxx/libsigrokcxx.hpp>
 #include <fstream>
 using namespace std;
@@ -776,6 +775,17 @@ void Session::select_device(shared_ptr<devices::Device> device)
 void Session::set_device(shared_ptr<devices::Device> device)
 {
 	assert(device);
+
+	/*
+	 * The board in hand until the new one is open. A device that refuses to
+	 * open used to leave the page with none at all: no port to know it by,
+	 * so the next pass could not hand it back and the list it feeds went
+	 * empty for good.
+	 */
+	const shared_ptr<devices::Device> previous = device_;
+
+	device_open_failed_ = false;
+
 	// Ensure we are not capturing before setting the device
 	stop_capture();
 	if (device_)
@@ -870,7 +880,11 @@ void Session::set_device(shared_ptr<devices::Device> device)
 		 */
 		const bool is_hw_device =
 			dynamic_pointer_cast<devices::HardwareDevice>(device_) != nullptr;
-		device_.reset();
+
+		/* Back to the board the page had: nothing was opened, so the page
+		 * stays where it was and the next pass can hand it this one. */
+		device_ = previous;
+		device_open_failed_ = true;
 
 		if (is_hw_device && !shutting_down_) {
 			QString detail = logging.last_sr_message();
@@ -889,7 +903,17 @@ void Session::set_device(shared_ptr<devices::Device> device)
 		}
 	}
 	
-	if (device_) {
+	/*
+	 * The board put back above is closed: no data feed until a pass opens it
+	 * again. Its channels do come back, so the page looks like the board it
+	 * is instead of an empty trace.
+	 */
+	if (device_open_failed_)
+	{
+		if (device_)
+			update_signals();
+	}
+	else if (device_) {
 		device_->session()->add_datafeed_callback([=]
 			(shared_ptr<sigrok::Device> device, shared_ptr<Packet> packet) {
 				data_feed_in(device, packet);
@@ -950,6 +974,10 @@ bool Session::adopt_device_instance(shared_ptr<devices::Device> device)
 
 	stop_capture();
 
+	/* The instance that is being left, kept in case the new one will not
+	 * open: the page has to go on being the board it was. */
+	const shared_ptr<devices::Device> previous = device_;
+
 	try {
 		device_->close();
 	} catch (const sigrok::Error &e) {
@@ -965,14 +993,17 @@ bool Session::adopt_device_instance(shared_ptr<devices::Device> device)
 	device_ = move(device);
 
 	try {
-		device_->open();
+		const shared_ptr<devices::HardwareDevice> opened =
+			dynamic_pointer_cast<devices::HardwareDevice>(device_);
+		if (!opened || !opened->is_open())
+			device_->open();
 	} catch (const QString &) {
 		/*
-		 * Leave nothing half-swapped behind: the caller falls back to
-		 * set_device(), which opens the very instance that is handed in
-		 * here - that only works while it is still untouched.
+		 * The board it had, back: it is closed, but the page keeps the
+		 * port it is known by, so the pass that finds the board again can
+		 * hand it over - and the device list keeps its entry until then.
 		 */
-		device_.reset();
+		device_ = previous;
 		return false;
 	}
 
@@ -999,6 +1030,42 @@ bool Session::adopt_device_instance(shared_ptr<devices::Device> device)
 	for (size_t i = 0; i < signalbases_.size() && i < saved_names.size(); i++)
 		if (signalbases_[i]->name() != saved_names[i])
 			signalbases_[i]->set_name(saved_names[i]);
+
+	return true;
+}
+
+bool Session::reopen_device()
+{
+	if (!device_)
+		return false;
+
+	const shared_ptr<devices::HardwareDevice> hw =
+		dynamic_pointer_cast<devices::HardwareDevice>(device_);
+
+	/* Only a board can sit there closed: a file device is opened by the
+	 * path it was loaded from and never by a scan. */
+	if (!hw)
+		return true;
+	if (hw->is_open())
+		return true;
+
+	try {
+		device_->open();
+	} catch (const sigrok::Error &e) {
+		qWarning() << "Error opening the device again:" << e.what();
+		return false;
+	} catch (const QString &msg) {
+		qWarning() << "Error opening the device again:" << msg;
+		return false;
+	}
+
+	device_->session()->add_datafeed_callback([=]
+		(shared_ptr<sigrok::Device> device, shared_ptr<Packet> packet) {
+			data_feed_in(device, packet);
+		});
+
+	/* The board is open again, so the last failure is no longer true. */
+	device_open_failed_ = false;
 
 	return true;
 }
@@ -1194,6 +1261,16 @@ void Session::start_capture(function<void (const QString)> error_handler)
 	if (!device_) {
 		// error_handler(tr("No active device set, can't start acquisition."));
 		mainwindow_show_error(tr("No active device set, can't start acquisition."));
+		return;
+	}
+
+	/*
+	 * A board that was pulled while its page kept it - the replacement could
+	 * not be opened, or a pass has yet to hand it back - is closed here.
+	 * Opening it again makes Run work instead of failing inside the driver.
+	 */
+	if (!reopen_device()) {
+		mainwindow_show_error(tr("The device could not be opened."));
 		return;
 	}
 	

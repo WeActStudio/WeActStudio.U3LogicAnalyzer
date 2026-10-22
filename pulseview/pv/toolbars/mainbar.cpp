@@ -25,13 +25,13 @@
 #include <QApplication>
 #include "pv/application.hpp"
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <cstdio>
 #include <set>
 #include <string>
 #include <cstdarg>
 
-#include <QProgressDialog>
 #include <QDir>
 #include <QFileInfo>
 
@@ -68,6 +68,8 @@
 #include <pv/mainwindow.hpp>
 #include <pv/popups/channels.hpp>
 #include <pv/popups/deviceoptions.hpp>
+#include <pv/usbapi.hpp>
+#include "../../../libsigrok/src/hardware/wch-ch32h417-libusb/libusb_wrapper.h"
 #include <pv/util.hpp>
 #include <pv/views/trace/view.hpp>
 #include <pv/widgets/exportmenu.hpp>
@@ -110,15 +112,168 @@ using boost::algorithm::join;
 #define WCH_PID_CH569 0x8025
 #define WCH_PID_CH32H417 0x5537
 #define WCH_PID_CH32H417_HID 0xFE17
+
+namespace {
+
+/* One wording for the mask: a title, and a hint under it. */
+QString mask_html(const QString &title, const QString &hint)
+{
+	return QString("<div style=\"text-align:center;\">"
+		"<span style=\"font-size:14pt;font-weight:600;\">%1</span>"
+		"<br/><br/>%2</div>").arg(title, hint);
+}
+
+} // namespace
+
 namespace pv
 {
+
 	namespace toolbars
 	{
+	namespace {
+
+	/* Both wrappers cap their enumeration at 16 boards. */
+	const unsigned long MaxUpgradeableBoards = 16;
+
+	/* How long an upgraded board is given before the bus is read: right at the
+	 * reset it still reports the port it sat in before the firmware change. */
+	const int UpgradeSettleMs = 1000;
+
+	/* How long the mask stays up after the last block went out: the board is
+	 * resetting, and a mask that waits for word of it may wait for good. */
+	const int UpgradeMaskGraceMs = 3000;
+
+	/* Whether this page is on a board the upgrade tool can talk to at all.
+	 * An FX2 running the sigrok firmware is not one of them. */
+	bool upgradeable_device(const shared_ptr<devices::Device> &device)
+	{
+		const shared_ptr<devices::HardwareDevice> hw =
+			dynamic_pointer_cast<devices::HardwareDevice>(device);
+
+		if (!hw)
+			return false;
+
+		return util::get_wch_device_type_by_driver(
+			hw->hardware_device()->driver()->name()) ==
+			util::WchDeviceType::CH32H417;
+	}
+
+	/*
+	 * Where the upgrade tool finds this board. Both backends number what they
+	 * enumerate, and that number moves as boards come and go - so the port
+	 * chain the page is known by is what is looked for, not an order.
+	 */
+	int upgrade_index_for(const QString &identity, bool libusb_backend)
+	{
+		if (identity.isEmpty())
+			return -1;
+
+#ifdef _WIN32
+		/* The DLL is unloaded with the last page that watched the bus; the
+		 * wrap of the enumeration below needs it back. Loading it twice is
+		 * a no-op. */
+		if (!libusb_backend && ch375_init() != 0) {
+			qWarning() << "Firmware upgrade: the CH375 DLL is not available";
+			return -1;
+		}
+#endif
+
+		for (unsigned long i = 0; i < MaxUpgradeableBoards; i++) {
+			char path[128] = { 0 };
+
+			if (libusb_backend) {
+				/* The libusb wrapper reports "usb/<bus>-<port>", which is
+				 * the identity as the driver wrote it. */
+				if (ch32h417_libusb_get_usb_path(i, path,
+						sizeof(path)) != 0)
+					continue;
+				if (identity == QString::fromLatin1(path))
+					return (int)i;
+				continue;
+			}
+
+#ifdef _WIN32
+			/* The vendor wrapper spells the identity itself - "ch375/<hub>-<port>",
+			 * exactly as the driver reports it. */
+			if (ch375_get_usb_path(i, path, sizeof(path)) < 0)
+				continue;
+			if (identity == QString::fromLatin1(path))
+				return (int)i;
+#endif
+		}
+
+		return -1;
+	}
+
+	} // namespace
+
 	MainBar *MainBar::s_mainbar_instance = nullptr;
 	atomic<int> MainBar::s_captures_running{ 0 };
 	atomic<bool> MainBar::s_attach_deferred{ false };
 	std::mutex MainBar::s_capture_mutex;
 	QSet<QString> MainBar::s_capturing_identities;
+	std::mutex MainBar::s_gone_mutex;
+	QSet<QString> MainBar::s_declared_gone;
+	std::mutex MainBar::s_upgrade_mutex;
+	QString MainBar::s_upgrade_target;
+	atomic<int64_t> MainBar::s_upgrade_deadline{ 0 };
+
+	bool MainBar::upgrade_running()
+	{
+		std::lock_guard<std::mutex> lock(s_upgrade_mutex);
+		return !s_upgrade_target.isEmpty();
+	}
+
+	bool MainBar::captures_running()
+	{
+		return s_captures_running > 0;
+	}
+
+	void MainBar::begin_upgrade(const QString &identity)
+	{
+		std::lock_guard<std::mutex> lock(s_upgrade_mutex);
+		s_upgrade_target = identity;
+		s_upgrade_deadline.store(g_get_monotonic_time() + 60 * G_USEC_PER_SEC);
+	}
+
+	void MainBar::end_upgrade()
+	{
+		std::lock_guard<std::mutex> lock(s_upgrade_mutex);
+		s_upgrade_target.clear();
+	}
+
+	bool MainBar::is_device_upgrading() const
+	{
+		return upgrade_mask_up_;
+	}
+
+	void MainBar::declare_gone(const QStringList &identities)
+	{
+		if (identities.isEmpty())
+			return;
+
+		std::lock_guard<std::mutex> lock(s_gone_mutex);
+		for (const QString &identity : identities)
+			s_declared_gone.insert(identity);
+	}
+
+	QSet<QString> MainBar::take_declared_gone()
+	{
+		std::lock_guard<std::mutex> lock(s_gone_mutex);
+		const QSet<QString> taken = s_declared_gone;
+		s_declared_gone.clear();
+		return taken;
+	}
+
+	bool MainBar::take_deferred_if_idle()
+	{
+		std::lock_guard<std::mutex> lock(s_capture_mutex);
+
+		if (s_captures_running > 0)
+			return false;
+
+		return s_attach_deferred.exchange(false);
+	}
 		const uint64_t MainBar::MinSampleCount = 12500ULL;
 		const uint64_t MainBar::MaxSampleCount = 1000000000000ULL;
 		const uint64_t MainBar::DefaultSampleCount = 1000000;
@@ -156,7 +311,6 @@ namespace pv
 																							updating_sample_rate_(false),
 																							updating_sample_count_(false),
 																							sample_count_supported_(false),
-																							iap_upgrading_(false),
 #ifdef ENABLE_DECODE
 																							add_decoder_button_(new QToolButton())
 #endif
@@ -434,7 +588,7 @@ namespace pv
 					this, &MainBar::device_new_session_requested);
 
 			/* A change that does not involve the device in use only needs the
-			 * list rebuilt. Queued: the scan may not run on the poll thread. */
+			 * list rebuilt. Queued: the scan may not run on the watcher thread. */
 			connect(this, SIGNAL(refresh_device_list()),
 					this, SLOT(on_refresh_device_list()), Qt::QueuedConnection);
 
@@ -498,20 +652,17 @@ namespace pv
 			connect(&session, SIGNAL(device_changed()),
 					this, SLOT(on_device_changed()));
 
-			/* The poll reads this from its own thread. Seeded here as well: the
-			 * page can already hold a board by the time the bar exists. */
+			/* The watcher reads this from its own thread. Seeded here as well:
+			 * the page can already hold a board by the time the bar exists. */
 			set_device_identity(
 				widgets::DeviceToolButton::device_identity(session_.device()));
-
-			/* CH32H417 device event signal/slot connections */
-			connect(this, SIGNAL(ch32h417_device_event_signal(unsigned long)),
-					this, SLOT(on_ch32h417_device_event(unsigned long)));
 
 			update_device_list();
 			is_rate_setting_default_ = false;
 			is_count_setting_default_ = false;
 			retranslate_ui();
 			update_device_status_icon();
+			update_upgrade_action();
 		}
 
 		void MainBar::retranslate_ui()
@@ -586,7 +737,7 @@ namespace pv
 	MainBar::~MainBar()
 		{
 			/*
-			 * Hot-plug belongs to the bar that started the poll. Another
+			 * Hot-plug belongs to the bar that started the watcher. Another
 			 * session's bar being destroyed must not take it down: clearing
 			 * the shared instance here would leave the callback with
 			 * nowhere to report to, and boards would stop being noticed.
@@ -608,10 +759,6 @@ namespace pv
 			if (owns_listener)
 			{
 				s_mainbar_instance = nullptr;
-
-#ifdef _WIN32
-				ch375_set_device_notify(0, NULL, NULL);
-#endif
 			}
 
 			if (channels_)
@@ -681,11 +828,21 @@ namespace pv
 
 		QString MainBar::offline_mask_text() const
 		{
+			return mask_html(tr("Device offline"),
+				tr("Waiting for the capture in the other session to end"));
+		}
+
+		QString MainBar::upgrade_mask_text(int percent) const
+		{
+			/* The number is what the eye has to land on: it is the only thing
+			 * that moves while the image is written, and it is read from a
+			 * step away. */
 			return QString("<div style=\"text-align:center;\">"
 				"<span style=\"font-size:14pt;font-weight:600;\">%1</span>"
-				"<br/><br/>%2</div>")
-			.arg(tr("Device offline"),
-				tr("Waiting for the capture in the other session to end"));
+				"<br/><br/>"
+				"<span style=\"font-size:28pt;font-weight:600;\">%2%</span>"
+				"<br/><br/>%3</div>").arg(tr("Writing firmware")).arg(percent)
+				.arg(tr("Do not disconnect the USB connection"));
 		}
 
 		bool MainBar::is_device_offline() const
@@ -693,24 +850,21 @@ namespace pv
 			return device_offline_;
 		}
 
-		void MainBar::set_device_offline(bool offline, QWidget *page)
+		/*
+		 * The mask is put up and taken down in one place each. The kind says
+		 * why it is there, and every caller that stops needing it goes through
+		 * hide_mask(): a mask left standing because another caller had meanwhile
+		 * changed the state is what kept a finished upgrade under "writing
+		 * firmware" for good.
+		 */
+		void MainBar::show_mask(MaskKind kind, const QString &html, QWidget *page)
 		{
-			/* Still offline with its mask in place: nothing to do. The mask can
-			 * be gone while the flag is up, since it lives on the page. */
-			if (offline == device_offline_ && (!offline || offline_mask_))
-				return;
-			device_offline_ = offline;
+			device_offline_ = true;
+			mask_kind_ = kind;
 
 			QWidget *const frame = page ? page : window();
 			if (!frame)
 				return;
-
-			if (!offline)
-			{
-				if (offline_mask_)
-					offline_mask_->hide();
-				return;
-			}
 
 			if (offline_mask_ && offline_mask_page_ != frame)
 			{
@@ -729,7 +883,7 @@ namespace pv
 				QLabel *const label = new QLabel(mask);
 				label->setAlignment(Qt::AlignCenter);
 				label->setWordWrap(true);
-				label->setText(offline_mask_text());
+				label->setText(html);
 				layout->addWidget(label);
 
 				/* A shade of the window colour: the mask follows a light and a dark
@@ -745,10 +899,118 @@ namespace pv
 				offline_mask_label_ = label;
 				offline_mask_page_ = frame;
 			}
+
+			if (offline_mask_label_)
+				offline_mask_label_->setText(html);
+
 			/* Eats the clicks: nothing on a page whose board is gone works. */
 			offline_mask_->setGeometry(frame->rect());
 			offline_mask_->show();
 			offline_mask_->raise();
+		}
+
+		void MainBar::hide_mask()
+		{
+			device_offline_ = false;
+			mask_kind_ = MaskKind::None;
+			mask_busy_ = false;
+			upgrade_mask_up_ = false;
+
+			if (offline_mask_)
+				offline_mask_->hide();
+		}
+
+		void MainBar::set_device_upgrading(bool upgrading, QWidget *page)
+		{
+			if (!upgrading)
+			{
+				/* Idempotent, and it does not ask the kind first: a mask put up
+				 * for an upgrade comes down here even if something else has
+				 * claimed the state since. */
+				if (!upgrade_mask_up_ && mask_kind_ != MaskKind::Upgrade)
+					return;
+
+				upgrade_writing_ = false;
+				upgrade_percent_ = -1;
+				hide_mask();
+				return;
+			}
+
+			if (upgrade_mask_up_)
+				return;
+
+			/* Nothing on the page can be used while the board is being
+			 * written: the mask is the offline one, with its own text. */
+			upgrade_mask_up_ = true;
+			upgrade_writing_ = true;
+			show_mask(MaskKind::Upgrade, upgrade_mask_text(0), page);
+		}
+
+		void MainBar::set_upgrade_progress(int percent)
+		{
+			if (!upgrade_mask_up_ || !offline_mask_label_)
+				return;
+
+			offline_mask_label_->setText(upgrade_mask_text(percent));
+		}
+
+		void MainBar::set_device_busy(bool busy, QWidget *page)
+		{
+			/* The upgrade owns the mask while it runs: a pass that finds the
+			 * board in its bootloader must not turn the progress away. */
+			if (mask_kind_ == MaskKind::Upgrade)
+				return;
+
+			if (busy == mask_busy_)
+				return;
+			mask_busy_ = busy;
+
+			if (busy)
+			{
+				/* The mask is what a scan looks like from here: it eats the
+				 * input for as long as it runs, and says why. */
+				show_mask(MaskKind::Busy,
+					mask_html(tr("Reinitializing devices"),
+						tr("The board is being re-opened")), page);
+			}
+			else if (offline_mask_)
+			{
+				/* Off, but the page is still masked: what it says now is
+				 * the offline text, and the caller says when that goes. */
+				show_mask(MaskKind::Offline, offline_mask_text(), page);
+			}
+		}
+
+		void MainBar::set_device_offline(bool offline, QWidget *page)
+		{
+			if (!offline)
+			{
+				/* A running upgrade keeps the mask it put there: an image is
+				 * being written, and a pass settling the list has nothing to
+				 * say about that page until the board is back. */
+				if (mask_kind_ == MaskKind::Upgrade)
+					return;
+
+				if (!device_offline_ && !offline_mask_)
+					return;
+
+				hide_mask();
+				return;
+			}
+
+			if (mask_kind_ == MaskKind::Upgrade)
+				return;
+
+			/* A scan says more than "offline" does, and it is about to take
+			 * its own mask down: leave it alone. */
+			if (mask_kind_ == MaskKind::Busy)
+				return;
+
+			/* Already masked as offline: nothing to do. */
+			if (device_offline_ && mask_kind_ == MaskKind::Offline && offline_mask_)
+				return;
+
+			show_mask(MaskKind::Offline, offline_mask_text(), page);
 		}
 
 		uint16_t MainBar::get_channel_number() const
@@ -756,32 +1018,67 @@ namespace pv
 			return channel_number_;
 		}
 
-		void MainBar::update_device_list()
+		namespace {
+
+		/*
+		 * Whether the list already offers this board. Identity, not the
+		 * pointer: until the session has taken the instance the scan made,
+		 * it still holds the one that scan replaced - the same board, and
+		 * adding it would put the board in the list twice.
+		 */
+		bool has_device(const list<shared_ptr<devices::Device>> &devs,
+			const shared_ptr<devices::Device> &device)
 		{
+			const QString identity =
+				widgets::DeviceToolButton::device_identity(device);
+
+			for (const shared_ptr<devices::Device> &dev : devs)
+			{
+				if (dev == device)
+					return true;
+
+				if (!identity.isEmpty() &&
+					widgets::DeviceToolButton::device_identity(dev) == identity)
+					return true;
+			}
+
+			return false;
+		}
+
+		} // namespace
+
+		void MainBar::rebuild_device_list(bool keep_label)
+		{
+			/* The manager the names are read through changes on every pass: a
+			 * selector left pointing at the one before shows a freed board,
+			 * or nothing at all. */
 			device_selector_.update_device_mamager(session_.device_manager_ptr());
+
 			DeviceManager &mgr = session_.device_manager();
-			shared_ptr<devices::Device> selected_device = session_.device();
+			const shared_ptr<devices::Device> selected = session_.device();
+
 			list<shared_ptr<devices::Device>> devs;
 			copy(mgr.devices().begin(), mgr.devices().end(), back_inserter(devs));
-			if (std::find(devs.begin(), devs.end(), selected_device) == devs.end())
-				devs.push_back(selected_device);
-			device_selector_.set_device_list(devs, selected_device);
+			/* The board this page holds is in the menu whatever the scan said:
+			 * it is the one the page is on. */
+			if (selected && !has_device(devs, selected))
+				devs.push_back(selected);
+
+			if (keep_label)
+				device_selector_.set_available_devices(devs);
+			else
+				device_selector_.set_device_list(devs, selected);
+		}
+
+		void MainBar::update_device_list()
+		{
+			rebuild_device_list();
 			update_device_config_widgets();
 		}
 
 		void MainBar::refresh_device_selector()
 		{
-			DeviceManager &mgr = session_.device_manager();
-
-			device_selector_.update_device_mamager(session_.device_manager_ptr());
-
-			list<shared_ptr<devices::Device>> devs;
-			copy(mgr.devices().begin(), mgr.devices().end(), back_inserter(devs));
-			const shared_ptr<devices::Device> selected = session_.device();
-			if (std::find(devs.begin(), devs.end(), selected) == devs.end())
-				devs.push_back(selected);
-			device_selector_.set_device_list(devs, selected);
-
+			rebuild_device_list();
 			update_device_status_icon();
 		}
 
@@ -818,7 +1115,7 @@ namespace pv
 				capture_running_ = running;
 
 				/* The count, the boards it is about and the flag that says a pass
-				 * is owed are one reading to the poll, so they change together. */
+				 * is owed are one reading to the watcher, so they change together. */
 				std::lock_guard<std::mutex> lock(s_capture_mutex);
 				if (running)
 					++s_captures_running;
@@ -900,7 +1197,7 @@ namespace pv
 		void MainBar::set_busy_devices(const QSet<QString> &busy,
 			const QString &own)
 		{
-			/* The poll needs the whole set: a chain that went away is only a
+			/* The watcher needs the whole set: a chain that went away is only a
 			 * board it can point at if it knows whose board it was. */
 			{
 				std::lock_guard<std::mutex> lock(vendorName_mutex);
@@ -2653,10 +2950,14 @@ namespace pv
 
 			session_.select_device(device);
 
-			/* A board that refused to open leaves the session empty, and the
-			 * selector must not keep showing it as the one in use. */
-			if (!session_.device()) {
-				device_selector_.clear_selection();
+			/*
+			 * A board that refused to open is not the one in use. The page
+			 * keeps the board it had - dropping it left the device list
+			 * with nothing in it - so the failure itself is what has to be
+			 * asked, not an empty device.
+			 */
+			if (session_.device_open_failed()) {
+				update_device_list();
 				return false;
 			}
 
@@ -2687,259 +2988,288 @@ namespace pv
 		void MainBar::hot_plug_listen()
 		{
 			/*
-			 * Only how many boards of each build are on the bus is compared: a
-			 * second libusb context numbers buses and ports its own way, so paths
-			 * cannot be matched. Which board it was is the main thread's work -
-			 * it rescans and matches every page by identity.
+			 * libusb reports every arrival and every removal of the builds below,
+			 * carrying the board it happened to. Nothing is polled: this thread
+			 * sleeps in libusb's event wait and is woken by a change.
 			 *
-			 * The count is read against where it started rather than against the
-			 * poll before, and only once it has held still: a board that was just
-			 * plugged re-enumerates a few times, and the dip in between would
-			 * otherwise read as a board leaving.
+			 * Only the chain of ports is compared - a second libusb context
+			 * numbers buses its own way - and which page a chain belongs to is
+			 * the main thread's work.
 			 */
 			struct HotPlugId {
 				uint16_t vid;
 				uint16_t pid;
-				WchDeviceType wch_type;
 			};
 
 			const HotPlugId hot_plug_ids[] = {
-				{ WCH_VID, WCH_PID_CH32H417, WchDeviceType::CH32H417 },
-				{ WCH_VID, WCH_PID_CH569, WchDeviceType::CH569 },
-				{ 0x1d50, 0x608c, WchDeviceType::None },
-				{ 0x1d50, 0x608d, WchDeviceType::None },
+				{ WCH_VID, WCH_PID_CH32H417 },
+				{ WCH_VID, WCH_PID_CH569 },
+				{ 0x1d50, 0x608c, },
+				{ 0x1d50, 0x608d, },
 			};
 			const size_t hot_plug_count = G_N_ELEMENTS(hot_plug_ids);
 
-			int count[G_N_ELEMENTS(hot_plug_ids)] = { 0 };
-			int base[G_N_ELEMENTS(hot_plug_ids)] = { 0 };
-			int last[G_N_ELEMENTS(hot_plug_ids)] = { 0 };
-			/* The chain of ports each watched board sits in, and the same when the
-			 * last change was handled: this page's own board is told from the rest
-			 * by it, and two boards on one chain cannot be told apart at all. */
-			std::map<std::string, int> chains_now;
-			std::map<std::string, int> chains_base;
-			bool primed = false;
-			int stable = 0;
+			const UsbApi *const usb = usb_api();
 
-			libusb_device **devlist = NULL;
+			if (!usb || !usb->can_watch())
+			{
+				qWarning() << "hot_plug_listen: libusb cannot watch the bus";
+				return;
+			}
+
 			libusb_context *libusb_ctx = NULL;
-			int device_count = 0;
-			int index = 0;
 
-			/* The libusb context must be initialized explicitly: passing
-			 * NULL to libusb_get_device_list() is undefined behaviour (older versions dereference a null pointer). */
-			if (libusb_init(&libusb_ctx) != 0)
+			/* The context must be initialized explicitly: an unwatched bus has
+			 * nothing to report, and a NULL context is not the same thing. */
+			if (usb->init(&libusb_ctx) != 0)
 			{
 				qWarning() << "hot_plug_listen: libusb_init failed";
 				return;
 			}
-			poll_running_ = true;
+
+			if (usb->has_capability(LIBUSB_CAP_HAS_HOTPLUG) != 1)
+			{
+				qWarning() << "hot_plug_listen: hot-plug is not available";
+				usb->exit(libusb_ctx);
+				return;
+			}
+
+			libusb_hotplug_callback_handle callbacks[G_N_ELEMENTS(hot_plug_ids)];
+			size_t callbacks_count = 0;
+
+			for (size_t i = 0; i < hot_plug_count; i++)
+			{
+				libusb_hotplug_callback_handle handle = 0;
+
+				const int rc = usb->hotplug_register(libusb_ctx,
+					LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED |
+						LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT,
+					0, hot_plug_ids[i].vid, hot_plug_ids[i].pid,
+					LIBUSB_HOTPLUG_MATCH_ANY, on_usb_bus_change, NULL,
+					&handle);
+
+				if (rc == 0)
+					callbacks[callbacks_count++] = handle;
+				else
+					qWarning() << "hot_plug_listen: hot-plug registration"
+							   << "failed for" << hot_plug_ids[i].vid
+							   << hot_plug_ids[i].pid << rc;
+			}
+
+			if (callbacks_count == 0)
+			{
+				qWarning() << "hot_plug_listen: no board is being watched";
+				usb->exit(libusb_ctx);
+				return;
+			}
+
+			/*
+			 * No quiet period here: a pass closes and re-flashes the boards it
+			 * finds, and the events that follow are piled up by the front end's
+			 * own debounce instead - one pass answers them all, and a board
+			 * that is already running is only re-opened.
+			 */
 
 			while (hot_plug_listen_)
 			{
-				device_count = libusb_get_device_list(libusb_ctx, &devlist);
-
-				for (size_t i = 0; i < hot_plug_count; i++)
-					count[i] = 0;
-				chains_now.clear();
-
-				for (index = 0; index < device_count; index++)
-				{
-					struct libusb_device_descriptor des;
-
-					if (libusb_get_device_descriptor(devlist[index], &des) != 0)
-						continue;
-
-					for (size_t i = 0; i < hot_plug_count; i++)
-					{
-						if (des.idVendor != hot_plug_ids[i].vid ||
-							des.idProduct != hot_plug_ids[i].pid)
-								continue;
-
-						count[i]++;
-
-						uint8_t ports[8];
-						const int depth = libusb_get_port_numbers(devlist[index], ports, 8);
-						std::string chain;
-						for (int k = 0; k < depth; k++)
-						{
-							if (k)
-								chain += '.';
-							chain += std::to_string(ports[k]);
-						}
-						if (!chain.empty())
-							chains_now[chain]++;
-					}
-				}
-				if (device_count >= 0)
-					libusb_free_device_list(devlist, 1);
-				devlist = NULL;
+				/* The wait is where this thread lives; the timeout only lets the
+				 * loop notice that it is over. */
+				struct timeval wait = { 0, 200000 };
+				usb->handle_events_timeout(libusb_ctx, &wait);
 
 				/*
-				 * Safety net: the upgrade flag is cleared by the device coming
-				 * back, and a device that never does would leave hot-plug deaf
-				 * for this board forever. Give up after a minute.
+				 * Safety net: the upgrade ends when the board comes back, and
+				 * a device that never does would leave the board's page
+				 * silent about it for good. Give up after a minute.
 				 */
-				if (iap_upgrading_ &&
-					g_get_monotonic_time() >= iap_upgrade_deadline_.load())
+				if (upgrade_running() &&
+					g_get_monotonic_time() >= s_upgrade_deadline.load())
 				{
 					qWarning() << "Firmware upgrade flag timed out, "
 								"resuming CH32H417 hot-plug detection";
-					iap_upgrading_ = false;
+					end_upgrade();
+					/* The page it was started from is still masked, and its
+					 * tab cannot be closed until the mask goes: the window
+					 * takes it down, so this has to cross threads. */
+					QMetaObject::invokeMethod(this, [this]() {
+						Q_EMIT device_upgrading(false, -1);
+					}, Qt::QueuedConnection);
 				}
 
-				if (!primed)
+				const std::vector<UsbBusEvent> events = usb_events_take();
+
+				if (events.empty())
+					continue;
+
+				const QSet<QString> busy = get_busy_identities();
+
+				bool wch_arrived = false;
+				bool went = false;
+				QStringList gone;
+
+				for (const UsbBusEvent &event : events)
 				{
-					for (size_t i = 0; i < hot_plug_count; i++)
-						base[i] = count[i];
-					chains_base = chains_now;
-					primed = true;
+					if (event.vid == WCH_VID &&
+						event.event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED)
+						wch_arrived = true;
+
+					if (event.event != LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT)
+						continue;
+
+					went = true;
+
+					if (event.chain.empty())
+						continue;
+
+					/* Which pages lost their board: the ones whose identity
+					 * carries this chain. */
+					const QString chain =
+						QString::fromStdString(event.chain);
+					for (const QString &identity : busy)
+					{
+						const int dash = identity.indexOf('-');
+						if (dash >= 0 &&
+							identity.mid(dash + 1) == chain &&
+							!gone.contains(identity))
+							gone << identity;
+					}
+				}
+
+				/*
+				 * An upgrade makes the CH32H417 re-enumerate as a HID
+				 * (PID 0xFE17); that window is ignored. The board coming back
+				 * goes to the slot the upgrade flow uses: it clears the flag,
+				 * reports success and refreshes the list.
+				 */
+				if (upgrade_running() && wch_arrived)
+				{
+					QMetaObject::invokeMethod(this, "on_ch32h417_device_event",
+											  Qt::QueuedConnection,
+											  Q_ARG(unsigned long, CH375_DEVICE_ARRIVAL));
+					continue;
+				}
+
+				/* The pages are told below; the pass is told as well, because a
+				 * scan can still list a board the host has only just taken
+				 * away. */
+				declare_gone(gone);
+
+				/*
+				 * A pass closes the device in use, so while a capture runs it waits
+				 * for that capture to end - unless the board behind that capture
+				 * was the one that went: nothing is left to capture on then and it
+				 * runs at once.
+				 *
+				 * The pages that did lose a board are told, so that they can say so
+				 * instead of sitting there looking alive.
+				 *
+				 * A captured board the chains cannot describe (the vendor back end)
+				 * is taken as gone: acting at once is the safe side.
+				 */
+				/*
+				 * Decided and recorded under the lock the count is under: a capture
+				 * that ends while this is deciding has to see the flag, or the pass
+				 * it should have triggered is lost and the pages stay masked until
+				 * something else happens.
+				 */
+				bool defer = false;
+				QSet<QString> capturing;
+				{
+					std::lock_guard<std::mutex> lock(s_capture_mutex);
+
+					const int captures = s_captures_running;
+					/*
+					 * Only a board whose ports the identity carries can be told
+					 * from the rest: one it does not describe (the vendor
+					 * backend) may or may not be the board being captured, and a
+					 * pass closes the devices it finds - so it waits for the
+					 * capture to end. A board that really went ends the capture
+					 * by itself.
+					 */
+					bool captured_went = false;
+					QStringList captured_gone;
+					for (const QString &id : s_capturing_identities) {
+						if (id.startsWith("usb/") && gone.contains(id))
+							captured_went = true;
+						if (gone.contains(id))
+							captured_gone << id;
+						capturing.insert(id);
+					}
+
+					/*
+					 * A capture whose board went ends right there, the way the
+					 * stop button ends it: the pass that follows asks about the
+					 * page. Nothing is closed while it runs.
+					 */
+					if (!captured_gone.isEmpty())
+						Q_EMIT capture_board_gone(captured_gone);
+
+					defer = (captures > 0 && !captured_went);
+					s_attach_deferred = defer;
+				}
+
+				if (defer)
+				{
+					/*
+					 * The board of the capture is not masked: its capture ends
+					 * by itself and the pass that follows asks about the page.
+					 * Only a board that went beside it is.
+					 */
+					QStringList notify;
+					for (const QString &id : gone)
+						if (!capturing.contains(id))
+							notify << id;
+
+					if (!notify.isEmpty())
+						Q_EMIT devices_went_offline(notify);
+					else if (gone.isEmpty() && went)
+					{
+						/*
+						 * The vendor backend carries no ports to match a board
+						 * on, so the one that went cannot be named. The board
+						 * of the capture is still there (that is what waiting
+						 * means), so what went belongs to one of the pages that
+						 * are not capturing: they are masked now, and the pass
+						 * corrects the list.
+						 */
+						QStringList suspects;
+						for (const QString &id : busy)
+							if (id.startsWith("ch375/") &&
+								!capturing.contains(id))
+								suspects << id;
+						if (!suspects.isEmpty())
+							Q_EMIT devices_went_offline(suspects);
+					}
 				}
 				else
-				{
-					bool moving = false;
-					bool changed = false;
-
-					for (size_t i = 0; i < hot_plug_count; i++)
-					{
-						if (count[i] != last[i])
-							moving = true;
-						if (count[i] != base[i])
-							changed = true;
-					}
-
-					if (moving || !changed)
-					{
-						stable = 0;
-					}
-					else if (++stable >= 3)
-					{
-						stable = 0;
-
-						int ch32h417_delta = 0;
-						bool wch_changed = false;
-						bool list_changed = false;
-
-						for (size_t i = 0; i < hot_plug_count; i++)
-						{
-							const int delta = count[i] - base[i];
-							if (!delta)
-								continue;
-
-							if (hot_plug_ids[i].wch_type == WchDeviceType::None)
-								list_changed = true;
-							else
-								wch_changed = true;
-
-							if (hot_plug_ids[i].wch_type == WchDeviceType::CH32H417)
-								ch32h417_delta = delta;
-						}
-
-						for (size_t i = 0; i < hot_plug_count; i++)
-							base[i] = count[i];
-
-						/*
-						 * An upgrade makes the CH32H417 re-enumerate as a HID
-						 * (PID 0xFE17); that window is ignored, the same way the
-						 * CH375 notify callback does. The board coming back is
-						 * handed to the slot that callback uses: it clears the
-						 * upgrade flag, reports success and refreshes the list.
-						 */
-						if (iap_upgrading_ && ch32h417_delta != 0)
-						{
-							if (ch32h417_delta > 0)
-								QMetaObject::invokeMethod(this, "on_ch32h417_device_event",
-														  Qt::QueuedConnection,
-														  Q_ARG(unsigned long, CH375_DEVICE_ARRIVAL));
-						}
-						else if (wch_changed)
-						{
-							/*
-							 * Which pages lost their board: a chain that was there when the last
-							 * change was handled and is gone now. A chain two boards share says
-							 * nothing and is left out; the pass settles that case anyway.
-							 */
-							QStringList gone;
-							const QSet<QString> busy = get_busy_identities();
-							for (const QString &identity : busy)
-							{
-								const int dash = identity.startsWith("usb/") ? identity.indexOf('-') : -1;
-								if (dash < 0)
-									continue;
-
-								const std::string chain = identity.mid(dash + 1).toStdString();
-								const auto before = chains_base.find(chain);
-								if (before != chains_base.end() && before->second == 1 &&
-									chains_now.find(chain) == chains_now.end())
-									gone << identity;
-							}
-
-							/*
-							 * A pass closes the device in use, so while a capture runs it
-							 * waits for that capture to end - unless the board behind that
-							 * capture was the one that went: nothing is left to capture on
-							 * then and it runs at once.
-							 *
-							 * The pages that did lose a board are told, so that they can say
-							 * so instead of sitting there looking alive.
-							 *
-							 * A captured board the chains cannot describe (the vendor back
-							 * end) is taken as gone: acting at once is the safe side.
-							 */
-							/*
-							 * Decided and recorded under the lock the count is under: a
-							 * capture that ends while this is deciding has to see the
-							 * flag, or the pass it should have triggered is lost and the
-							 * pages stay masked until something else happens.
-							 */
-							bool defer = false;
-							{
-								std::lock_guard<std::mutex> lock(s_capture_mutex);
-
-								int captures = s_captures_running;
-								bool captured_went = false;
-								for (const QString &id : s_capturing_identities)
-									if (!id.startsWith("usb/") || gone.contains(id))
-										captured_went = true;
-
-								defer = (captures > 0 && !captured_went);
-								s_attach_deferred = defer;
-							}
-
-							if (defer)
-							{
-								/* A page keeps its mask until the pass runs: a board that came
-								 * back is only listed, the page still holds the instance the
-								 * scan of that pass replaces. */
-								if (!gone.isEmpty())
-									Q_EMIT devices_went_offline(gone);
-							}
-							else
-								device_attached();
-						}
-						else if (list_changed)
-						{
-							/* Refresh the list only, do not switch
-							 * automatically. */
-							refresh_device_list();
-						}
-						/* Only now is it the state the next change is
-						 * measured against. */
-						chains_base = chains_now;
-					}
-				}
-
-				g_usleep(100000);
-				for (size_t i = 0; i < hot_plug_count; i++)
-					last[i] = count[i];
+					device_attached();
 			}
-			poll_running_ = false;
-			libusb_exit(libusb_ctx);
+
+			for (size_t i = 0; i < callbacks_count; i++)
+				if (usb->hotplug_deregister)
+					usb->hotplug_deregister(libusb_ctx, callbacks[i]);
+
+			usb->exit(libusb_ctx);
+		}
+
+		void MainBar::update_upgrade_action()
+		{
+			/* An FX2 page has nothing the upgrade tool knows how to talk to;
+			 * hiding the entry says so without an error box. */
+			if (action_update_)
+				action_update_->setVisible(
+					upgradeable_device(session_.device()));
 		}
 
 		void MainBar::on_device_changed()
 		{
+			/* The page is on another device now: an upgrade mask left over
+			 * from the one before would have nothing left to say. A board
+			 * that merely came back does not come through here - taking an
+			 * instance over is not a device change. */
+			if (is_device_upgrading())
+				set_device_upgrading(false);
+
 			set_device_offline(false);
 
 			/* The change is through: the next one asks again. */
@@ -2959,6 +3289,7 @@ namespace pv
 			 * is part of building the page, so it happens there. */
 			update_device_list();
 			update_device_status_icon();
+			update_upgrade_action();
 
 			/*
 			 * The zoom and pan limits are derived from the sample rate and
@@ -2993,25 +3324,13 @@ namespace pv
 			/* Register unsigned long as a Qt metatype for cross-thread signal delivery */
 			qRegisterMetaType<unsigned long>("unsigned long");
 
-#ifdef _WIN32
-			/*
-			 * CH375DLL only exists on Windows. Where it does, the vendor
-			 * driver reports its own devices; elsewhere the polling thread
-			 * below is the only hot-plug source for the CH32H417.
-			 */
-			ch375_init();
-			ch375_set_device_notify(0, NULL, ch32h417_notify_callback);
-#endif
-
-			/* Start the CH569 polling thread */
+			/* Start the bus watcher */
 			if (t_hot_plug.joinable())
 			{
 				hot_plug_listen_ = false;
 				t_hot_plug.join();
 			}
 			hot_plug_listen_ = true;
-
-			usleep(10000);
 			t_hot_plug = std::thread(&MainBar::hot_plug_listen, this);
 		}
 
@@ -3020,12 +3339,7 @@ namespace pv
 			/* Clear the static instance pointer */
 			s_mainbar_instance = nullptr;
 
-#ifdef _WIN32
-			/* Unregister the CH32H417 device event callback */
-			ch375_set_device_notify(0, NULL, NULL);
-#endif
-
-			/* Stop the CH569 polling thread */
+			/* Stop the bus watcher */
 			if (t_hot_plug.joinable())
 			{
 				hot_plug_listen_ = false;
@@ -3404,41 +3718,50 @@ namespace pv
 
 		void MainBar::on_action_update_triggered()
 		{
-			/* Check whether the current device is a CH32H417 (USB mode or HID mode) */
-			QString currentVendorName = get_vendorName();
-			bool is_ch32h417_usb = (currentVendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)]);
+			/*
+			 * The board this page is on is the one that gets upgraded. It is
+			 * the only one the page can speak for, and an FX2 running the
+			 * sigrok firmware takes no CH32H417 image at all.
+			 */
+			const shared_ptr<devices::Device> page_device = session_.device();
 
-		bool is_ch32h417_hid = false;
-		libusb_device **hid_devlist = NULL;
-		libusb_context *hid_ctx = NULL;
-
-		/* Initialize the libusb context explicitly before enumerating, to avoid passing NULL */
-		if (libusb_init(&hid_ctx) == 0) {
-			int hid_count = libusb_get_device_list(hid_ctx, &hid_devlist);
-			for (int i = 0; i < hid_count; i++) {
-				struct libusb_device_descriptor hid_des;
-
-				if (libusb_get_device_descriptor(hid_devlist[i], &hid_des) != 0)
-					continue;
-				if (hid_des.idVendor == WCH_VID && hid_des.idProduct == WCH_PID_CH32H417_HID) {
-					is_ch32h417_hid = true;
-					break;
-				}
-			}
-			if (hid_count >= 0)
-				libusb_free_device_list(hid_devlist, 1);
-			libusb_exit(hid_ctx);
-		} else {
-			qWarning() << "on_action_update_triggered: libusb_init failed";
-		}
-
-			if (!is_ch32h417_usb && !is_ch32h417_hid)
-			{
+			if (!upgradeable_device(page_device)) {
 				pv::util::show_message(this, tr("Warning"),
 					tr("The current device does not support firmware upgrade.\nPlease connect the CH32H417 device and try again."),
 					pv::util::message_box_icon(QMessageBox::Warning), 350);
 				return;
 			}
+
+			/*
+			 * The command channel has to be the one that owns the board: a
+			 * device bound to WinUSB cannot be written through the CH375 DLL.
+			 */
+			const shared_ptr<devices::HardwareDevice> page_hw =
+				std::dynamic_pointer_cast<devices::HardwareDevice>(page_device);
+			const bool iap_use_libusb = page_hw &&
+				string(page_hw->hardware_device()->driver()->name()) ==
+					"wch-ch32h417-libusb";
+
+			/* Which board it is, and where the tool finds it: the ports it
+			 * sits in, not the order it happened to be enumerated in. */
+			const QString identity =
+				widgets::DeviceToolButton::device_identity(page_device);
+			const int target = upgrade_index_for(identity, iap_use_libusb);
+			qDebug() << "Firmware upgrade:" << identity << "-> index" << target
+					 << (iap_use_libusb ? "(libusb)" : "(CH375)");
+
+			if (target < 0) {
+				pv::util::show_message(this, tr("Warning"),
+					tr("The board this session is on could not be found for the upgrade."),
+					pv::util::message_box_icon(QMessageBox::Warning), 350);
+				return;
+			}
+
+			/* The IAP channel carries no port, so the serial is what the
+			 * board is picked by once it is in its bootloader. */
+			const shared_ptr<sigrok::Device> page_sr = page_device->device();
+			const QString serial = page_sr ?
+				QString::fromStdString(page_sr->serial_number()) : QString();
 
 			/* Let the user pick the firmware file */
 			QString firmwarePath = QFileDialog::getOpenFileName(this,
@@ -3457,61 +3780,87 @@ namespace pv
 				session_.stop_capture();
 			}
 
-			/* Create the progress dialog */
-			QProgressDialog *progressDlg = new QProgressDialog(
-				tr("Firmware update in progress, do not disconnect the USB connection"), tr("Cancel"), 0, 100, this);
-			progressDlg->setWindowTitle(tr("Firmware Update"));
-			progressDlg->setWindowModality(Qt::WindowModal);
-			progressDlg->setMinimumDuration(0);
-			progressDlg->setValue(0);
-			progressDlg->setCancelButton(nullptr); /* cancellation disabled */
-			progressDlg->setWindowFlags(progressDlg->windowFlags() & ~Qt::WindowContextHelpButtonHint | Qt::WindowStaysOnTopHint);
+			/*
+			 * The board is about to leave the bus for its bootloader, so the
+			 * pages have to know it went on purpose: the pass that finds it
+			 * missing would otherwise take the page for one whose board was
+			 * pulled and ask about saving the capture.
+			 */
+			begin_upgrade(identity);
 
 			/*
-			 * Set the IAP flag so hot-plug detection does not report a false
-			 * disconnect. It is normally cleared when the device comes back and
-			 * reports through on_ch32h417_device_event(); the deadline is the
-			 * fallback for a device that never returns.
+			 * The progress is a mask over the page, not a dialog: the window
+			 * stays usable, the page is not, and the tab it sits in cannot be
+			 * closed while the image is being written - the page that owns
+			 * this worker has to outlive it.
 			 */
-			iap_upgrading_ = true;
-			iap_upgrade_deadline_.store(g_get_monotonic_time() + 60 * G_USEC_PER_SEC);
+			/* From here until the worker says it is done, its progress is
+			 * what the mask shows, and nothing else. */
+			upgrade_writing_ = true;
+			upgrade_percent_ = 0;
+			Q_EMIT device_upgrading(true, 0);
 
-			/*
-			 * The "enter IAP" command has to go out on the backend that owns
-			 * the device: a device bound to WinUSB cannot be opened through the
-			 * CH375 DLL, so the write would simply fail. Fall back to CH375
-			 * when no hardware device is selected.
-			 */
-			bool iap_use_libusb = false;
-			shared_ptr<devices::HardwareDevice> iap_hw_device =
-				std::dynamic_pointer_cast<devices::HardwareDevice>(session_.device());
-			if (iap_hw_device)
-				iap_use_libusb = (string(iap_hw_device->hardware_device()->driver()->name()) ==
-								  "wch-ch32h417-libusb");
-
-			pv::dialogs::IAPWorker *worker = new pv::dialogs::IAPWorker(0, firmwarePath,
-				WCH_VID, WCH_PID_CH32H417_HID, is_ch32h417_hid, iap_use_libusb);
+			pv::dialogs::IAPWorker *worker = new pv::dialogs::IAPWorker(target,
+				firmwarePath, WCH_VID, WCH_PID_CH32H417_HID, false,
+				iap_use_libusb, serial);
 			QThread *workerThread = new QThread();
 			worker->moveToThread(workerThread);
 
 			connect(workerThread, &QThread::started, worker, &pv::dialogs::IAPWorker::do_work);
-			connect(worker, &pv::dialogs::IAPWorker::progress_updated, progressDlg, &QProgressDialog::setValue);
+			/* The worker emits from its own thread; the mask is a widget and
+			 * only the window may touch it, so this goes through the thread
+			 * the bar lives in. */
+			connect(worker, &pv::dialogs::IAPWorker::progress_updated, this,
+				[this](int percent) {
+					/* The last steps are reported while the board resets, and
+					 * they can land after the worker said it was done - a
+					 * mask put back then would never come down. Only what is
+					 * written while it is written is passed on, and only when
+					 * the number moves: the worker reports per block. */
+					if (!upgrade_writing_ || percent == upgrade_percent_)
+						return;
+					upgrade_percent_ = percent;
+					Q_EMIT device_upgrading(true, percent);
+				}, Qt::QueuedConnection);
 			/* "this" as the context object: the worker emits from its own
 			 * thread, and without it the lambda would build the message box
 			 * there and Qt would complain about the parent's thread. */
 			connect(worker, &pv::dialogs::IAPWorker::finished, this, [=](bool success)
 					{
-				progressDlg->close();
+				upgrade_writing_ = false;
+				upgrade_percent_ = -1;
+
 				if (!success) {
-					iap_upgrading_ = false;
+					end_upgrade();
+					/* The mask comes off before the message: the board is not
+					 * coming back on its own, and the question the pass asks
+					 * is about this page. */
+					Q_EMIT device_upgrading(false, -1);
 					pv::util::show_message(this, tr("Update Failed"),
 						tr("Firmware Update Failed!\nPlease check the device connection and firmware file."),
 						pv::util::message_box_icon(QMessageBox::Critical), 0);
+					/* The board is not coming back on its own, so the bus is
+					 * read: the page has to find it gone instead of keeping a
+					 * device that is not there. */
+					device_attached();
 				}
+				/*
+				 * The mask cannot outlive the worker, whatever the outcome: the
+				 * arrival that ends a successful upgrade is reported through the
+				 * bus watcher - another page, another thread - and that is a
+				 * hint, not something a page can wait on. It stays up only for
+				 * as long as the reset needs.
+				 */
+				QTimer::singleShot(UpgradeMaskGraceMs, this, [this]() {
+					if (upgrade_writing_)
+						return;
+					set_device_upgrading(false);
+					Q_EMIT device_upgrading(false, -1);
+				});
+
 				workerThread->quit(); });
 			connect(workerThread, &QThread::finished, workerThread, &QThread::deleteLater);
 			connect(workerThread, &QThread::finished, worker, &dialogs::IAPWorker::deleteLater);
-			connect(workerThread, &QThread::finished, progressDlg, &QProgressDialog::deleteLater);
 
 			workerThread->start();
 
@@ -3566,57 +3915,40 @@ namespace pv
 				500, true, true);
 		}
 
-		/* CH32H417 hot-plug callback - runs on the DLL thread */
-		void MainBar::ch32h417_notify_callback(unsigned long eventStatus)
-		{
-			/* Hand the event to the main thread through QMetaObject::invokeMethod */
-			if (s_mainbar_instance)
-			{
-				QMetaObject::invokeMethod(s_mainbar_instance, "on_ch32h417_device_event",
-										  Qt::QueuedConnection, Q_ARG(unsigned long, eventStatus));
-			}
-		}
-
 		/* CH32H417 device event handler - runs on the main thread */
 		void MainBar::on_ch32h417_device_event(unsigned long eventStatus)
 		{
-			/*
-			 * The poll covers arrivals and departures on its own, from either back
-			 * end, and the vendor driver reports each of them a second time. Only the
-			 * upgrade window needs this callback: it clears the flag and reports
-			 * success.
-			 */
-			if (poll_running_ && !iap_upgrading_)
+			/* Only an arrival is reported: the driver-side notify is gone, and
+			 * this is the upgrade flow saying the board is back. */
+			if (eventStatus != CH375_DEVICE_ARRIVAL)
 				return;
 
-			if (eventStatus == CH375_DEVICE_ARRIVAL)
+			if (upgrade_running())
 			{
-				if (iap_upgrading_)
-				{
-					iap_upgrading_ = false;
-					pv::util::show_message(this, tr("Update Success"),
-						tr("Firmware Update Success!\nDevice already restart."),
-						pv::util::message_box_icon(QMessageBox::Information),
-						400, false, false, false);
-				}
-				/* CH32H417 plugged in: if the device is coming back after an IAP upgrade, clear the upgrade flag */
-				device_attached();
+				end_upgrade();
+				/* The board is back, so the page is free again: the pass
+				 * below takes it over and says what the mask said until now. */
+				Q_EMIT device_upgrading(false, -1);
+				pv::util::show_message(this, tr("Update Success"),
+					tr("Firmware Update Success!\nDevice already restart."),
+					pv::util::message_box_icon(QMessageBox::Information),
+					400, false, false, false);
 			}
-			else if (eventStatus == CH375_DEVICE_REMOVE)
-			{
-				if (iap_upgrading_)
-				{
-					return;
-				}
 
-				/*
-				 * Same request as an arrival: read the bus and let that
-				 * decide. Acting on the report alone would turn a repeat of
-				 * it into a question about a board that is still there.
-				 */
+			/*
+			 * The bus is read once the board has settled, not at the reset:
+			 * the port it reports straight after one is still the one from
+			 * before it came up, and a page bound to that cannot be found
+			 * again - the next upgrade would not know which board to take.
+			 * A capture in progress is left alone; the next change settles
+			 * the page instead.
+			 */
+			QTimer::singleShot(UpgradeSettleMs, this, [this]() {
+				if (captures_running())
+					return;
 				device_attached();
+			});
 		}
-	}
 
 } // namespace toolbars
 

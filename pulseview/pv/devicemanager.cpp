@@ -38,6 +38,7 @@
 #include <QDebug>
 #include <QObject>
 #include <QProgressDialog>
+#include <QThread>
 
 #include <boost/filesystem.hpp>
 
@@ -77,9 +78,16 @@ DeviceManager::DeviceManager(shared_ptr<Context> context,
 	std::string driver, bool do_scan) :
 	context_(context)
 {
-	unique_ptr<QProgressDialog> progress(new QProgressDialog("",
-		QObject::tr("Cancel"), 0, context->drivers().size() + 1));
-	progress->setWindowModality(Qt::WindowModal);
+	/* The scan runs on a worker thread while a board is re-flashed, and a
+	 * widget cannot be built there: the caller shows its own progress then. */
+	QCoreApplication *const app = QCoreApplication::instance();
+	const bool gui_thread = app && QThread::currentThread() == app->thread();
+	unique_ptr<QProgressDialog> progress;
+	if (gui_thread)
+		progress.reset(new QProgressDialog("",
+			QObject::tr("Cancel"), 0, context->drivers().size() + 1));
+	if (progress)
+		progress->setWindowModality(Qt::WindowModal);
 	/*
 	 * A scan of a healthy link is over in a fraction of a second, and a
 	 * dialog that comes and goes in that time is only a flicker - several
@@ -87,7 +95,8 @@ DeviceManager::DeviceManager(shared_ptr<Context> context,
 	 * Only a link that has stopped answering takes long enough to be
 	 * worth showing, and that is the case the dialog is there for.
 	 */
-	progress->setMinimumDuration(800);
+	if (progress)
+		progress->setMinimumDuration(800);
 
 	int entry_num = 1;
 
@@ -116,13 +125,16 @@ DeviceManager::DeviceManager(shared_ptr<Context> context,
 		if (!driver_supported(entry.second))
 			continue;
 
-		progress->setLabelText(QObject::tr("Scanning for devices that driver %1 can access...")
-			.arg(QString::fromStdString(entry.first)));
+		if (progress)
+			progress->setLabelText(QObject::tr("Scanning for devices that driver %1 can access...")
+				.arg(QString::fromStdString(entry.first)));
 
 		if (entry.first == user_name)
 			continue;
 		driver_scan(entry.second, map<const ConfigKey *, VariantBase>());
 
+		if (!progress)
+			continue;
 		progress->setValue(entry_num++);
 		QApplication::processEvents();
 		if (progress->wasCanceled())
@@ -169,7 +181,8 @@ DeviceManager::DeviceManager(shared_ptr<Context> context,
 				user_spec_device_ = found.front();
 		}
 	}
-	progress->setValue(entry_num++);
+	if (progress)
+		progress->setValue(entry_num++);
 }
 
 const shared_ptr<sigrok::Context>& DeviceManager::context() const

@@ -233,6 +233,13 @@ public:
 	bool using_file_device() const;
 
 	/**
+	 * Whether the last set_device() could not open what it was handed. The
+	 * page keeps the board it had in that case, so the caller has to ask
+	 * this instead of looking for an empty device.
+	 */
+	bool device_open_failed() const { return device_open_failed_; }
+
+	/**
 	 * A copy of another session's capture: it holds the data of a moment
 	 * that has passed, so there is nothing to capture into it and nothing
 	 * to reload from - its own buttons do not apply.
@@ -398,6 +405,8 @@ private:
 	// DeviceManager *device_manager_;
 	int id_;
 	shared_ptr<devices::Device> device_;
+	/* Set by set_device() when the device it was given would not open. */
+	bool device_open_failed_ = false;
 	QString default_name_, name_, save_path_;
 
 	vector< shared_ptr<views::ViewBase> > views_;

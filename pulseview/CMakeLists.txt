@@ -339,6 +339,7 @@ set(pulseview_SOURCES
 	pv/metadata_obj.cpp
 	pv/session.cpp
 	pv/storesession.cpp
+	pv/usbapi.cpp
 	pv/util.cpp
 	pv/binding/binding.cpp
 	pv/binding/inputoutput.cpp
@@ -779,9 +780,10 @@ set(PULSEVIEW_LINK_LIBS
 	${LIBATOMIC_LIBRARY}
 )
 
-# The hot-plug detection code in mainbar.cpp talks to libusb directly,
-# so the library must appear on the link line (Linux rejects transitive
-# dependencies pulled in via libsigrok).
+# On Linux the bus watcher takes its entry points straight from the linked
+# libusb, so the library has to be on the link line (Linux rejects transitive
+# dependencies pulled in via libsigrok). On Windows every call goes through
+# libusb-1.0.dll at run time and this only adds an unused import.
 pkg_check_modules(LIBUSB_LINK QUIET libusb-1.0)
 if(LIBUSB_LINK_FOUND)
 	list(APPEND PULSEVIEW_LINK_LIBS ${LIBUSB_LINK_LIBRARIES})

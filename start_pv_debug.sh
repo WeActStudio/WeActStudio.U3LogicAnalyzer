@@ -9,6 +9,8 @@ else
     BIN=./U3LogicAnalyzer
 fi
 export SIGROKDECODE_DIR=${SCRIPT_DIR}/install/share/libsigrokdecode/decoders
-cd build_cmake/logicanalyzer_build
+# fx2lafw uploads its firmware from here when a board comes up unconfigured.
+export SIGROK_FIRMWARE_DIR=${SCRIPT_DIR}/install/share/sigrok-firmware
+cd "${U3_BUILD_DIR:-$SCRIPT_DIR/build_cmake}/logicanalyzer_build"
 gdb --args "$BIN" -l 5
 cd ../..

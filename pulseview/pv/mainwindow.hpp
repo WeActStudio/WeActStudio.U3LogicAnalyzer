@@ -29,6 +29,7 @@
 
 #include <QMainWindow>
 #include <QShortcut>
+#include <QTimer>
 #include <QTabWidget>
 #include <QToolButton>
 #include <QString>
@@ -157,7 +158,7 @@ public:
 	void save_sessions();
 	void restore_sessions();
 	void add_default_setting();
-	/* Starts the hot-plug poll on the page in front. It is not tied to a board
+	/* Starts the hot-plug watcher on the page in front. It is not tied to a board
 	 * page: a run that only opens files still has to notice a board later. */
 	void start_hot_plug();
 
@@ -200,9 +201,26 @@ public Q_SLOTS:
 	void run_device_attached();
 	/* Pages whose board went while a capture keeps the pass waiting. */
 	void on_devices_went_offline(const QStringList &identities);
+	/* Ends the captures whose board has left, so the pass can run. */
+	void on_capture_board_gone(const QStringList &identities);
+	/* The body of the above, once the board had its moment to come back. */
+	void apply_devices_went_offline(const QStringList &identities);
+	/* A page is writing firmware: it gets the mask, and its tab cannot be
+	 * closed until that is over - the worker belongs to the page. The end of
+	 * it is reported by another page as often as by that one. */
+	void on_device_upgrading(bool active, int percent);
 
 private:
+	/* The page that holds this board, if any: the one place a device
+	 * identity is matched against the pages. */
+	shared_ptr<Session> session_holding(const QString &identity) const;
 	void do_device_detach_switch(const shared_ptr<Session> &session);
+
+	/* The rest of a detach, once the scan it started has finished on its
+	 * worker: hands the new list to the pages, takes the boards back and
+	 * moves the session to one that is there. Runs on the GUI thread. */
+	void finish_device_detach_switch(pv::DeviceManager *manager,
+		const shared_ptr<Session> &session, const QString &lost_identity);
 
 	/* Tells every bar what its device selector may offer: the capture page
 	 * lists every board, a session opened for one board lists that one,
@@ -373,6 +391,9 @@ private:
 	bool is_repeat_acq_ = false;
 	/* True while the link stop warning is on screen. */
 	bool link_stop_message_visible_ = false;
+	/* A capture ended because its board left: the warning about the link
+	 * stopping says nothing new then, the question about the page does. */
+	bool link_stop_from_unplug_ = false;
 	bool is_wch_device_ = false;
 	bool attach_process_done = true;
 	/* Set when a device change arrived while the previous one was still being
@@ -385,6 +406,10 @@ private:
 	 */
 	bool device_event_queued_ = false;
 	static const int DeviceEventDebounceMs = 150;
+	/* How long the "device stopped sending data" warning waits for the
+	 * hot-plug pass to say the board is gone: that question is the one that
+	 * matters when a board was pulled mid-capture. */
+	static const int LinkStopWarnDelayMs = 700;
 	/* The detach question while it is on screen. Only one is ever asked: a
 	 * second copy would sit exactly on top of the first, and answering one
 	 * would only reveal the other. */
@@ -397,6 +422,12 @@ private:
 	 * the board is taken for gone: a scan can miss one while the bus is
 	 * being re-enumerated. */
 	bool attach_retry_done_ = false;
+
+	/* An upgrade holds its page masked until word comes that the board is
+	 * back. That word crosses threads, so it is never the only way out: this
+	 * takes the mask down after a while whatever happened. */
+	static const int UpgradeMaskMaxMs = 120000;
+	QTimer *upgrade_watchdog_ = nullptr;
 };
 
 } // namespace pv

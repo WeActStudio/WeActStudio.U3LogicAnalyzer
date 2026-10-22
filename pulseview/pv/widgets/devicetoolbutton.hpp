@@ -78,6 +78,15 @@ public:
 		shared_ptr<devices::Device> selected);
 
 	/**
+	 * Replaces what the menu offers, leaving the name of the device in use
+	 * alone. A pass that could not hand a page its board back uses this:
+	 * the menu still belongs to a scan that is gone, while the label is
+	 * about a board that never came back.
+	 */
+	void set_available_devices(
+		const list< shared_ptr<devices::Device> > &devices);
+
+	/**
 	 * Sets the current device to "no device". Useful for when a selected
 	 * device fails to open.
 	 */

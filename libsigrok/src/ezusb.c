@@ -118,6 +118,7 @@ SR_PRIV int ezusb_upload_firmware(struct sr_context *ctx, libusb_device *dev,
 		if ((ret = libusb_detach_kernel_driver(hdl, 0)) < 0) {
 			sr_err("failed to detach kernel driver: %s",
 					libusb_error_name(ret));
+			libusb_close(hdl);
 			return SR_ERR;
 		}
 	}
@@ -126,17 +127,29 @@ SR_PRIV int ezusb_upload_firmware(struct sr_context *ctx, libusb_device *dev,
 	if ((ret = libusb_set_configuration(hdl, configuration)) < 0) {
 		sr_err("Unable to set configuration: %s",
 				libusb_error_name(ret));
+		libusb_close(hdl);
 		return SR_ERR;
 	}
 
-	if ((ezusb_reset(hdl, 1)) < 0)
+	/*
+	 * A board pulled out in the middle of the upload fails here. The handle
+	 * has to be let go of even then: it keeps the device taken, and every
+	 * later open of it answers LIBUSB_ERROR_ACCESS.
+	 */
+	if ((ezusb_reset(hdl, 1)) < 0) {
+		libusb_close(hdl);
 		return SR_ERR;
+	}
 
-	if (ezusb_install_firmware(ctx, hdl, name) < 0)
+	if (ezusb_install_firmware(ctx, hdl, name) < 0) {
+		libusb_close(hdl);
 		return SR_ERR;
+	}
 
-	if ((ezusb_reset(hdl, 0)) < 0)
+	if ((ezusb_reset(hdl, 0)) < 0) {
+		libusb_close(hdl);
 		return SR_ERR;
+	}
 
 	libusb_close(hdl);
 

@@ -103,6 +103,12 @@ void DeviceToolButton::set_device_list(
 	selected_device_ = selected;
 	set_label(selected ? QString::fromStdString(
 		selected->display_name(*device_manager_)) : tr("<No Device>"));
+	set_available_devices(devices);
+}
+
+void DeviceToolButton::set_available_devices(
+	const list< shared_ptr<Device> > &devices)
+{
 	devices_ = vector< weak_ptr<Device> >(devices.begin(), devices.end());
 	update_device_list();
 }

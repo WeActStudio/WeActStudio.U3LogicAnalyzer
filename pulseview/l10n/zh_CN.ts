@@ -90,6 +90,10 @@ Do you want to save the session?</source>
 是否保存当前会话?</translation>
     </message>
     <message>
+        <source>Model: %1</source>
+        <translation>型号：%1</translation>
+    </message>
+    <message>
         <location filename="../pv/mainwindow.cpp" line="1264"/>
         <source>Save File</source>
         <translation>保存文件</translation>
@@ -1541,6 +1545,26 @@ Please check the device connection and firmware file.</source>
     <message>
         <source>Waiting for the capture in the other session to end</source>
         <translation>等待其他会话的采集结束后继续</translation>
+    </message>
+    <message>
+        <source>Reinitializing devices</source>
+        <translation>正在重新初始化设备</translation>
+    </message>
+    <message>
+        <source>The board is being re-opened</source>
+        <translation>请稍候，正在重新打开板子</translation>
+    </message>
+    <message>
+        <source>Writing firmware</source>
+        <translation>正在写入固件</translation>
+    </message>
+    <message>
+        <source>Do not disconnect the USB connection</source>
+        <translation>请勿断开 USB 连接</translation>
+    </message>
+    <message>
+        <source>The board this session is on could not be found for the upgrade.</source>
+        <translation>找不到本会话所在的设备，无法升级。</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="2358"/>
