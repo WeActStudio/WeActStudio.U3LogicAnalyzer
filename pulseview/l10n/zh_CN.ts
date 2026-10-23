@@ -90,6 +90,7 @@ Do you want to save the session?</source>
 是否保存当前会话?</translation>
     </message>
     <message>
+        <location filename="../pv/mainwindow.cpp" line="1876"/>
         <source>Model: %1</source>
         <translation>型号：%1</translation>
     </message>
@@ -1547,30 +1548,37 @@ Please check the device connection and firmware file.</source>
         <translation>等待其他会话的采集结束后继续</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="945"/>
         <source>Initializing device</source>
         <translation>正在初始化设备</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="946"/>
         <source>Waiting for the board to come back</source>
         <translation>等待板子重新连接</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1096"/>
         <source>Reinitializing devices</source>
         <translation>正在重新初始化设备</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1097"/>
         <source>The board is being re-opened</source>
         <translation>请稍候，正在重新打开板子</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="958"/>
         <source>Writing firmware</source>
         <translation>正在写入固件</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="959"/>
         <source>Do not disconnect the USB connection</source>
         <translation>请勿断开 USB 连接</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3965"/>
         <source>The board this session is on could not be found for the upgrade.</source>
         <translation>找不到本会话所在的设备，无法升级。</translation>
     </message>

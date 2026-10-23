@@ -201,6 +201,11 @@ Möchten Sie die Sitzung speichern?</translation>
         <translation>Ihre Geräte stehen nicht in der Liste. Stecken Sie den Analyzer ab und wieder an – oder beenden Sie das andere Programm, das ihn verwendet – und suchen Sie erneut.</translation>
     </message>
     <message>
+        <location filename="../pv/mainwindow.cpp" line="1876"/>
+        <source>Model: %1</source>
+        <translation>Modell: %1</translation>
+    </message>
+    <message>
         <location filename="../pv/mainwindow.cpp" line="2131"/>
         <source>Sessions not restored</source>
         <translation>Sitzungen nicht wiederhergestellt</translation>
@@ -1543,6 +1548,41 @@ Bitte überprüfen Sie die Verbindung und die Firmware Datei.</translation>
 <context>
     <name>pv::toolbars::MainBar</name>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="945"/>
+        <source>Initializing device</source>
+        <translation>Gerät wird initialisiert</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="946"/>
+        <source>Waiting for the board to come back</source>
+        <translation>Warten auf die Rückkehr der Platine</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="958"/>
+        <source>Writing firmware</source>
+        <translation>Firmware wird geschrieben</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="959"/>
+        <source>Do not disconnect the USB connection</source>
+        <translation>Trennen Sie die USB-Verbindung nicht</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1096"/>
+        <source>Reinitializing devices</source>
+        <translation>Geräte werden neu initialisiert</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="1097"/>
+        <source>The board is being re-opened</source>
+        <translation>Die Platine wird erneut geöffnet</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3965"/>
+        <source>The board this session is on could not be found for the upgrade.</source>
+        <translation>Die Platine dieser Sitzung wurde für das Upgrade nicht gefunden.</translation>
+    </message>
+    <message>
         <source>Device offline</source>
         <translation>Gerät offline</translation>
     </message>
@@ -2039,13 +2079,38 @@ Bitte überprüfen Sie die Verbindung und die Firmware Datei.</translation>
     </message>
     <message>
         <location filename="../pv/views/decoder_binary/view.cpp" line="101"/>
-        <source>Show data as</source>
-        <translation>Zeige Daten als</translation>
+        <source>Right column</source>
+        <translation>Rechte Spalte</translation>
     </message>
     <message>
         <location filename="../pv/views/decoder_binary/view.cpp" line="109"/>
-        <source>Hexdump</source>
-        <translation>Hex-Dump</translation>
+        <source>ASCII text</source>
+        <translation>ASCII-Text</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="110"/>
+        <source>Hex</source>
+        <translation>Hexadezimal</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="111"/>
+        <source>Decimal</source>
+        <translation>Dezimal</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="112"/>
+        <source>Octal</source>
+        <translation>Oktal</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="113"/>
+        <source>Binary digits</source>
+        <translation>Binärziffern</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="114"/>
+        <source>C array</source>
+        <translation>C-Array</translation>
     </message>
     <message>
         <location filename="../pv/views/decoder_binary/view.cpp" line="123"/>
@@ -2177,14 +2242,54 @@ Bitte überprüfen Sie die Verbindung und die Firmware Datei.</translation>
         <translation>Im Hauptfenster sichtbare anzeigen</translation>
     </message>
     <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="94"/>
+        <source>As written</source>
+        <translation>Wie geschrieben</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="95"/>
+        <source>Hex</source>
+        <translation>Hexadezimal</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="96"/>
+        <source>Decimal</source>
+        <translation>Dezimal</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="97"/>
+        <source>Octal</source>
+        <translation>Oktal</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="98"/>
+        <source>Binary</source>
+        <translation>Binär</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="99"/>
+        <source>ASCII</source>
+        <translation>ASCII</translation>
+    </message>
+    <message>
         <location filename="../pv/views/tabular_decoder/view.cpp" line="708"/>
         <source>Decoder:</source>
         <translation>Dekoder:</translation>
     </message>
     <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="711"/>
+        <source>Value:</source>
+        <translation>Wert:</translation>
+    </message>
+    <message>
         <location filename="../pv/views/tabular_decoder/view.cpp" line="735"/>
         <source>Filter rows</source>
         <translation>Zeilen filtern</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="760"/>
+        <source>How the Value column is written</source>
+        <translation>Wie die Spalte „Wert“ geschrieben wird</translation>
     </message>
     <message>
         <location filename="../pv/views/tabular_decoder/view.cpp" line="774"/>

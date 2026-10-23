@@ -450,7 +450,7 @@ if [ $PACKAGE -eq 1 ]; then
     # 10. Copy Qt translations
     echo "  Qt translations..."
     QT_TRANSLATIONS_SRC="$QT_PREFIX/share/qt${QT_MAJOR}/translations"
-    LANGUAGES="zh_CN en de es"
+    LANGUAGES="zh_CN en de es ru"
 
     if [ -d "$QT_TRANSLATIONS_SRC" ]; then
         mkdir -p "$DIST_DIR/share/qt${QT_MAJOR}/translations"
@@ -828,7 +828,7 @@ EOF
 
         echo "  Qt translations..."
         QT_TRANSLATIONS_SRC="/usr/share/qt${QT_MAJOR}/translations"
-        LANGUAGES="zh_CN en de es"
+        LANGUAGES="zh_CN en de es ru"
         if [ -d "$QT_TRANSLATIONS_SRC" ]; then
             mkdir -p "$DIST_DIR/share/qt${QT_MAJOR}/translations"
             for lang in $LANGUAGES; do
