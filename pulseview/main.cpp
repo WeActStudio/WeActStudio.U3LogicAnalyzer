@@ -586,5 +586,13 @@ int main(int argc, char *argv[])
 
 	} while (false);
 
+	/*
+	 * Let the backend go here, while Qt and the DLLs are still up. Left to
+	 * the pointers themselves, the last reference is a static that dies
+	 * after both, and that sr_exit() is what crashed on the way out.
+	 */
+	pv::Session::sr_context.reset();
+	context.reset();
+
 	return ret;
 }

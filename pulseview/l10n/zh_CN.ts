@@ -1547,6 +1547,14 @@ Please check the device connection and firmware file.</source>
         <translation>等待其他会话的采集结束后继续</translation>
     </message>
     <message>
+        <source>Initializing device</source>
+        <translation>正在初始化设备</translation>
+    </message>
+    <message>
+        <source>Waiting for the board to come back</source>
+        <translation>等待板子重新连接</translation>
+    </message>
+    <message>
         <source>Reinitializing devices</source>
         <translation>正在重新初始化设备</translation>
     </message>

@@ -27,6 +27,8 @@
 #include <string>
 #include <vector>
 
+#include <QString>
+
 using std::list;
 using std::map;
 using std::set;
@@ -102,6 +104,31 @@ public:
 	/* The drivers that hit the timeout since the last call, taken off the
 	 * list so the caller can tell the user about each one once. */
 	static std::vector<std::string> take_stalled_drivers();
+
+	/*
+	 * Whether the board a device identity names sits on the bus right now, in
+	 * any state: an FX2 that was just plugged is there while it is being
+	 * flashed, it just does not answer yet.
+	 */
+	static bool board_on_bus(const QString &identity);
+
+	/*
+	 * Where that board stands: absent, in its boot loader with no firmware to
+	 * answer with, or running. A blank board has to be flashed before anything
+	 * can be waited for; one that says it runs and stays silent is hung.
+	 * A vendor board runs on its own back end and has no FX2 version to ask
+	 * for, so it is told apart.
+	 */
+	enum class UsbBoardState { Absent, Boot, Running, RunningVendor };
+	static UsbBoardState board_state(const QString &identity);
+
+	/*
+	 * Whether the board at this identity was seen answering after the given
+	 * moment. An arrival older than that is one the board already came back
+	 * from, which is how a board pulled right after being plugged is told
+	 * from one that is on its way back.
+	 */
+	static bool board_up_since(const QString &identity, qint64 since_ms);
 
 private:
 	/* The drivers that ran into the timeout, and the ones not reported */

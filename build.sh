@@ -293,6 +293,19 @@ if [ $IS_WINDOWS -eq 1 ]; then
 # start "" "U3LogicAnalyzer.exe"
 # RBEOF
 
+    # Qt looks its own translations up under share/qt6/translations, so the
+    # build tree needs its own copy: without it the standard buttons stay in
+    # English there while the package shows them translated.
+    QT_TRANSLATIONS_SRC="$QT_PREFIX/share/qt${QT_MAJOR}/translations"
+    if [ -d "$QT_TRANSLATIONS_SRC" ]; then
+        mkdir -p "$PVDIR/share/qt${QT_MAJOR}/translations"
+        for lang in zh_CN de es; do
+            cp "$QT_TRANSLATIONS_SRC"/*_${lang}.qm \
+                "$PVDIR/share/qt${QT_MAJOR}/translations/" 2>/dev/null || true
+        done
+        echo "  Qt translations"
+    fi
+
     echo "  $(ls "$PVDIR"/*.dll 2>/dev/null | wc -l) DLLs, run.bat created"
     if [ $DEBUG -eq 0 ]; then
         echo "  Stripping debug symbols..."

@@ -28,6 +28,8 @@
 #include <vector>
 
 #include <QMainWindow>
+#include <QElapsedTimer>
+#include <QSet>
 #include <QShortcut>
 #include <QTimer>
 #include <QTabWidget>
@@ -216,6 +218,32 @@ private:
 	shared_ptr<Session> session_holding(const QString &identity) const;
 	void do_device_detach_switch(const shared_ptr<Session> &session);
 
+	/* Reads the bus again and moves the page to a board that is there. The
+	 * page keeps the capture it holds - it is the board that left, not the
+	 * data - and its own board is left out: it was just tried. */
+	void switch_to_free_device(const shared_ptr<Session> &session);
+
+	/*
+	 * A page whose board is on its way back: it is on the bus but answers
+	 * nothing yet, an FX2 being flashed again every time it is plugged. The
+	 * page waits under a mask instead of being asked to give its capture up;
+	 * the question comes only if the board never answers. Returns false when
+	 * there is nothing to wait for and the caller has to carry on.
+	 *
+	 * "asked" is whether the question about the capture is already behind
+	 * the page: a wait that gives up then settles it, rather than asking the
+	 * same thing again.
+	 */
+	bool start_board_wait(const shared_ptr<Session> &session,
+		bool close_on_fail, bool asked);
+	void poll_board_wait();
+	void give_up_board_wait(const shared_ptr<Session> &session,
+		const char *reason);
+
+	/* Whether this page is waiting for its board under the mask: the question
+	 * was answered, so nothing is asked again until the wait settles it. */
+	bool board_wait_active(const shared_ptr<Session> &session) const;
+
 	/* The rest of a detach, once the scan it started has finished on its
 	 * worker: hands the new list to the pages, takes the boards back and
 	 * moves the session to one that is there. Runs on the GUI thread. */
@@ -330,11 +358,12 @@ private:
 	// DeviceManager *device_manager_;
 
 	/*
-	 * The one and only libsigrok Context of this process. Every
-	 * sigrok::Context destructor calls sr_exit(), which tears down the
-	 * global backend and frees the device instances of *all* drivers,
-	 * including those created by a newer context. Rescans must therefore
-	 * always reuse this context instead of creating a second one.
+	 * A reference to the one libsigrok Context of this process, the one
+	 * main() created. Every sigrok::Context destructor calls sr_exit(),
+	 * which tears down the global backend and frees the device instances
+	 * of *all* drivers, including those created by a newer context; a
+	 * second context therefore meant a second teardown on the way out.
+	 * Rescans reuse this context instead of creating one of their own.
 	 */
 	shared_ptr<sigrok::Context> sigrok_context_;
 
@@ -417,6 +446,57 @@ private:
 
 	/* The board the capture page is waiting to get back, by identity. */
 	QString waiting_for_board_;
+
+	/*
+	 * Pages waiting for a board that is still coming up. The board is asked
+	 * for its firmware version until it answers: that request is the only
+	 * thing that tells a board being flashed from a board that is gone.
+	 */
+	struct BoardWait
+	{
+		shared_ptr<Session> session;
+		/* "usb/4-2.2" asks the bus, "2.2" is what a bus event names. */
+		QString identity;
+		QString port;
+		QElapsedTimer since;
+		/* The page was to be closed anyway: it closes if the board never
+		 * answers, instead of being asked about its capture. */
+		bool close_on_fail = false;
+		/* The question about the capture was answered before this wait
+		 * began: giving up settles the page instead of asking it again. */
+		bool asked = false;
+		/* A scan that flashes the board, and the scans that take it back:
+		 * one can look before the driver lists the board again. */
+		bool flashed = false;
+		/* When that scan ran: a board that never shows up again after it was
+		 * not there to be flashed, it was pulled. */
+		qint64 flashed_ms = 0;
+		/* The last thing seen about the board, for one log line per change. */
+		int signature = -1;
+		int submits = 0;
+		qint64 submitted_ms = 0;
+		/* Absolute times: the clock above stops while a capture runs. */
+		qint64 opened_ms = 0;
+		qint64 last_seen_ms = 0;
+	};
+	std::vector<BoardWait> board_waits_;
+	QTimer *board_wait_timer_ = nullptr;
+	/* How often the board is asked, when a scan is started for it, and how
+	 * long it gets before it is taken for gone. */
+	static const int BoardWaitPollMs = 250;
+	/* How long a blank board gets before a scan tries to flash it. */
+	static const int BoardWaitFlashMs = 2500;
+	/* Gone from the bus, with nothing saying it is coming back. A hand
+	 * taking the plug out and putting it back needs a few seconds. */
+	static const int BoardWaitGoneMs = 3000;
+	/* How long a flash may take to bring the board back before the wait
+	 * gives up on it. */
+	static const int BoardWaitRenumMs = 4000;
+	/* However badly the board behaves, the page gets its mask taken off. */
+	static const int BoardWaitCapMs = 20000;
+	/* A scan can still miss the board: try again, but not for ever. */
+	static const int BoardWaitRetryMs = 2000;
+	static const int BoardWaitRetries = 4;
 
 	/* A pass that found a page without its board gets one more look before
 	 * the board is taken for gone: a scan can miss one while the bus is

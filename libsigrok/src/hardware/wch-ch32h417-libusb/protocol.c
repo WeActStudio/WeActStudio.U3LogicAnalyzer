@@ -865,6 +865,10 @@ static gpointer data_read_thread(gpointer arg)
 	unsigned int num_samples;
 	int trigger_offset, pre_trigger_samples, cur_sample_count, processed_samples;
 	int64_t no_data_timeout_ms = 500; /* 500 ms without data counts as a timeout */
+	int link_dead = FALSE;
+	/* The query alone is refreshed by a board that is gone; the reads are
+	 * what tell whether anything really came. */
+	int64_t last_read_time = g_get_monotonic_time();
 
 	pipe_num = (devc->mode == MODE_LOGIC_ANALYZER) ? PIPE_LOGIC_DATA : PIPE_ADC_DATA;
 
@@ -902,6 +906,14 @@ static gpointer data_read_thread(gpointer arg)
 		/* Poll for buffered data */
 		if (!ch32h417_libusb_query_buf_upload_ex(devc->device_index, pipe_num,
 									   &transfer_count, &total_data_len)) {
+			/*
+			 * A board that was pulled fails every call, which used to spin
+			 * here for good: it counts as no data like any other silence.
+			 */
+			if ((current_time - last_query_time) / 1000 >= no_data_timeout_ms) {
+				link_dead = TRUE;
+				break;
+			}
 			/* Query failed, wait briefly and retry */
 			sr_warn("Failed to query buffer upload, retrying in 1ms");
 			g_usleep(1000);
@@ -909,26 +921,16 @@ static gpointer data_read_thread(gpointer arg)
 		}
 
 		if (transfer_count == 0) {
-			/* No data: check whether the device has stopped */
-			/* Track how long there has been no data */
+			/*
+			 * Nothing arrived although the capture was not due to end. A link
+			 * that cannot sustain the rate looks like this, and so does a
+			 * board that was pulled.
+			 */
 			const int64_t no_data_time_ms =
 				(current_time - last_query_time) / 1000;
 			if (no_data_time_ms >= no_data_timeout_ms) {
-				/*
-				 * Nothing arrived although the capture was not due to end.
-				 * A link that cannot sustain the configured rate is one
-				 * way this shows up, so report the stop instead of letting
-				 * the GUI present the truncated capture as complete.
-				 */
-				devc->link_stop_reason = LINK_STOP_NO_DATA;
-				send_stop_command_once(sdi);
-				/* Timed out with no data, the device may have stopped acquiring */
-				sr_info("No data for %" PRId64 " ms, device may have stopped", no_data_timeout_ms);
-				g_free(buffer);
-				/* Flag the thread as exiting; the timer callback handles the stop */
-				acquisition_set_aborted(devc, TRUE);
-				sr_dbg("data_read_thread EXIT (timeout)");
-				return NULL;
+				link_dead = TRUE;
+				break;
 			}
 			g_usleep(1000);
 			continue;
@@ -940,6 +942,14 @@ static gpointer data_read_thread(gpointer arg)
 		/* Read the data */
 		length = devc->buffer_size;
 		if (!ch32h417_libusb_read_endpoint(devc->device_index, pipe_num, buffer, &length)) {
+			/*
+			 * A pulled board keeps answering the query with a stale count and
+			 * then fails every read; that is why this path needs the timeout.
+			 */
+			if ((current_time - last_read_time) / 1000 >= no_data_timeout_ms) {
+				link_dead = TRUE;
+				break;
+			}
 			sr_warn("Failed to read data from pipe %lu", pipe_num);
 			g_usleep(1000);
 			continue;
@@ -949,6 +959,8 @@ static gpointer data_read_thread(gpointer arg)
 			g_usleep(1000);
 			continue;
 		}
+
+		last_read_time = current_time;
 
 		/* A line per read is far too expensive at SuperSpeed rates. */
 		if (++dbg_packets >= 256) {
@@ -1031,6 +1043,23 @@ static gpointer data_read_thread(gpointer arg)
 			return NULL;
 		}
 
+	}
+
+	/*
+	 * The board stopped answering. Reported as a link stop so the GUI ends the
+	 * capture and asks about the page, instead of showing data that is only
+	 * there because nothing else came.
+	 */
+	if (link_dead) {
+		devc->link_stop_reason = LINK_STOP_NO_DATA;
+		send_stop_command_once(sdi);
+		sr_info("No data for %" PRId64 " ms, device may have stopped",
+				no_data_timeout_ms);
+		g_free(buffer);
+		/* Flag the thread as exiting; the timer callback handles the stop */
+		acquisition_set_aborted(devc, TRUE);
+		sr_dbg("data_read_thread EXIT (dead link)");
+		return NULL;
 	}
 
 	g_free(buffer);

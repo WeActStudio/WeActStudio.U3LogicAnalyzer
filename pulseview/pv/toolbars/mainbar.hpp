@@ -35,6 +35,7 @@
 #include <QMenu>
 #include <QPixmap>
 #include <QPointer>
+#include <QHash>
 #include <QSet>
 #include <QTimer>
 #include <QToolBar>
@@ -188,6 +189,10 @@ public:
 	/* Says the page is being re-initialized, in the mask a missing board
 	 * uses: the scan behind it blocks the window for seconds. */
 	void set_device_busy(bool busy, QWidget *page = nullptr);
+	/* The board of this page is on its way back and is not answering yet: the
+	 * page waits under this mask instead of being asked to give its capture
+	 * up. The window takes it down when the board is back or given up on. */
+	void set_device_initializing(bool initializing, QWidget *page = nullptr);
 	/* The page it is on is writing firmware: the mask says so and eats the
 	 * clicks, and the tab cannot be closed while it is up. Its progress is
 	 * pushed in with set_upgrade_progress(). */
@@ -268,8 +273,9 @@ private:
 
 	/* What the mask is there for: one page has one, and the three callers
 	 * must not take each other's down. */
-	enum class MaskKind { None, Offline, Busy, Upgrade };
+	enum class MaskKind { None, Offline, Busy, Initializing, Upgrade };
 	QString offline_mask_text() const;
+	QString initializing_mask_text() const;
 	QString upgrade_mask_text(int percent) const;
 	/* The two ways the mask is put up and taken down - nothing else touches
 	 * the widget, so a mask cannot be left standing by a state that another
@@ -475,6 +481,12 @@ private:
 	/* The boards a bus event said have gone; see declare_gone(). */
 	static std::mutex s_gone_mutex;
 	static QSet<QString> s_declared_gone;
+	/* When each of them was said to go; see gone_at(). */
+	static std::mutex s_gone_at_mutex;
+	static QHash<QString, qint64> s_gone_at;
+	/* The ports a board was just seen arriving on; see declare_arrived(). */
+	static std::mutex s_arrived_mutex;
+	static QHash<QString, qint64> s_arrived;
 	/* Read from the bus watcher thread as well as the main thread. */
 	static std::mutex s_upgrade_mutex;
 	static QString s_upgrade_target;
@@ -528,6 +540,35 @@ public:
 	 */
 	static void declare_gone(const QStringList &identities);
 	static QSet<QString> take_declared_gone();
+	/*
+	 * When that board was last said to be gone, or 0 if it was not within
+	 * the last few seconds. A capture on a board that is pulled ends with
+	 * the link warning, since the driver only sees the silence: the warning
+	 * asks this before it blames the sample rate.
+	 */
+	static qint64 gone_at(const QString &identity);
+	/*
+	 * The same note, from the side that knows without a bus event: a scan
+	 * that no longer lists the board of a page is the only word the vendor
+	 * back end gives, since its boards carry no port chain in libusb events.
+	 */
+	static void note_gone(const QString &identity);
+	/*
+	 * The ports a board was just seen arriving on. A board that is being
+	 * flashed is off the bus for a moment, and the pass that answers the
+	 * arrival has to know it is coming rather than gone.
+	 */
+	static void declare_arrived(const QStringList &chains);
+	/*
+	 * When that board was last seen arriving, or 0 if it was not within the
+	 * time a board needs to be flashed and re-enumerated. The moment, not a
+	 * state: a board that has been up since then went away afterwards, and
+	 * the caller has to tell the two apart.
+	 */
+	static qint64 arrived_at(const QString &chain);
+	static const int ArrivalMemoryMs = 8000;
+	/* Long enough for the warning a pull ends with to be looked at. */
+	static const int GoneMemoryMs = 5000;
 	/*
 	 * Clears the "a pass is owed" flag when nothing is capturing any more.
 	 * A capture that ended without saying so would otherwise keep every

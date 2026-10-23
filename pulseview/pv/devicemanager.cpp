@@ -27,6 +27,7 @@
 #include <functional>
 #include <future>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -35,6 +36,7 @@
 #include <libsigrokcxx/libsigrokcxx.hpp>
 
 #include <QApplication>
+#include <QDateTime>
 #include <QDebug>
 #include <QObject>
 #include <QProgressDialog>
@@ -43,6 +45,7 @@
 #include <boost/filesystem.hpp>
 
 #include <pv/devices/hardwaredevice.hpp>
+#include <pv/usbapi.hpp>
 #include <pv/util.hpp>
 
 using std::bind;
@@ -273,6 +276,279 @@ bool DeviceManager::driver_supported(shared_ptr<Driver> driver) const
 	return keys.count(ConfigKey::LOGIC_ANALYZER) | keys.count(ConfigKey::OSCILLOSCOPE);
 }
 
+namespace {
+
+/* What the port a device sits in carries on the bus right now. */
+struct UsbNode
+{
+	uint16_t vid;
+	uint16_t pid;
+	uint16_t bcd;
+	bool named; /* a running board names itself, a boot loader does not */
+};
+
+/* Every node on the bus, keyed the way a device identity spells the port
+ * ("4-2.2", or "2.2" when the bus number cannot be read). Empty when libusb
+ * cannot be reached. */
+map<string, UsbNode> scan_usb_nodes()
+{
+	map<string, UsbNode> nodes;
+
+	const pv::UsbApi *usb = pv::usb_api();
+	if (!usb || !usb->ready())
+		return nodes;
+
+	libusb_context *ctx = nullptr;
+	if (usb->init(&ctx) != 0)
+		return nodes;
+
+	libusb_device **list = nullptr;
+	const ssize_t count = usb->get_device_list(ctx, &list);
+	for (ssize_t i = 0; i < count; i++) {
+		struct libusb_device_descriptor desc;
+		if (usb->get_device_descriptor(list[i], &desc) != 0)
+			continue;
+
+		uint8_t ports[8] = {0};
+		const int port_count = usb->get_port_numbers(list[i], ports, 8);
+		if (port_count <= 0)
+			continue;
+
+		/* The bus number only separates two boards on the same port of
+		 * different buses; without it the chain still names them, the way
+		 * a bus event does. */
+		string key;
+		if (usb->get_bus_number)
+			key = std::to_string(usb->get_bus_number(list[i])) + "-";
+		for (int p = 0; p < port_count; p++) {
+			if (p)
+				key += '.';
+			key += std::to_string(ports[p]);
+		}
+
+		UsbNode node;
+		node.vid = desc.idVendor;
+		node.pid = desc.idProduct;
+		node.bcd = desc.bcdDevice;
+		node.named = desc.iManufacturer || desc.iProduct ||
+			desc.iSerialNumber;
+		nodes[key] = node;
+	}
+
+	if (list)
+		usb->free_device_list(list, 1);
+	usb->exit(ctx);
+
+	return nodes;
+}
+
+/*
+ * One walk serves everything asking within the poll window: a page waiting for
+ * its board asks every 250 ms, and each walk is an init/exit pair plus every
+ * node on every bus. The window is shorter than that poll, so nothing is seen
+ * later than it would have been.
+ */
+const qint64 NodesCacheMs = 200;
+std::mutex s_nodes_mutex;
+map<string, UsbNode> s_nodes_cache;
+qint64 s_nodes_at = 0;
+
+map<string, UsbNode> usb_nodes_by_port()
+{
+	const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+	{
+		std::lock_guard<std::mutex> lock(s_nodes_mutex);
+		if (s_nodes_at && now - s_nodes_at < NodesCacheMs)
+			return s_nodes_cache;
+	}
+
+	const map<string, UsbNode> fresh = scan_usb_nodes();
+
+	std::lock_guard<std::mutex> lock(s_nodes_mutex);
+	s_nodes_cache = fresh;
+	s_nodes_at = now;
+
+	return fresh;
+}
+
+/* A scan has just changed what a board answers: the next question goes to the
+ * bus again instead of to the window before it. */
+void forget_usb_nodes()
+{
+	std::lock_guard<std::mutex> lock(s_nodes_mutex);
+	s_nodes_at = 0;
+}
+
+/*
+ * The chain of ports a place spells, without the bus number in front: two
+ * contexts in one process do not always number buses alike, and the chain is
+ * what places a board.
+ */
+string chain_of_place(const string &place)
+{
+	const size_t dash = place.find('-');
+	return dash == string::npos ? place : place.substr(dash + 1);
+}
+
+/*
+ * When each port last had a board that answers on it. An arrival older than
+ * that is one the board has already come back from: the board is not on its
+ * way back, it is where the page left it before it was pulled again.
+ */
+std::mutex s_up_mutex;
+map<string, qint64> s_last_up;
+
+void note_board_up(const string &place)
+{
+	const qint64 now = QDateTime::currentMSecsSinceEpoch();
+	const string chain = chain_of_place(place);
+
+	std::lock_guard<std::mutex> lock(s_up_mutex);
+
+	for (auto it = s_last_up.begin(); it != s_last_up.end(); )
+		if (now - it->second > 60000)
+			it = s_last_up.erase(it);
+		else
+			++it;
+
+	s_last_up[chain] = now;
+}
+
+bool was_up_since(const string &place, qint64 since_ms)
+{
+	const string chain = chain_of_place(place);
+
+	std::lock_guard<std::mutex> lock(s_up_mutex);
+
+	const auto it = s_last_up.find(chain);
+	return it != s_last_up.end() && it->second > since_ms;
+}
+
+/* The node the bus lists at this place, if any: the exact key first, then a
+ * key with the same chain under any bus number. */
+const UsbNode *node_at(const map<string, UsbNode> &nodes, const string &place)
+{
+	const auto hit = nodes.find(place);
+	if (hit != nodes.end())
+		return &hit->second;
+
+	const string chain = chain_of_place(place);
+	for (const auto &entry : nodes)
+		if (chain_of_place(entry.first) == chain)
+			return &entry.second;
+
+	return nullptr;
+}
+
+/*
+ * Whether the board at this port answers as a running fx2lafw one. The
+ * driver also lists a board it has just uploaded to, but that one is off
+ * the bus renumbering and cannot be opened - offering it turns a click
+ * into an error box, so it waits for the scan that follows its return.
+ */
+bool fx2_is_running(const map<string, UsbNode> &nodes,
+	const string &connection_id)
+{
+	const string prefix = "usb/";
+	if (connection_id.compare(0, prefix.size(), prefix) != 0)
+		return true;
+
+	const UsbNode *const found =
+		node_at(nodes, connection_id.substr(prefix.size()));
+	if (!found)
+		return false;
+
+	const UsbNode &node = *found;
+	if (node.vid != 0x1d50 || (node.pid != 0x608c && node.pid != 0x608d))
+		return false;
+
+	/* The firmware puts a version and its strings in the descriptor; a
+	 * board whose EEPROM carries the sigrok ids but no code has neither. */
+	return node.bcd != 0 || node.named;
+}
+
+/* A vendor board on the bus: the application firmware, or its IAP loader. */
+bool is_vendor_board(const UsbNode &node)
+{
+	return node.vid == 0x1a86 &&
+		(node.pid == 0x5537 || node.pid == 0xfe17);
+}
+
+bool vendor_is_running(const UsbNode &node)
+{
+	return node.vid == 0x1a86 && node.pid == 0x5537;
+}
+
+} // namespace
+
+bool DeviceManager::board_on_bus(const QString &identity)
+{
+	/*
+	 * Only a board the bus names by port is looked for. The vendor back end
+	 * numbers the ports its own way, and such a board is back in
+	 * milliseconds anyway - there is nothing to wait for.
+	 */
+	const QString prefix = QStringLiteral("usb/");
+	if (!identity.startsWith(prefix))
+		return false;
+
+	const string port = identity.mid(prefix.size()).toStdString();
+	if (port.empty())
+		return false;
+
+	const map<string, UsbNode> nodes = usb_nodes_by_port();
+
+	return node_at(nodes, port) != nullptr;
+}
+
+DeviceManager::UsbBoardState
+DeviceManager::board_state(const QString &identity)
+{
+	const QString prefix = QStringLiteral("usb/");
+	if (!identity.startsWith(prefix))
+		return UsbBoardState::Absent;
+
+	const string port = identity.mid(prefix.size()).toStdString();
+	if (port.empty())
+		return UsbBoardState::Absent;
+
+	const map<string, UsbNode> nodes = usb_nodes_by_port();
+	const UsbNode *const node = node_at(nodes, port);
+	if (!node)
+		return UsbBoardState::Absent;
+
+	/*
+	 * The same test the device list uses, plus the vendor back end: its
+	 * boards answer by their USB id alone, and the loader id means they are
+	 * not answering yet. A board read as absent here is one the wait gives
+	 * up on, so the vendor ids have to count as present.
+	 */
+	const bool vendor = is_vendor_board(*node);
+	const bool running = vendor ? vendor_is_running(*node) :
+		fx2_is_running(nodes, string("usb/") + port);
+
+	if (!running)
+		return UsbBoardState::Boot;
+
+	note_board_up(port);
+
+	return vendor ? UsbBoardState::RunningVendor : UsbBoardState::Running;
+}
+
+bool DeviceManager::board_up_since(const QString &identity, qint64 since_ms)
+{
+	const QString prefix = QStringLiteral("usb/");
+	if (!identity.startsWith(prefix))
+		return false;
+
+	const string port = identity.mid(prefix.size()).toStdString();
+	if (port.empty())
+		return false;
+
+	return was_up_since(port, since_ms);
+}
+
 list< shared_ptr<devices::HardwareDevice> >
 DeviceManager::driver_scan(
 	shared_ptr<Driver> driver, map<const ConfigKey *, VariantBase> drvopts)
@@ -345,8 +621,42 @@ DeviceManager::driver_scan(
 		// Take the devices the scan found.
 		ScannedDevices devices = answer.get();
 
+		/* Nothing is open while a scan runs, so this is when an FX2 can be
+		 * asked which firmware it runs. The answer is kept, and the version
+		 * dialog shows it later - the page has the board open by then. */
+		if (name == "fx2lafw" && !devices.empty())
+			pv::fx2_prefetch_versions();
+
+		/*
+		 * The fx2lafw driver lists the boards it has just uploaded the
+		 * firmware to as well. They are renumbering and cannot be opened,
+		 * so only the boards the bus shows as running are taken; the scan
+		 * that follows their return brings the rest.
+		 */
+		const bool fx2_driver = name == "fx2lafw";
+		map<string, UsbNode> nodes;
+		if (fx2_driver) {
+			/* A scan is the point where a board may have just been
+			 * flashed: read the bus rather than the window before. */
+			forget_usb_nodes();
+			nodes = usb_nodes_by_port();
+		}
+
 		// Add the scanned devices to the main list, set display names and sort.
 		for (shared_ptr<sigrok::HardwareDevice>& device : devices) {
+			if (fx2_driver &&
+				!fx2_is_running(nodes, device->connection_id())) {
+				qInfo() << "fx2lafw:" << QString::fromStdString(
+					device->connection_id())
+					<< "has no firmware yet, not listed";
+				continue;
+			}
+
+			/* Either back end that names a board by its port has just seen
+			 * it answer; the vendor back end numbers boards its own way. */
+			if (device->connection_id().compare(0, 4, "usb/") == 0)
+				note_board_up(device->connection_id());
+
 			const shared_ptr<devices::HardwareDevice> d(
 				new devices::HardwareDevice(context_, device));
 			driver_devices.push_front(d);

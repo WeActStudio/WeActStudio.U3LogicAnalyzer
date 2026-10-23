@@ -74,10 +74,12 @@
 #include <QCoreApplication>
 
 #include <thread>
+#include <chrono>
 #include "application.hpp"
 #include "devicemanager.hpp"
 #include "devices/hardwaredevice.hpp"
 #include "dialogs/settings.hpp"
+#include "usbapi.hpp"
 #include "globalsettings.hpp"
 #include "fluentui3colors.h"
 #include "toolbars/mainbar.hpp"
@@ -141,8 +143,15 @@ MainWindow::MainWindow(QWidget *parent) :
 	installEventFilter(this);
     qApp->installEventFilter(this);
 
-	//Check memory size
-	sigrok_context_ = sigrok::Context::create();
+	/*
+	 * Reuse the backend main() made. A Context of its own would sr_exit()
+	 * the shared one when it dies, so the process ends with two teardowns
+	 * of the same libusb and network state; the second one lands after Qt
+	 * is gone, and that is where the program used to crash on exit.
+	 */
+	sigrok_context_ = Session::sr_context;
+	if (!sigrok_context_)
+		sigrok_context_ = sigrok::Context::create();
 	device_manager_ = new pv::DeviceManager(sigrok_context_, "", true);
 	sessions_.resize(0);
 	setup_ui();
@@ -1026,21 +1035,32 @@ void MainWindow::do_device_detach_switch(const shared_ptr<Session> &session)
 		return;
 	}
 
-	/* What the page is about to lose, remembered in case it has to fall
-	 * back to the demo device: the board can come back to it later. */
-	const QString lost_identity =
-		widgets::DeviceToolButton::device_identity(session->device());
+	/*
+	 * The board came back while the question was up. Closing the page over it
+	 * is what the answer said, not what it meant: the page waits for the
+	 * board under a mask, and is closed only if it never answers.
+	 *
+	 * The capture page is no exception: it cannot be closed, so a board that
+	 * is still being flashed would otherwise cost it the capture and move it
+	 * to whatever else happens to be plugged in.
+	 */
+	const bool is_capture_page =
+		!sessions_.empty() && session == sessions_.front();
+
+	if (start_board_wait(session, !is_capture_page, true)) {
+		/* Answered, so the events are let through; the pass that follows is
+		 * what takes the board back. */
+		resume_device_events(true);
+		return;
+	}
 
 	/*
 	 * A session that was opened for a board of its own has nothing left to
 	 * do once that board is pulled, so it is closed - that is what pulling
 	 * it asks for, whether the capture on it was saved or not. Keeping it
 	 * would only leave a page holding another board's settings.
-	 *
-	 * The capture page is the one that cannot be closed, so it is the one
-	 * that moves to whatever is still there.
 	 */
-	if (!sessions_.empty() && session != sessions_.front()) {
+	if (!is_capture_page) {
 		remove_session(session);
 
 		/*
@@ -1056,6 +1076,53 @@ void MainWindow::do_device_detach_switch(const shared_ptr<Session> &session)
 		resume_device_events(true);
 		return;
 	}
+
+	/* The capture page is the one that cannot be closed, so it is the one
+	 * that moves to whatever is still there. */
+	switch_to_free_device(session);
+}
+
+/*
+ * A board that was plugged back in the moment the question about its page was
+ * answered is not in the first scan: the host needs a moment to enumerate it.
+ * The wait is made of bus walks - a scan opens every driver, and repeating
+ * that for one board is what took seconds.
+ */
+static constexpr int BoardBackTries = 5;
+static constexpr int BoardBackGapMs = 250;
+
+static QString chain_of_identity(const QString &identity);
+static QString place_of_identity(const QString &identity);
+
+/* Whether the scan lists the board this page lost. */
+static bool scan_lists(pv::DeviceManager *manager, const QString &identity)
+{
+	if (!manager || identity.isEmpty())
+		return false;
+
+	for (const shared_ptr<devices::HardwareDevice> &dev : manager->devices())
+		if (widgets::DeviceToolButton::device_identity(dev) == identity)
+			return true;
+
+	return false;
+}
+
+/* Whether the bus has the board answering: running, or its loader is there. */
+static bool board_is_running(const QString &identity)
+{
+	const pv::DeviceManager::UsbBoardState state =
+		pv::DeviceManager::board_state(identity);
+
+	return state == pv::DeviceManager::UsbBoardState::Running ||
+		state == pv::DeviceManager::UsbBoardState::RunningVendor;
+}
+
+void MainWindow::switch_to_free_device(const shared_ptr<Session> &session)
+{
+	/* What the page is about to lose, remembered in case it has to fall
+	 * back to the demo device: the board can come back to it later. */
+	const QString lost_identity =
+		widgets::DeviceToolButton::device_identity(session->device());
 
 	session->device_detached();
 
@@ -1102,12 +1169,44 @@ void MainWindow::do_device_detach_switch(const shared_ptr<Session> &session)
 	 * page happens once it is back, on this thread.
 	 */
 	std::thread([this, context, driver, session, lost_identity]() {
-		pv::DeviceManager *manager = nullptr;
+		const QString place = place_of_identity(lost_identity);
 
-		try {
-			manager = new pv::DeviceManager(context, driver, true);
-		} catch (...) {
-			manager = nullptr;
+		auto make_manager = [&]() -> pv::DeviceManager * {
+			try {
+				return new pv::DeviceManager(context, driver, true);
+			} catch (...) {
+				return nullptr;
+			}
+		};
+
+		/*
+		 * The board is on its way back: wait for it on the bus, not by
+		 * scanning over and over. A walk opens nothing; a scan opens and
+		 * closes every driver.
+		 */
+		for (int attempt = 0; attempt < BoardBackTries; ++attempt) {
+			const qint64 arrived_at =
+				toolbars::MainBar::arrived_at(place);
+
+			if (!arrived_at ||
+				DeviceManager::board_up_since(lost_identity, arrived_at) ||
+				board_is_running(lost_identity))
+				break;
+
+			std::this_thread::sleep_for(
+				std::chrono::milliseconds(BoardBackGapMs));
+		}
+
+		pv::DeviceManager *manager = make_manager();
+
+		/*
+		 * A scan can still miss a board that came up while it ran: one more
+		 * look, and only while the bus says the board is there.
+		 */
+		if (manager && !scan_lists(manager, lost_identity) &&
+			board_is_running(lost_identity)) {
+			delete manager;
+			manager = make_manager();
 		}
 
 		QMetaObject::invokeMethod(this,
@@ -1135,7 +1234,10 @@ void MainWindow::finish_device_detach_switch(pv::DeviceManager *manager,
 			sessions_.end();
 
 		if (page_alive && session && session->main_bar()) {
-			session->main_bar()->set_device_busy(false);
+			/* Both kinds, not just the scan's: taking one down by name
+			 * re-texted the mask of a page that no longer had one, and with
+			 * no page to hand over it went over the whole window. */
+			session->main_bar()->set_device_initializing(false);
 			session->main_bar()->set_device_offline(false);
 		}
 
@@ -1183,6 +1285,23 @@ void MainWindow::finish_device_detach_switch(pv::DeviceManager *manager,
 	update_session_roles();
 
 	list< shared_ptr<devices::HardwareDevice> > devices = new_device_manager->devices();
+
+	/*
+	 * The board came back while the question was up: the scan above handed
+	 * this page a board again - its own, or the same one in another port -
+	 * and everything on it stands. A board that happens to be free is for a
+	 * page whose board really went away: taking it here would close the one
+	 * that has just come back.
+	 */
+	if (session->device())
+		for (const shared_ptr<devices::HardwareDevice>& dev : devices)
+			if (session->device() == dev) {
+				qInfo() << "[DETACH]" << lost_identity
+					<< "came back, the page keeps it";
+				session->main_bar()->rebuild_device_list(true);
+				done();
+				return;
+			}
 
 	if (!devices.empty()) {
 		shared_ptr<devices::Device> default_device;
@@ -1270,6 +1389,10 @@ void MainWindow::finish_device_detach_switch(pv::DeviceManager *manager,
 		 * will not open as well. Ask is false: the question this flow came
 		 * from has already been answered.
 		 */
+		qInfo() << "[DETACH]" << lost_identity << "is gone, the page moves to"
+			<< (default_device ? widgets::DeviceToolButton::device_identity(
+				default_device) : QString("<none>"));
+
 		if (session->main_bar()->switch_to_device(default_device, false)) {
 			/* The strip names each page after the board on it, and it is
 			 * this call that does the naming. */
@@ -1322,6 +1445,339 @@ void MainWindow::finish_device_detach_switch(pv::DeviceManager *manager,
 }
 
 /*
+ * The place an identity names, the way a bus event spells it: "usb/4-2.2"
+ * and "4-2.2" both mean "4-2.2". A bus event is kept in this same form, so
+ * an arrival is matched by it before falling back to the ports alone.
+ */
+static QString place_of_identity(const QString &identity)
+{
+	const QString prefix = QStringLiteral("usb/");
+
+	return identity.startsWith(prefix) ? identity.mid(prefix.size()) : identity;
+}
+
+/*
+ * The chain of ports an identity names: "usb/4-2.2" and "4-2.2" both mean
+ * "2.2". The bus number in front is left out - a bus event does not always
+ * carry it, and two libusb contexts do not always number buses alike.
+ */
+static QString chain_of_identity(const QString &identity)
+{
+	const QString port = place_of_identity(identity);
+	const int dash = port.indexOf(QLatin1Char('-'));
+
+	return dash < 0 ? port : port.mid(dash + 1);
+}
+
+/*
+ * Whether an arrival still says the board is on its way back. It does not
+ * once the board has been seen running since: that arrival is the one the
+ * page answered on, and the board went away after it. Pulling a board that
+ * had been plugged in a moment before is exactly that, and it has to be
+ * asked about at once instead of being masked over.
+ *
+ * It also only speaks for the moment it names: a board that has not turned
+ * up a couple of seconds later was not late, it was never there.
+ */
+static bool board_is_arriving(const QString &identity, const QString &chain)
+{
+	/* Exact place first - two boards on the same port of different buses
+	 * are told apart only by it - then the ports alone. */
+	qint64 arrived_at =
+		toolbars::MainBar::arrived_at(place_of_identity(identity));
+
+	if (!arrived_at)
+		arrived_at = toolbars::MainBar::arrived_at(chain);
+
+	if (!arrived_at)
+		return false;
+
+	static const qint64 ArrivingForMs = 2500;
+
+	return QDateTime::currentMSecsSinceEpoch() - arrived_at <= ArrivingForMs &&
+		!DeviceManager::board_up_since(identity, arrived_at);
+}
+
+/*
+ * A page whose board is on its way back: the board is on the bus, or was just
+ * seen arriving, but answers nothing yet - an FX2 has no firmware until it is
+ * flashed again. The page keeps its mask and its capture, and the question
+ * about saving comes only if the board never answers.
+ */
+bool MainWindow::start_board_wait(const shared_ptr<Session> &session,
+	bool close_on_fail, bool asked)
+{
+	if (!session || !session->main_bar() || !session->device())
+		return false;
+
+	const QString identity =
+		widgets::DeviceToolButton::device_identity(session->device());
+	const QString prefix = QStringLiteral("usb/");
+
+	/* A vendor board is back in milliseconds and is numbered by its own back
+	 * end, so there is nothing to wait for. */
+	if (!identity.startsWith(prefix))
+		return false;
+
+	/* Already waiting: the mask says so, and the clock runs on. The caller
+	 * that comes after the question settles a failure by closing the page,
+	 * so the stricter of the two is the one that stands. */
+	for (BoardWait &wait : board_waits_)
+		if (wait.session == session) {
+			wait.close_on_fail = wait.close_on_fail || close_on_fail;
+			wait.asked = wait.asked || asked;
+			return true;
+		}
+
+	const QString port = chain_of_identity(identity);
+
+	/* Neither on the bus nor on its way back: what to do with the page is
+	 * the caller's to settle. */
+	const bool on_bus = DeviceManager::board_on_bus(identity);
+	const bool arriving = !on_bus && board_is_arriving(identity, port);
+
+	if (!on_bus && !arriving)
+		return false;
+
+	const auto window = session_windows_.find(session);
+	if (window == session_windows_.end())
+		return false;
+
+	BoardWait wait;
+	wait.session = session;
+	wait.identity = identity;
+	wait.port = port;
+	wait.since.start();
+	wait.close_on_fail = close_on_fail;
+	wait.asked = asked;
+	wait.last_seen_ms = QDateTime::currentMSecsSinceEpoch();
+	wait.opened_ms = wait.last_seen_ms;
+	board_waits_.push_back(wait);
+
+	session->main_bar()->set_device_initializing(true, window->second);
+
+	if (!board_wait_timer_) {
+		board_wait_timer_ = new QTimer(this);
+		board_wait_timer_->setInterval(BoardWaitPollMs);
+		connect(board_wait_timer_, &QTimer::timeout,
+			this, &MainWindow::poll_board_wait);
+	}
+	board_wait_timer_->start();
+
+	qInfo() << "[BOARD] waiting for" << identity << "to answer"
+		<< (on_bus ? "(on the bus)" : "(arriving)");
+	return true;
+}
+
+bool MainWindow::board_wait_active(const shared_ptr<Session> &session) const
+{
+	for (const BoardWait &wait : board_waits_)
+		if (wait.session == session)
+			return true;
+
+	return false;
+}
+
+void MainWindow::poll_board_wait()
+{
+	if (board_waits_.empty()) {
+		if (board_wait_timer_)
+			board_wait_timer_->stop();
+		return;
+	}
+
+	for (size_t i = 0; i < board_waits_.size(); ) {
+		BoardWait &wait = board_waits_[i];
+
+		/* The page was closed under the wait: nothing is owed to it. */
+		if (std::find(sessions_.begin(), sessions_.end(), wait.session) ==
+			sessions_.end()) {
+			board_waits_.erase(board_waits_.begin() + i);
+			continue;
+		}
+
+		/*
+		 * A pass under way owns the bus: a probe now would fail against the
+		 * instance it is opening, and the page it is filling is not one to
+		 * give up on.
+		 */
+		if (!attach_process_done) {
+			++i;
+			continue;
+		}
+
+		const qint64 now = QDateTime::currentMSecsSinceEpoch();
+		const qint64 waited = wait.since.elapsed();
+		const DeviceManager::UsbBoardState state =
+			DeviceManager::board_state(wait.identity);
+
+		/* A board being flashed is off the bus while it re-enumerates, and
+		 * an arrival says it is on its way back. */
+		const bool on_bus =
+			state != DeviceManager::UsbBoardState::Absent;
+		const bool present = on_bus ||
+			board_is_arriving(wait.identity, wait.port);
+
+		/* Only a board that is on the bus counts as seen: an arrival on its
+		 * own must not hold the gone clock back, or a board pulled right
+		 * after a plug keeps the page waiting for nothing. */
+		if (on_bus)
+			wait.last_seen_ms = now;
+
+		/*
+		 * The descriptor already says whether the board runs firmware; asking
+		 * it for a version as well meant opening it on every poll, and one
+		 * failed answer left a board that was plainly there out of reach.
+		 */
+		const bool ready = state == DeviceManager::UsbBoardState::Running ||
+			state == DeviceManager::UsbBoardState::RunningVendor;
+
+		/* A wait that ends in a timeout is otherwise opaque: one line per
+		 * change of what was seen. */
+		const int signature = (int)state * 4 + (present ? 2 : 0) +
+			(ready ? 1 : 0);
+		if (signature != wait.signature) {
+			wait.signature = signature;
+			qWarning() << "[BOARD]" << wait.port << "state" << (int)state
+				<< "present" << present << "ready" << ready << "at" << waited;
+		}
+
+		/*
+		 * A pass closes every device it finds, so one started while a capture
+		 * elsewhere runs would end that capture. The page keeps waiting, and
+		 * the clock only runs while nothing is in the way.
+		 */
+		if (toolbars::MainBar::captures_running()) {
+			if (ready)
+				wait.since.restart();
+			++i;
+			continue;
+		}
+
+		const bool retry = wait.submits == 0 ||
+			now - wait.submitted_ms > BoardWaitRetryMs;
+
+		if (ready && retry && wait.submits < BoardWaitRetries) {
+			++wait.submits;
+			wait.submitted_ms = now;
+			QTimer::singleShot(0, this, &MainWindow::on_device_attached);
+		} else if (!ready && !wait.flashed && on_bus &&
+			waited >= BoardWaitFlashMs) {
+			/* The pass that answered the arrival came before the board was
+			 * there to be flashed. One more scan does it - a board that is
+			 * not on the bus has nothing to flash, and scanning for it
+			 * would only spend the window below. */
+			wait.flashed = true;
+			wait.flashed_ms = now;
+			QTimer::singleShot(0, this, &MainWindow::on_device_attached);
+		}
+
+		/*
+		 * Nothing left to wait for: the board is off the bus and no arrival
+		 * says it is coming back, or a flash did not bring it back at all.
+		 * A renumber after the flash is shorter than the gone window, so no
+		 * separate grace is needed - waiting it out is what made an unplugged
+		 * board take ten seconds to be reported.
+		 */
+		const bool gone = !present &&
+			now - wait.last_seen_ms > BoardWaitGoneMs;
+		/* The flash only counts as failed while nothing was ever scanned:
+		 * once a scan is out, its retries are what decide. */
+		const bool unflashable = wait.flashed && wait.submits == 0 &&
+			now - wait.flashed_ms > BoardWaitRenumMs;
+		/* Scanned as often as it is worth it and still not back. */
+		const bool stuck = wait.submits >= BoardWaitRetries &&
+			now - wait.submitted_ms > BoardWaitRetryMs;
+		/* A board that keeps dropping and coming back never lets the clock
+		 * above run out: the mask has to end at some point anyway. */
+		const bool endless = now - wait.opened_ms > BoardWaitCapMs;
+
+		if (stuck || endless || (!ready && (gone || unflashable))) {
+			const char *const reason = stuck ? "no scan brought it back" :
+				endless ? "never settled" :
+				gone ? "gone from the bus" :
+				"not back after the flash";
+			give_up_board_wait(wait.session, reason);
+			continue;
+		}
+
+		++i;
+	}
+}
+
+void MainWindow::give_up_board_wait(const shared_ptr<Session> &session,
+	const char *reason)
+{
+	auto it = std::find_if(board_waits_.begin(), board_waits_.end(),
+		[&session](const BoardWait &wait) { return wait.session == session; });
+
+	if (it == board_waits_.end())
+		return;
+
+	const bool close_on_fail = it->close_on_fail;
+	const bool asked = it->asked;
+	const QString port = it->port;
+	const qint64 waited = it->since.elapsed();
+	board_waits_.erase(it);
+
+	qWarning() << "[BOARD]" << port << "gave up after" << waited
+		<< "ms:" << reason;
+
+	if (session && session->main_bar())
+		session->main_bar()->set_device_initializing(false);
+
+	const bool page_alive = session &&
+		std::find(sessions_.begin(), sessions_.end(), session) != sessions_.end();
+
+	if (!page_alive)
+		return;
+
+	/*
+	 * The question about the capture is already behind the page: asking it
+	 * again would be the same question over the same board, and the answer
+	 * would bring the page right back here. What is left is to settle it -
+	 * the page moves to another board, or closes.
+	 */
+	if (asked) {
+		if (!close_on_fail) {
+			switch_to_free_device(session);
+			return;
+		}
+
+		remove_session(session);
+
+		for (const shared_ptr<Session> &other : sessions_)
+			if (other && other->main_bar())
+				other->main_bar()->refresh_device_selector();
+
+		resume_device_events(true);
+		return;
+	}
+
+	/* The page is asked again, so the answer it gave before cannot stand. */
+	if (detach_answered == session.get())
+		detach_answered = nullptr;
+
+	/* The capture page is not closed, and a page that was never going to be
+	 * closed is asked about: that is the question a board that really went
+	 * away gets. */
+	if (!close_on_fail || sessions_.empty() || session == sessions_.front()) {
+		show_device_detach(session);
+		return;
+	}
+
+	remove_session(session);
+
+	/* Every page left was built before the scan that lost this one, and
+	 * would still offer its board. */
+	for (const shared_ptr<Session> &other : sessions_)
+		if (other && other->main_bar())
+			other->main_bar()->refresh_device_selector();
+
+	resume_device_events(true);
+}
+
+/*
  * Carries out what the answer to the detach question asks for: the device that
  * was in use is gone, so the list is read again and the session moves to what
  * is there. Device events stay held back until that rescan is done - a second
@@ -1351,6 +1807,14 @@ void MainWindow::show_device_detach(const shared_ptr<Session> &session)
 		return;
 	}
 
+	/* A page waiting for its board has answered this question already, and
+	 * the scan that brought nothing back means the board is still coming up.
+	 * Asking here is what put the save question over the mask. */
+	if (board_wait_active(session)) {
+		resume_device_events(false);
+		return;
+	}
+
 	/* Already asking. Raising the question is all that is left to do; a
 	 * second copy would have to be answered for the same thing. */
 	if (detach_dialog_) {
@@ -1358,6 +1822,9 @@ void MainWindow::show_device_detach(const shared_ptr<Session> &session)
 		detach_dialog_->activateWindow();
 		return;
 	}
+
+	qWarning() << "[DETACH] asking about"
+		<< widgets::DeviceToolButton::device_identity(session->device());
 
 	attach_process_done = false;
 	QDialog* dialog = new QDialog(this);
@@ -1608,6 +2075,8 @@ void MainWindow::on_capture_board_gone(const QStringList &identities)
 		if (session->get_capture_state() == Session::Stopped)
 			continue;
 
+		qInfo() << "[DETACH]" << identity << "went, its capture ends";
+
 		link_stop_from_unplug_ = true;
 		/*
 		 * The warning it suppresses may never come - this stop is ours, not
@@ -1771,7 +2240,7 @@ void MainWindow::run_device_attached()
 		const QString identity =
 			widgets::DeviceToolButton::device_identity(session->device());
 		if (identity.startsWith(QStringLiteral("usb/")))
-			session->main_bar()->set_device_busy(true, window->second);
+			session->main_bar()->set_device_initializing(true, window->second);
 	}
 	QApplication::processEvents();
 
@@ -1859,9 +2328,14 @@ void MainWindow::run_device_attached()
 
 			if (!device_manager) {
 				QMetaObject::invokeMethod(this, [this]() {
+					/* busy(false) leaves an initializing mask alone, and no
+					 * wait is left to take that one down: it goes here, or
+					 * the page is masked for good. */
 					for (const shared_ptr<Session> &session : sessions_)
-						if (session && session->main_bar())
+						if (session && session->main_bar()) {
+							session->main_bar()->set_device_initializing(false);
 							session->main_bar()->set_device_busy(false);
+						}
 					resume_device_events();
 				}, Qt::QueuedConnection);
 				return;
@@ -1926,20 +2400,42 @@ void MainWindow::run_device_attached()
 			const shared_ptr<Session> unplugged = adopt_device_in_sessions(&lost);
 
 			/*
+			 * The scan is the only word the vendor back end gives about a
+			 * board leaving: its boards carry no port chain in the libusb
+			 * events. Note it here, so that a capture that just ended on this
+			 * board does not go on to blame the sample rate.
+			 */
+			if (unplugged)
+				toolbars::MainBar::note_gone(
+					widgets::DeviceToolButton::device_identity(
+						unplugged->device()));
+
+			/* A page that has its board again is done waiting: the mask it
+			 * wore goes with the others below. */
+			for (size_t i = 0; i < board_waits_.size(); ) {
+				if (std::find(lost.begin(), lost.end(),
+						board_waits_[i].session) == lost.end())
+					board_waits_.erase(board_waits_.begin() + i);
+				else
+					++i;
+			}
+
+			/*
 			 * A board the bus reported gone is still handed back by the scan:
-			 * the list was read before the host finished taking it away, and
-			 * nobody is asked about that page. Worth saying out loud - it is the
-			 * one case where a board going leaves no trace at all.
+			 * the list was read before the host finished taking it away. Worth
+			 * saying only while the board is really off the bus - one that
+			 * came back is in the list because it is back.
 			 */
 			if (!declared_gone.isEmpty() && !unplugged) {
 				QStringList still;
 				for (const QString &identity : declared_gone)
-					if (find_device_by_identity(identity))
+					if (find_device_by_identity(identity) &&
+						!DeviceManager::board_on_bus(identity))
 						still << identity;
 
-				qDebug() << "[DETACH] reported gone but nobody asked:"
-						   << "declared" << declared_gone.values()
-						   << "still listed" << still;
+				if (!still.isEmpty())
+					qDebug() << "[DETACH] gone but the scan still lists:"
+							   << still;
 			}
 
 			/*
@@ -2040,6 +2536,21 @@ void MainWindow::run_device_attached()
 				}
 
 				/*
+				 * The board is on its way back - still on the bus while it
+				 * is flashed, or seen arriving - so the page waits under
+				 * its mask instead of being asked. Whether a capture runs
+				 * elsewhere makes no difference: this pass only runs now
+				 * because nothing is in its way.
+				 *
+				 * A board that is really gone is on neither, and the
+				 * question goes first.
+				 */
+				if (start_board_wait(unplugged, false, false)) {
+					resume_device_events(false);
+					return;
+				}
+
+				/*
 				 * The board in that session is gone: ask about saving it the way
 				 * the detach flow does. That is also what picks the replacement,
 				 * and it lets the device events through again once the question
@@ -2050,7 +2561,9 @@ void MainWindow::run_device_attached()
 				 * again.
 				 */
 				if (detach_answered == unplugged.get()) {
-					detach_answered = nullptr;
+					/* The answer stands until the board is back: a scan that
+					 * brings nothing back is the board still coming up, not
+					 * the same detach to ask about again. */
 					resume_device_events(false);
 					return;
 				}
@@ -2162,6 +2675,21 @@ shared_ptr<devices::HardwareDevice> MainWindow::find_moved_board(
 	 */
 	const QString was_id = QString::fromStdString(was->connection_id());
 	if (!was_id.startsWith("usb/") && !was_id.startsWith("ch375/"))
+		return nullptr;
+
+	/*
+	 * Only a board whose serial names that board is worth chasing across a
+	 * port change. The sigrok FX2 firmware reports one serial for every
+	 * board of its kind - "sigrok FX2 8ch" - so with two of them on the bus
+	 * the one still plugged answers for the one that was pulled, and the
+	 * page moved to its neighbour without anything being asked. Our own
+	 * boards carry a serial of their own; the chase is for those.
+	 */
+	const shared_ptr<devices::HardwareDevice> hw =
+		dynamic_pointer_cast<devices::HardwareDevice>(session->device());
+	if (!hw || !hw->hardware_device() || !hw->hardware_device()->driver() ||
+		get_wch_device_type_by_driver(
+			hw->hardware_device()->driver()->name()) == WchDeviceType::None)
 		return nullptr;
 
 	const string serial = was->serial_number();
@@ -2276,6 +2804,10 @@ shared_ptr<Session> MainWindow::adopt_device_in_sessions(
 			reinit_failed = true;
 			continue;
 		}
+
+		/* Its board is back, so the next pull is a question of its own. */
+		if (detach_answered == session.get())
+			detach_answered = nullptr;
 
 		/*
 		 * The board it is on came back as a new instance. The list is the
@@ -3212,16 +3744,41 @@ void MainWindow::on_sample_rate_too_low(qulonglong configured, qulonglong reason
 	 * about saving the page is the one that matters then. Give the hot-plug
 	 * pass a moment to say the board is gone; a board that is still there
 	 * gets the warning as before.
+	 *
+	 * The board is remembered by name here, before the wait: a page that
+	 * loses its board drops the device it held, and the name would go with
+	 * it.
 	 */
 	const QPointer<Session> stopped(session);
-	QTimer::singleShot(LinkStopWarnDelayMs, this, [this, stopped, configured]() {
+	const QString identity = (session && session->device()) ?
+		widgets::DeviceToolButton::device_identity(session->device()) :
+		QString();
+	QTimer::singleShot(LinkStopWarnDelayMs, this,
+		[this, stopped, identity, configured]() {
 		link_stop_message_visible_ = false;
 		if (!stopped || !stopped->main_bar())
 			return;
 		if (stopped->main_bar()->is_device_offline())
 			return;
+		/* A question about a pulled board is already up: the page lost it,
+		 * and blaming the rate underneath that box is noise. */
+		if (detach_dialog_)
+			return;
 		if (link_stop_from_unplug_) {
 			link_stop_from_unplug_ = false;
+			return;
+		}
+		/*
+		 * The driver only sees the silence, so a pulled board arrives here
+		 * as a capture that ran out of data - and the vendor back end has
+		 * no link stop of its own to say it went. Ask the bus instead: a
+		 * board the watcher has just said is gone was pulled, and blaming
+		 * the sample rate for that would be wrong.
+		 */
+		if (!identity.isEmpty() &&
+			toolbars::MainBar::gone_at(identity) != 0) {
+			qInfo() << "[LINK]" << identity
+				<< "was pulled, no rate warning";
 			return;
 		}
 

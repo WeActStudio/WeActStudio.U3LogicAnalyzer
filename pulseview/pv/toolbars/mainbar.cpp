@@ -50,6 +50,7 @@
 #include "mainbar.hpp"
 #include <thread>
 #include <boost/algorithm/string/join.hpp>
+#include <QDateTime>
 #include <QTime>
 #include <QStandardPaths>
 #include <QDesktopServices>
@@ -159,6 +160,29 @@ namespace pv
 	}
 
 	/*
+	 * Whether a bus event's chain is the place this identity sits in. Only the
+	 * libusb back end names a place by port chain ("usb/4-2.2", chain "2.2");
+	 * the vendor one writes "ch375/<hub>-<port>", which no chain of ports
+	 * matches - such a board is noted by the scan instead (note_gone).
+	 */
+	bool chain_matches_identity(const QString &identity, const QString &chain)
+	{
+		if (chain.isEmpty())
+			return false;
+
+		const int slash = identity.indexOf('/');
+		if (slash < 0)
+			return false;
+
+		const QString place = identity.mid(slash + 1);
+		if (place == chain)
+			return true;
+
+		const int dash = place.indexOf('-');
+		return dash >= 0 && place.mid(dash + 1) == chain;
+	}
+
+	/*
 	 * Where the upgrade tool finds this board. Both backends number what they
 	 * enumerate, and that number moves as boards come and go - so the port
 	 * chain the page is known by is what is looked for, not an order.
@@ -214,6 +238,10 @@ namespace pv
 	QSet<QString> MainBar::s_capturing_identities;
 	std::mutex MainBar::s_gone_mutex;
 	QSet<QString> MainBar::s_declared_gone;
+	std::mutex MainBar::s_gone_at_mutex;
+	QHash<QString, qint64> MainBar::s_gone_at;
+	std::mutex MainBar::s_arrived_mutex;
+	QHash<QString, qint64> MainBar::s_arrived;
 	std::mutex MainBar::s_upgrade_mutex;
 	QString MainBar::s_upgrade_target;
 	atomic<int64_t> MainBar::s_upgrade_deadline{ 0 };
@@ -252,9 +280,48 @@ namespace pv
 		if (identities.isEmpty())
 			return;
 
+		const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
 		std::lock_guard<std::mutex> lock(s_gone_mutex);
 		for (const QString &identity : identities)
 			s_declared_gone.insert(identity);
+
+		/*
+		 * Kept apart from the set above, which the pass takes and clears: a
+		 * capture that ended because of the pull reads this afterwards.
+		 */
+		std::lock_guard<std::mutex> at_lock(s_gone_at_mutex);
+		for (const QString &identity : identities)
+			s_gone_at.insert(identity, now);
+	}
+
+	qint64 MainBar::gone_at(const QString &identity)
+	{
+		std::lock_guard<std::mutex> lock(s_gone_at_mutex);
+
+		const qint64 now = QDateTime::currentMSecsSinceEpoch();
+		for (auto it = s_gone_at.begin(); it != s_gone_at.end(); )
+			if (now - it.value() > GoneMemoryMs)
+				it = s_gone_at.erase(it);
+			else
+				++it;
+
+		return s_gone_at.value(identity, 0);
+	}
+
+	/*
+	 * A board a scan no longer lists. Kept where the bus events keep theirs:
+	 * that is what the link warning reads before it blames the rate.
+	 */
+	void MainBar::note_gone(const QString &identity)
+	{
+		if (identity.isEmpty())
+			return;
+
+		const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+		std::lock_guard<std::mutex> at_lock(s_gone_at_mutex);
+		s_gone_at.insert(identity, now);
 	}
 
 	QSet<QString> MainBar::take_declared_gone()
@@ -263,6 +330,47 @@ namespace pv
 		const QSet<QString> taken = s_declared_gone;
 		s_declared_gone.clear();
 		return taken;
+	}
+
+	void MainBar::declare_arrived(const QStringList &chains)
+	{
+		if (chains.isEmpty())
+			return;
+
+		const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+		std::lock_guard<std::mutex> lock(s_arrived_mutex);
+		for (const QString &chain : chains)
+			s_arrived.insert(chain, now);
+	}
+
+	qint64 MainBar::arrived_at(const QString &chain)
+	{
+		std::lock_guard<std::mutex> lock(s_arrived_mutex);
+
+		const qint64 now = QDateTime::currentMSecsSinceEpoch();
+		for (auto it = s_arrived.begin(); it != s_arrived.end(); )
+			if (now - it.value() > ArrivalMemoryMs)
+				it = s_arrived.erase(it);
+			else
+				++it;
+
+		const auto hit = s_arrived.constFind(chain);
+		if (hit != s_arrived.constEnd())
+			return hit.value();
+
+		/*
+		 * The asker may spell the place without its bus, or with one this
+		 * context numbers differently: the ports are what has to agree.
+		 */
+		for (auto it = s_arrived.constBegin(); it != s_arrived.constEnd();
+			++it) {
+			const int dash = it.key().indexOf(QLatin1Char('-'));
+			if (dash >= 0 && it.key().mid(dash + 1) == chain)
+				return it.value();
+		}
+
+		return 0;
 	}
 
 	bool MainBar::take_deferred_if_idle()
@@ -832,6 +940,12 @@ namespace pv
 				tr("Waiting for the capture in the other session to end"));
 		}
 
+		QString MainBar::initializing_mask_text() const
+		{
+			return mask_html(tr("Initializing device"),
+				tr("Waiting for the board to come back"));
+		}
+
 		QString MainBar::upgrade_mask_text(int percent) const
 		{
 			/* The number is what the eye has to land on: it is the only thing
@@ -862,7 +976,11 @@ namespace pv
 			device_offline_ = true;
 			mask_kind_ = kind;
 
-			QWidget *const frame = page ? page : window();
+			/* A mask already up stays on the page it was put on: taking it
+			 * down or re-texting it happens without a page to hand over, and
+			 * falling back to the window put it over the whole program. */
+			QWidget *const frame = page ? page :
+				(offline_mask_ ? offline_mask_->parentWidget() : window());
 			if (!frame)
 				return;
 
@@ -961,6 +1079,11 @@ namespace pv
 			if (mask_kind_ == MaskKind::Upgrade)
 				return;
 
+			/* A page waiting for its board says so already, and that is more
+			 * than "a scan is running" - the window takes it down. */
+			if (mask_kind_ == MaskKind::Initializing)
+				return;
+
 			if (busy == mask_busy_)
 				return;
 			mask_busy_ = busy;
@@ -979,6 +1102,26 @@ namespace pv
 				 * the offline text, and the caller says when that goes. */
 				show_mask(MaskKind::Offline, offline_mask_text(), page);
 			}
+		}
+
+		void MainBar::set_device_initializing(bool initializing, QWidget *page)
+		{
+			if (mask_kind_ == MaskKind::Upgrade)
+				return;
+
+			if (initializing)
+			{
+				if (mask_kind_ == MaskKind::Initializing && offline_mask_)
+					return;
+
+				show_mask(MaskKind::Initializing, initializing_mask_text(), page);
+				return;
+			}
+
+			/* Idempotent, and only its own mask: the window may have put the
+			 * offline one up meanwhile. */
+			if (mask_kind_ == MaskKind::Initializing)
+				hide_mask();
 		}
 
 		void MainBar::set_device_offline(bool offline, QWidget *page)
@@ -1002,8 +1145,10 @@ namespace pv
 				return;
 
 			/* A scan says more than "offline" does, and it is about to take
-			 * its own mask down: leave it alone. */
-			if (mask_kind_ == MaskKind::Busy)
+			 * its own mask down: leave it alone. A page waiting for its board
+			 * says more as well. */
+			if (mask_kind_ == MaskKind::Busy ||
+				mask_kind_ == MaskKind::Initializing)
 				return;
 
 			/* Already masked as offline: nothing to do. */
@@ -2651,7 +2796,7 @@ namespace pv
 
 		void MainBar::show_hardware_version()
 		{
-			const shared_ptr<devices::Device> device = device_selector_.selected_device();
+			const shared_ptr<devices::Device> device = session_.device();
 			if (!device)
 				return;
 			const shared_ptr<sigrok::Device> sr_dev = device->device();
@@ -2908,6 +3053,26 @@ namespace pv
 				return false;
 
 			/*
+			 * A scan hands out a fresh instance for a board that stayed
+			 * plugged, so the entry just clicked is never the object the page
+			 * holds. Same board means same entry: compare what it is, not which
+			 * object it is. Closing it to open it again throws the capture away
+			 * and races the FX2 - its version read then times out.
+			 *
+			 * A board that failed to open is the exception: clicking it again
+			 * is the retry, and the session has to open it once more.
+			 */
+			const QString clicked_id =
+				widgets::DeviceToolButton::device_identity(device);
+			if (session_.device() && !session_.device_open_failed() &&
+				!clicked_id.isEmpty() &&
+				clicked_id ==
+				widgets::DeviceToolButton::device_identity(session_.device())) {
+				update_device_list();
+				return false;
+			}
+
+			/*
 			 * Everything set up for the device in hand goes when another
 			 * one is taken, so ask before that happens - but only when
 			 * there is something to lose. Same test as closing the
@@ -3006,6 +3171,9 @@ namespace pv
 				{ WCH_VID, WCH_PID_CH569 },
 				{ 0x1d50, 0x608c, },
 				{ 0x1d50, 0x608d, },
+				/* A blank FX2 arrives under Cypress ids: that arrival is
+				 * what gets a scan going, and the scan is what flashes it. */
+				{ 0x04b4, 0x8613, },
 			};
 			const size_t hot_plug_count = G_N_ELEMENTS(hot_plug_ids);
 
@@ -3106,9 +3274,27 @@ namespace pv
 				bool wch_arrived = false;
 				bool went = false;
 				QStringList gone;
+				QStringList arrived;
 
 				for (const UsbBusEvent &event : events)
 				{
+					/*
+					 * An arrival is kept the way a page identity spells it,
+					 * "<bus>-<chain>": the ports alone read alike for two
+					 * boards on the same port of different buses.
+					 */
+					if (event.event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED &&
+						!event.chain.empty()) {
+						QString arrived_at =
+							QString::fromStdString(event.chain);
+
+						if (event.bus > 0)
+							arrived_at = QString::number(event.bus) +
+								QLatin1Char('-') + arrived_at;
+
+						arrived << arrived_at;
+					}
+
 					if (event.vid == WCH_VID &&
 						event.event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED)
 						wch_arrived = true;
@@ -3127,9 +3313,7 @@ namespace pv
 						QString::fromStdString(event.chain);
 					for (const QString &identity : busy)
 					{
-						const int dash = identity.indexOf('-');
-						if (dash >= 0 &&
-							identity.mid(dash + 1) == chain &&
+						if (chain_matches_identity(identity, chain) &&
 							!gone.contains(identity))
 							gone << identity;
 					}
@@ -3151,8 +3335,13 @@ namespace pv
 
 				/* The pages are told below; the pass is told as well, because a
 				 * scan can still list a board the host has only just taken
-				 * away. */
+				 * away - or miss one that is still being flashed. */
+				declare_arrived(arrived);
 				declare_gone(gone);
+
+				qInfo() << "[HOTPLUG] gone" << gone << "arrived" << arrived
+					<< "captures" << s_captures_running.load()
+					<< "busy" << busy;
 
 				/*
 				 * A pass closes the device in use, so while a capture runs it waits
@@ -3162,9 +3351,6 @@ namespace pv
 				 *
 				 * The pages that did lose a board are told, so that they can say so
 				 * instead of sitting there looking alive.
-				 *
-				 * A captured board the chains cannot describe (the vendor back end)
-				 * is taken as gone: acting at once is the safe side.
 				 */
 				/*
 				 * Decided and recorded under the lock the count is under: a capture
@@ -3179,20 +3365,17 @@ namespace pv
 
 					const int captures = s_captures_running;
 					/*
-					 * Only a board whose ports the identity carries can be told
-					 * from the rest: one it does not describe (the vendor
-					 * backend) may or may not be the board being captured, and a
-					 * pass closes the devices it finds - so it waits for the
-					 * capture to end. A board that really went ends the capture
-					 * by itself.
+					 * A capture whose board went is ended at once. Only a
+					 * board a bus event names by port chain can be told that
+					 * way; a vendor one is noted by the scan that lost it.
 					 */
 					bool captured_went = false;
 					QStringList captured_gone;
 					for (const QString &id : s_capturing_identities) {
-						if (id.startsWith("usb/") && gone.contains(id))
+						if (gone.contains(id)) {
 							captured_went = true;
-						if (gone.contains(id))
 							captured_gone << id;
+						}
 						capturing.insert(id);
 					}
 
@@ -3667,9 +3850,36 @@ namespace pv
 			QString fpgaVersion;
 			QString text;
 			QString vendorName = get_vendorName();
-			
+
+			/*
+			 * What this page is on, not what its menu offers: the selector holds a
+			 * device of its own, and on a page without one it says nothing about
+			 * what to report. A demo device has no firmware to name.
+			 */
+			const shared_ptr<devices::Device> page_device = session_.device();
+			const shared_ptr<devices::HardwareDevice> page_hw =
+				std::dynamic_pointer_cast<devices::HardwareDevice>(page_device);
+			const QString driver = page_hw ?
+				QString::fromStdString(
+					page_hw->hardware_device()->driver()->name()) :
+				QString();
+
 			// For the demo device or no device, only the software version is shown
-			if (vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)] && vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH569)])
+			if (driver == QStringLiteral("fx2lafw"))
+			{
+				/* An FX2 runs the firmware that was flashed into it, and the
+				 * version it answers with is the only one there is. Only what a
+				 * scan kept is read here: this page has the board open. */
+				const std::string fw = pv::fx2_cached_version(
+					widgets::DeviceToolButton::device_identity(
+						page_device).toStdString());
+
+				text = tr("<b>Software Version:</b> %1<br/>").arg(softwareVersion) +
+					   tr("<b>Firmware Version:</b> %1<br/>").arg(
+						   fw.empty() ? QStringLiteral("null") :
+							   QString::fromStdString(fw));
+			}
+			else if (vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)] && vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH569)])
 			{
 				text = tr("<b>Software Version:</b> %1<br/>").arg(softwareVersion);
 			}
