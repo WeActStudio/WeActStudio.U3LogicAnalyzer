@@ -27,6 +27,7 @@
 
 #include "view.hpp"
 
+#include "pv/data/decode/decoder.hpp"
 #include "pv/util.hpp"
 #include "pv/globalsettings.hpp"
 
@@ -41,6 +42,135 @@ namespace pv {
 namespace views {
 namespace tabular_decoder {
 
+// Checked for every cell that is drawn, so it allocates nothing.
+static bool is_digit_in_radix(QChar c, int radix)
+{
+	const ushort u = c.unicode();
+
+	if ((u >= '0') && (u <= '9'))
+		return (u - '0') < radix;
+
+	if (radix == 16) {
+		const ushort upper = c.toUpper().unicode();
+		return (upper >= 'A') && (upper <= 'F');
+	}
+
+	return false;
+}
+
+/*
+ * The base a decoder writes bare numbers in. UART and its like have a
+ * "format" option that says so ("dec", "hex", "oct", "bin"); the rest
+ * write hex, which is what a dump reader expects anyway.
+ */
+static int decoder_radix(const pv::data::decode::Decoder *decoder)
+{
+	if (!decoder)
+		return 16;
+
+	const auto &options = decoder->options();
+	const auto it = options.find("format");
+	if ((it == options.end()) || !it->second)
+		return 16;
+	if (!g_variant_is_of_type(it->second, G_VARIANT_TYPE_STRING))
+		return 16;
+
+	const string format = g_variant_get_string(it->second, nullptr);
+	if (format == "dec")
+		return 10;
+	if (format == "oct")
+		return 8;
+	if (format == "bin")
+		return 2;
+
+	return 16;  // "hex", "ascii" (which spells bytes as characters) and others
+}
+
+/*
+ * The number a decoder's text is about. Decoders write it without a "0x"
+ * in the base they were told to use ("48" from UART in hex mode), so the
+ * base comes from the decoder: reading that "48" as decimal would make it
+ * 0x30. Text without a number - "Start", "CRC error" - is shown as it is.
+ */
+static bool annotation_value(const QString &text, int radix, quint32 *value)
+{
+	const QString s = text.trimmed();
+
+	// A byte written as the character itself: 'H'
+	if ((s.size() == 3) && (s.at(0) == '\'') && (s.at(2) == '\'')) {
+		*value = s.at(1).unicode();
+		return true;
+	}
+
+	// Hex, with or without a label in front of it: "0x48", "DATA: 0x48"
+	const int hex_at = s.indexOf(QStringLiteral("0x"), 0, Qt::CaseInsensitive);
+	if (hex_at >= 0) {
+		QString digits;
+		for (int i = hex_at + 2; i < s.size(); i++) {
+			const QChar c = s.at(i);
+			if (!c.isLetterOrNumber())
+				break;
+			digits.append(c);
+		}
+
+		bool ok = false;
+		const uint v = digits.toUInt(&ok, 16);
+		if (ok && !digits.isEmpty()) {
+			*value = v;
+			return true;
+		}
+
+		// "0x" in the text means the number is hex, so a hex that cannot
+		// be read leaves nothing to show in the other formats.
+		return false;
+	}
+
+	// Hex mode always writes two digits, so a lone one is the character
+	// itself: 0x41 arrives as "A", and hex would read that as 0x0A.
+	if ((s.size() == 1) && (radix == 16)) {
+		*value = s.at(0).unicode();
+		return true;
+	}
+
+	// The whole text is one number: "48", "FF", "1010".
+	{
+		bool all_digits = !s.isEmpty();
+		for (const QChar c : s)
+			all_digits = all_digits && is_digit_in_radix(c, radix);
+
+		if (all_digits) {
+			bool ok = false;
+			const uint v = s.toUInt(&ok, radix);
+			if (ok) {
+				*value = v;
+				return true;
+			}
+		}
+	}
+
+	// A number behind a label: "DATA: 48", "[0A]".
+	int i = 0;
+	while ((i < s.size()) && !s.at(i).isDigit())
+		i++;
+	QString digits;
+	for (; (i < s.size()) && is_digit_in_radix(s.at(i), radix); i++)
+		digits.append(s.at(i));
+
+	// A number that runs straight into a letter is not one in this base:
+	// "1A2B" in decimal must not come out as 1.
+	if (!digits.isEmpty() && (i < s.size()) && s.at(i).isLetterOrNumber())
+		return false;
+
+	bool ok = false;
+	const uint v = digits.toUInt(&ok, radix);
+	if (ok && !digits.isEmpty()) {
+		*value = v;
+		return true;
+	}
+
+	return false;
+}
+
 AnnotationCollectionModel::AnnotationCollectionModel(QObject* parent) :
 	QAbstractTableModel(parent),
 	all_annotations_(nullptr),
@@ -50,7 +180,8 @@ AnnotationCollectionModel::AnnotationCollectionModel(QObject* parent) :
 	prev_segment_(0),
 	prev_last_row_(0),
 	had_highlight_before_(false),
-	colored_annotations_(true)
+	colored_annotations_(true),
+	value_format_(ValueRaw)
 {
 	// Note: when adding entries, consider ViewVisibleFilterProxyModel::filterAcceptsRow()
 
@@ -94,7 +225,41 @@ QVariant AnnotationCollectionModel::data_from_ann(const Annotation* ann, int ind
 	case 2: return QVariant(ann->row()->decoder()->name());    // Column #2, Decoder
 	case 3: return QVariant(ann->row()->description());        // Column #3, Ann Row
 	case 4: return QVariant(ann->ann_class_description());     // Column #4, Ann Class
-	case 5: return QVariant(ann->longest_annotation());        // Column #5, Value
+	case 5: {                                                   // Column #5, Value
+			const QString text = ann->longest_annotation();
+			quint32 value = 0;
+
+			// A bit row says 0 or 1 and nothing else: turned into another
+			// format it would read as a number it is not.
+			const QString trimmed = text.trimmed();
+			if ((trimmed == "0") || (trimmed == "1"))
+				return QVariant(text);
+
+			if (value_format_ == ValueRaw)
+				return QVariant(text);
+
+			if (!annotation_value(text, decoder_radix(ann->row()->decoder()),
+				&value))
+				return QVariant(text);
+
+			switch (value_format_) {
+			case ValueHex:
+				// 0x stays lowercase, the digits do not.
+				return QVariant(QString("0x") +
+					QString("%1").arg(value, 2, 16, QChar('0')).toUpper());
+			case ValueDec:
+				return QVariant(QString::number(value));
+			case ValueOct:
+				return QVariant(QString("0%1").arg(value, 3, 8, QChar('0')));
+			case ValueBin:
+				return QVariant(QString("%1").arg(value, 8, 2, QChar('0')));
+			case ValueAscii:
+				return QVariant(QString(QChar(
+					((value >= 0x20) && (value <= 0x7E)) ? value : '.')));
+			default:
+				return QVariant(text);
+			}
+		}
 	case 6: return QVariant((qulonglong)ann->end_sample());    // Column #6, End Sample
 	case 7: {                                                  // Column #7, Duration
 			// Without a sample rate the numbers are sample counts, the
@@ -183,6 +348,18 @@ Qt::ItemFlags AnnotationCollectionModel::flags(const QModelIndex& index) const
 void AnnotationCollectionModel::set_colored_annotations(bool colored)
 {
 	colored_annotations_ = colored;
+}
+
+void AnnotationCollectionModel::set_value_format(int format)
+{
+	if (format == value_format_)
+		return;
+
+	value_format_ = format;
+
+	// The whole column changes, and so does what a filter matches on it.
+	if (dataset_ && !dataset_->empty())
+		dataChanged(index(0, 5), index(dataset_->size() - 1, 5));
 }
 
 uint8_t AnnotationCollectionModel::first_hidden_column() const

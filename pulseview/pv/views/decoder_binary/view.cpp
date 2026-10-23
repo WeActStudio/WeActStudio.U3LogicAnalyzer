@@ -98,15 +98,21 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 	class_selector_->setSizeAdjustPolicy(QComboBox::AdjustToContentsOnFirstShow);
 	toolbar->addWidget(class_selector_);
 	toolbar->addSeparator();
-	toolbar->addWidget(new QLabel(tr("Show data as")));
+	toolbar->addWidget(new QLabel(tr("Right column")));
 	format_selector_->setMinimumWidth(10);
 	format_selector_->setSizeAdjustPolicy(QComboBox::AdjustToContentsOnFirstShow);
 	toolbar->addWidget(format_selector_);
 	toolbar->addSeparator();
 	toolbar->addWidget(save_button_);
 
-	// Add format types
-	format_selector_->addItem(tr("Hexdump"), QVariant(QString("text/hexdump")));
+	// Formats of the column on the right; the left one is always hex. The
+	// order follows QHexView::DisplayFormat.
+	format_selector_->addItem(tr("ASCII text"), QVariant((int)QHexView::FormatAscii));
+	format_selector_->addItem(tr("Hex"), QVariant((int)QHexView::FormatHex));
+	format_selector_->addItem(tr("Decimal"), QVariant((int)QHexView::FormatDec));
+	format_selector_->addItem(tr("Octal"), QVariant((int)QHexView::FormatOct));
+	format_selector_->addItem(tr("Binary digits"), QVariant((int)QHexView::FormatBin));
+	format_selector_->addItem(tr("C array"), QVariant((int)QHexView::FormatCArray));
 
 	// Add widget stack
 	root_layout->addWidget(stacked_widget_);
@@ -118,6 +124,10 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 		this, SLOT(on_selected_decoder_changed(int)));
 	connect(class_selector_, SIGNAL(currentIndexChanged(int)),
 		this, SLOT(on_selected_class_changed(int)));
+	connect(format_selector_, SIGNAL(currentIndexChanged(int)),
+		this, SLOT(on_selected_format_changed(int)));
+	connect(hex_view_, SIGNAL(byte_selected(uint64_t, uint64_t)),
+		this, SLOT(on_byte_selected(uint64_t, uint64_t)));
 
 	// Configure actions
 	save_action_->setText(tr("&Save..."));
@@ -176,6 +186,7 @@ void View::reset_view_state()
 	decoder_selector_->clear();
 	class_selector_->clear();
 	format_selector_->setCurrentIndex(0);
+	hex_view_->set_display_format(QHexView::FormatAscii);
 	save_button_->setEnabled(false);
 
 	hex_view_->clear();
@@ -464,6 +475,22 @@ void View::on_selected_class_changed(int index)
 		false;
 
 	update_data();
+}
+
+void View::on_selected_format_changed(int index)
+{
+	hex_view_->set_display_format(
+		(QHexView::DisplayFormat)format_selector_->itemData(index).toInt());
+}
+
+/* The same thing the table does when a row is clicked: the main view moves
+ * to the range that byte was decoded from. */
+void View::on_byte_selected(uint64_t start_sample, uint64_t end_sample)
+{
+	shared_ptr<views::ViewBase> main_view = session_.main_view();
+
+	if (main_view)
+		main_view->focus_on_range(start_sample, end_sample);
 }
 
 void View::on_signal_name_changed(const QString &name)

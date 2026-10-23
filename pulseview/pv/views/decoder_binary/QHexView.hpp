@@ -51,10 +51,29 @@ public:
 		MemoryEmulationMode ///< Reconstructs memory contents from data chunks
 	};
 
+	/* How a byte is written in the column on the right. The column on the
+	 * left is always hex without 0x: that is what a dump is read for. */
+	enum DisplayFormat {
+		FormatAscii,    ///< f
+		FormatHex,      ///< 66
+		FormatDec,      ///< 102
+		FormatOct,      ///< 146
+		FormatBin,      ///< 01100110
+		FormatCArray    ///< 0x66,
+	};
+
+	/* Which of the two columns the selection was made in. Each copies its
+	 * bytes the way it writes them. */
+	enum SelectArea {
+		AreaBytes,
+		AreaText
+	};
+
 public:
 	QHexView(QWidget *parent = nullptr);
 
 	void set_mode(Mode m);
+	void set_display_format(DisplayFormat format);
 	void set_data(const DecodeBinaryClass* data);
 
 	/* Sets range of samples that are visible in the main view */
@@ -66,7 +85,6 @@ public:
 	unsigned int get_bytes_per_line() const;
 
 	void clear();
-	void showFromOffset(size_t offset);
 	virtual QSizePolicy sizePolicy() const;
 	virtual QSize minimumSizeHint() const;
 	virtual QSize sizeHint() const;
@@ -75,6 +93,10 @@ public:
 
 	size_t create_hex_line(size_t start, size_t end, QString* dest,
 		bool with_offset=false, bool with_ascii=false);
+
+Q_SIGNALS:
+	/* A byte was clicked. The samples it covers say where it is in the trace. */
+	void byte_selected(uint64_t start_sample, uint64_t end_sample);
 
 protected:
 	void initialize_byte_iterator(size_t offset);
@@ -93,18 +115,31 @@ private:
 	void setSelection(int pos);
 	void ensureVisible();
 	void setCursorPos(int pos);
-	size_t cursorPosFromMousePos(const QPoint &position);
+	size_t cursorPosFromMousePos(const QPoint &position, bool *on_text = nullptr,
+		bool *on_bytes = nullptr);
+	void update_theme_colors();
+	void update_layout();
+	QString byte_text(uint8_t value) const;
+	QString text_text(uint8_t value) const;
+	unsigned int byte_cell_chars() const;
+	unsigned int byte_cell_step() const;
+	unsigned int text_cell_chars() const;
+	unsigned int text_cell_step() const;
+	pair<uint64_t, uint64_t> byte_sample_range(size_t offset) const;
+	void copy_selection();
 
 private:
 	Mode mode_;
+	DisplayFormat format_;
 	const DecodeBinaryClass* data_;
 	size_t data_size_;
 
-	size_t posAddr_, posHex_, posAscii_;
+	size_t posAddr_, posHex_, posText_;
 	size_t charWidth_, charHeight_;
 	size_t selectBegin_, selectEnd_, selectInit_, cursorPos_;
+	SelectArea select_area_;
 	uint8_t address_digits_;
-	bool mouse_pressed_;  // 跟踪鼠标是否按下
+	bool mouse_pressed_;
 
 	size_t current_chunk_id_, current_chunk_offset_, current_offset_;
 	DecodeBinaryDataChunk current_chunk_; // Cache locally so that we're not messed up when the vector is re-allocating its data
@@ -115,6 +150,7 @@ private:
 
 	vector<QColor> chunk_colors_;
 	QColor visible_range_color_;
+	bool theme_dark_;
 };
 
 #endif // PULSEVIEW_PV_VIEWS_DECODER_BINARY_QHEXVIEW_HPP

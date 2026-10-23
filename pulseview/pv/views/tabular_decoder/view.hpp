@@ -67,8 +67,23 @@ enum ViewModeType {
 	ViewModeCount // Indicates how many view mode types there are, must always be last
 };
 
+/*
+ * How the Value column reads what a decoder wrote. The decoder writes text,
+ * so the other formats are made from the first number found in it.
+ */
+enum ValueFormatType {
+	ValueRaw,      ///< As the decoder wrote it
+	ValueHex,      ///< 0x48
+	ValueDec,      ///< 72
+	ValueOct,      ///< 0110
+	ValueBin,      ///< 01001000
+	ValueAscii,    ///< H
+	ValueFormatCount
+};
+
 extern const char* SaveTypeNames[SaveTypeCount];
 extern const char* ViewModeNames[ViewModeCount];
+extern const char* ValueFormatNames[ValueFormatCount];
 
 
 class AnnotationCollectionModel : public QAbstractTableModel
@@ -119,6 +134,9 @@ public:
 	void set_signal_and_segment(data::DecodeSignal* signal, uint32_t current_segment);
 	void set_colored_annotations(bool colored);
 
+	/* The format the Value column is written in; the rows are re-read. */
+	void set_value_format(int format);
+
 	void update_annotations_without_hidden();
 	QModelIndex update_highlighted_rows(QModelIndex first, QModelIndex last,
 		int64_t sample_num);
@@ -138,6 +156,7 @@ private:
 	int64_t highlight_sample_num_;
 	bool had_highlight_before_;
 	bool colored_annotations_;
+	int value_format_;
 };
 
 
@@ -341,6 +360,8 @@ private Q_SLOTS:
 	void on_decoder_stacked(void* decoder);
 	void on_decoder_removed(void* decoder);
 
+	void on_value_format_changed(int index);
+
 	void on_actionSave_triggered(QAction* action = nullptr);
 
 	void on_table_item_clicked(const QModelIndex& index);
@@ -364,6 +385,7 @@ private:
 
 	QComboBox* decoder_selector_;
 	QComboBox* view_mode_selector_;
+	QComboBox* value_format_selector_;
 	QLineEdit* row_filter_;
 	QLabel* row_count_label_;
 	QToolButton* colored_annotations_button_;

@@ -2063,13 +2063,38 @@ Make sure the doc directory and the user manual are present.</source>
     </message>
     <message>
         <location filename="../pv/views/decoder_binary/view.cpp" line="101"/>
-        <source>Show data as</source>
-        <translation>数据显示格式</translation>
+        <source>Right column</source>
+        <translation>右列格式</translation>
     </message>
     <message>
         <location filename="../pv/views/decoder_binary/view.cpp" line="109"/>
-        <source>Hexdump</source>
-        <translation>十六进制转储</translation>
+        <source>ASCII text</source>
+        <translation>ASCII 字符</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="110"/>
+        <source>Hex</source>
+        <translation>十六进制</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="111"/>
+        <source>Decimal</source>
+        <translation>十进制</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="112"/>
+        <source>Octal</source>
+        <translation>八进制</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="113"/>
+        <source>Binary digits</source>
+        <translation>二进制</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/decoder_binary/view.cpp" line="114"/>
+        <source>C array</source>
+        <translation>C 数组</translation>
     </message>
     <message>
         <location filename="../pv/views/decoder_binary/view.cpp" line="123"/>
@@ -2204,6 +2229,46 @@ Make sure the doc directory and the user manual are present.</source>
         <location filename="../pv/views/tabular_decoder/view.cpp" line="708"/>
         <source>Decoder:</source>
         <translation>解码器：</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="711"/>
+        <source>Value:</source>
+        <translation>值：</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="94"/>
+        <source>As written</source>
+        <translation>原文</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="95"/>
+        <source>Hex</source>
+        <translation>十六进制</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="96"/>
+        <source>Decimal</source>
+        <translation>十进制</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="97"/>
+        <source>Octal</source>
+        <translation>八进制</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="98"/>
+        <source>Binary</source>
+        <translation>二进制</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="99"/>
+        <source>ASCII</source>
+        <translation>ASCII</translation>
+    </message>
+    <message>
+        <location filename="../pv/views/tabular_decoder/view.cpp" line="760"/>
+        <source>How the Value column is written</source>
+        <translation>值列按哪种格式显示</translation>
     </message>
     <message>
         <location filename="../pv/views/tabular_decoder/view.cpp" line="735"/>

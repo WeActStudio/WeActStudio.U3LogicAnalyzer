@@ -83,6 +83,15 @@ const char* ViewModeNames[ViewModeCount] = {
 		"Show visible in main view")
 };
 
+const char* ValueFormatNames[ValueFormatCount] = {
+	QT_TRANSLATE_NOOP("pv::views::tabular_decoder::View", "As written"),
+	QT_TRANSLATE_NOOP("pv::views::tabular_decoder::View", "Hex"),
+	QT_TRANSLATE_NOOP("pv::views::tabular_decoder::View", "Decimal"),
+	QT_TRANSLATE_NOOP("pv::views::tabular_decoder::View", "Octal"),
+	QT_TRANSLATE_NOOP("pv::views::tabular_decoder::View", "Binary"),
+	QT_TRANSLATE_NOOP("pv::views::tabular_decoder::View", "ASCII")
+};
+
 
 CustomFilterProxyModel::CustomFilterProxyModel(QObject* parent) :
 	QSortFilterProxyModel(parent),
@@ -682,6 +691,7 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 	parent_(parent),
 	decoder_selector_(new QComboBox()),
 	view_mode_selector_(new QComboBox()),
+	value_format_selector_(new QComboBox()),
 	row_filter_(new QLineEdit()),
 	row_count_label_(new QLabel()),
 	colored_annotations_button_(new QToolButton()),
@@ -708,6 +718,9 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 	toolbar->addWidget(new QLabel(tr("Decoder:")));
 	toolbar->addWidget(decoder_selector_);
 	toolbar->addSeparator();
+	toolbar->addWidget(new QLabel(tr("Value:")));
+	toolbar->addWidget(value_format_selector_);
+	toolbar->addSeparator();
 	toolbar->addWidget(save_button_);
 	toolbar->addSeparator();
 	toolbar->addWidget(view_mode_selector_);
@@ -727,6 +740,8 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 		this, SLOT(on_selected_decoder_changed(int)));
 	connect(view_mode_selector_, SIGNAL(currentIndexChanged(int)),
 		this, SLOT(on_view_mode_changed(int)));
+	connect(value_format_selector_, SIGNAL(currentIndexChanged(int)),
+		this, SLOT(on_value_format_changed(int)));
 
 	// Configure widgets
 	decoder_selector_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
@@ -741,6 +756,12 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 		QString translated = tr(ViewModeNames[i]);
     	view_mode_selector_->addItem(translated, QVariant::fromValue(i));
 	}
+
+	value_format_selector_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+	for (int i = 0; i < ValueFormatCount; i++)
+		value_format_selector_->addItem(tr(ValueFormatNames[i]),
+			QVariant::fromValue(i));
+	value_format_selector_->setToolTip(tr("How the Value column is written"));
 
 
 	// The table's own display toggles. They used to sit in the
@@ -1042,6 +1063,9 @@ void View::restore_table_state()
 		(Qt::SortOrder)settings.value("TabularDecoder/sort_order",
 			(int)Qt::AscendingOrder).toInt());
 
+	value_format_selector_->setCurrentIndex(
+		settings.value("TabularDecoder/value_format", ValueRaw).toInt());
+
 	wanted_decoder_ =
 		settings.value("TabularDecoder/decoder").toString();
 	apply_wanted_decoder();
@@ -1269,6 +1293,16 @@ void View::on_column_filter_changed(int column, const QStringList& excluded)
 
 	// Force repaint, otherwise the filtering isn't shown for some reason
 	table_view_->viewport()->update();
+}
+
+void View::on_value_format_changed(int index)
+{
+	const int format = value_format_selector_->itemData(index).toInt();
+
+	model_->set_value_format(format);
+
+	GlobalSettings settings;
+	settings.setValue("TabularDecoder/value_format", format);
 }
 
 void View::on_view_mode_changed(int index)

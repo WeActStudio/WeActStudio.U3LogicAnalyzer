@@ -94,6 +94,11 @@ private Q_SLOTS:
 	void on_decoder_stacked(void* decoder);
 	void on_decoder_removed(void* decoder);
 
+	void on_selected_format_changed(int index);
+
+	/* A byte was clicked in the dump: show where it sits in the trace. */
+	void on_byte_selected(uint64_t start_sample, uint64_t end_sample);
+
 	void on_actionSave_triggered(QAction* action = nullptr);
 
 	virtual void on_metadata_object_changed(MetadataObject* obj,
