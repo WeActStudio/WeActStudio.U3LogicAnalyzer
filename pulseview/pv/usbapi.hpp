@@ -32,14 +32,16 @@ struct UsbApi
 	void (LIBUSB_CALL *free_device_list)(libusb_device **, int);
 	int (LIBUSB_CALL *get_device_descriptor)(libusb_device *,
 		struct libusb_device_descriptor *);
-	int (LIBUSB_CALL *get_bus_number)(libusb_device *); /* optional */
+	/* optional */
+	decltype(&libusb_get_bus_number) get_bus_number;
 	int (LIBUSB_CALL *get_port_numbers)(libusb_device *, uint8_t *, int);
-	int (LIBUSB_CALL *has_capability)(enum libusb_capability);
+	/* Actual signatures differ between libusb headers (uint8_t vs int,
+	 * uint32_t vs enum); take them from the header in use. */
+	decltype(&libusb_has_capability) has_capability;
 	int (LIBUSB_CALL *hotplug_register)(libusb_context *, int, int, int, int,
 		int, libusb_hotplug_callback_fn, void *,
 		libusb_hotplug_callback_handle *);
-	int (LIBUSB_CALL *hotplug_deregister)(libusb_context *,
-		libusb_hotplug_callback_handle);
+	decltype(&libusb_hotplug_deregister_callback) hotplug_deregister;
 	int (LIBUSB_CALL *handle_events_timeout)(libusb_context *,
 		struct timeval *);
 	int (LIBUSB_CALL *open)(libusb_device *, libusb_device_handle **);
