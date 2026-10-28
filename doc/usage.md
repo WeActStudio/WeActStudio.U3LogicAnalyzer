@@ -1,4 +1,4 @@
-# Using the application
+# Using U3LogicAnalyzer
 
 [中文](usage.zh_CN.md) · [Back to README](../README.md)
 

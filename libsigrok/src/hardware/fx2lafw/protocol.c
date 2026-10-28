@@ -562,9 +562,9 @@ check_trigger:
 
 		/* There may be another trigger in the remaining data, go back and check for it */
 		if (processed_samples < cur_sample_count) {
-			/* Reset the trigger stage */
+			/* Start the next frame from a clean trigger state. */
 			if (devc->stl)
-				devc->stl->cur_stage = 0;
+				soft_trigger_logic_reset(devc->stl);
 			else {
 				std_session_send_df_frame_begin(sdi);
 				devc->trigger_fired = TRUE;
@@ -694,7 +694,8 @@ static int start_transfers(const struct sr_dev_inst *sdi)
 		int pre_trigger_samples = 0;
 		if (devc->limit_samples > 0)
 			pre_trigger_samples = (devc->capture_ratio * devc->limit_samples) / 100;
-		devc->stl = soft_trigger_logic_new(sdi, trigger, pre_trigger_samples);
+		devc->stl = soft_trigger_logic_new(sdi, trigger, pre_trigger_samples,
+			0, FALSE);
 		if (!devc->stl)
 			return SR_ERR_MALLOC;
 		devc->trigger_fired = FALSE;

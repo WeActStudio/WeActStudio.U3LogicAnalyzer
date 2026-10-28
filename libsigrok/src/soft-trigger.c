@@ -43,14 +43,19 @@ SR_PRIV int logic_channel_unitsize(GSList *channels)
 
 SR_PRIV struct soft_trigger_logic *soft_trigger_logic_new(
 		const struct sr_dev_inst *sdi, struct sr_trigger *trigger,
-		int pre_trigger_samples)
+		int pre_trigger_samples, int unitsize, gboolean arm_when_full)
 {
 	struct soft_trigger_logic *stl;
 
 	stl = g_malloc0(sizeof(struct soft_trigger_logic));
 	stl->sdi = sdi;
 	stl->trigger = trigger;
-	stl->unitsize = logic_channel_unitsize(sdi->channels);
+	/*
+	 * The width a sample costs on the wire is not always what the channel
+	 * count says: a driver may send eight of sixteen channels one byte at
+	 * a time. Use the width the caller reports when it has one.
+	 */
+	stl->unitsize = unitsize > 0 ? unitsize : logic_channel_unitsize(sdi->channels);
 	stl->prev_sample = g_malloc0(stl->unitsize);
 	stl->pre_trigger_size = stl->unitsize * pre_trigger_samples;
 	stl->pre_trigger_buffer = g_try_malloc(stl->pre_trigger_size);
@@ -64,6 +69,8 @@ SR_PRIV struct soft_trigger_logic *soft_trigger_logic_new(
 		return NULL;
 	}
 	stl->pre_trigger_head = stl->pre_trigger_buffer;
+	stl->arm_after_samples = arm_when_full ? (uint64_t)pre_trigger_samples : 0;
+	stl->samples_until_armed = stl->arm_after_samples;
 
 	if (stl->pre_trigger_size > 0 && !stl->pre_trigger_buffer) {
 		soft_trigger_logic_free(stl);
@@ -71,6 +78,24 @@ SR_PRIV struct soft_trigger_logic *soft_trigger_logic_new(
 	}
 
 	return stl;
+}
+
+/*
+ * Start a new frame: drop the pre-trigger window and the stage counters,
+ * otherwise the first trigger of the next frame fires on the previous one's
+ * leftovers and reports a pre-trigger depth it never had.
+ */
+SR_PRIV void soft_trigger_logic_reset(struct soft_trigger_logic *stl)
+{
+	if (!stl)
+		return;
+
+	stl->cur_stage = 0;
+	stl->count = 0;
+	stl->pre_trigger_fill = 0;
+	stl->pre_trigger_head = stl->pre_trigger_buffer;
+	stl->samples_until_armed = stl->arm_after_samples;
+	memset(stl->prev_sample, 0, stl->unitsize);
 }
 
 SR_PRIV void soft_trigger_logic_free(struct soft_trigger_logic *stl)
@@ -113,6 +138,11 @@ static void pre_trigger_send(struct soft_trigger_logic *stl,
 	struct sr_datafeed_packet packet;
 	struct sr_datafeed_logic logic;
 
+	/*
+	 * Clear the whole packet: status is read by the datafeed consumers, and
+	 * a stack garbage value there makes them drop the pre-trigger block.
+	 */
+	memset(&packet, 0, sizeof(packet));
 	packet.type = SR_DF_LOGIC;
 	packet.payload = &logic;
 	logic.unitsize = stl->unitsize;
@@ -180,9 +210,37 @@ SR_PRIV int soft_trigger_logic_check(struct soft_trigger_logic *stl,
 	GSList *l, *l_stage;
 	int offset;
 	int i;
+	int armed = 0;
 	gboolean match_found;
 
 	offset = -1;
+
+	/*
+	 * Swallow samples until the pre-trigger window is full. Matching from
+	 * the very first sample fires on whatever the signal happens to be
+	 * right after the start - with an edge trigger that is the first edge
+	 * - and the pre-trigger depth then is whatever was collected, usually
+	 * nothing.
+	 */
+	if (stl->samples_until_armed) {
+		uint64_t avail = (uint64_t)len / stl->unitsize;
+		int fill = avail <= stl->samples_until_armed ? len :
+				(int)(stl->samples_until_armed * stl->unitsize);
+
+		pre_trigger_append(stl, buf, fill);
+		stl->samples_until_armed -= fill / stl->unitsize;
+		/* Carry the last swallowed sample over as the edge reference. */
+		if (fill >= stl->unitsize)
+			memcpy(stl->prev_sample, buf + fill - stl->unitsize,
+				stl->unitsize);
+		stl->count = MAX(stl->count, 1);
+		buf += fill;
+		len -= fill;
+		armed = fill;
+		if (len <= 0)
+			return -1;
+	}
+
 	for (i = 0; i < len; i += stl->unitsize) {
 		l_stage = g_slist_nth(stl->trigger->stages, stl->cur_stage);
 		stage = l_stage->data;
@@ -235,6 +293,10 @@ SR_PRIV int soft_trigger_logic_check(struct soft_trigger_logic *stl,
 			stl->cur_stage = 0;
 		}
 	}
+
+	if (offset > -1)
+		/* The caller's buffer still starts where it was handed over. */
+		offset += armed / stl->unitsize;
 
 	if (offset == -1)
 		pre_trigger_append(stl, buf, len);

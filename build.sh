@@ -306,7 +306,35 @@ if [ $IS_WINDOWS -eq 1 ]; then
         echo "  Qt translations"
     fi
 
-    echo "  $(ls "$PVDIR"/*.dll 2>/dev/null | wc -l) DLLs, run.bat created"
+    # Firmware stays beside the executable: an FX2 asks for it on every scan,
+    # and run_gui.bat points SIGROK_FIRMWARE_DIR at this copy.
+    if [ -d "$PREFIX/share/sigrok-firmware" ]; then
+        mkdir -p "$PVDIR/share/sigrok-firmware"
+        cp "$PREFIX/share/sigrok-firmware"/*.fw \
+            "$PVDIR/share/sigrok-firmware/" 2>/dev/null || true
+        echo "  $(ls "$PVDIR/share/sigrok-firmware" | wc -l) firmware files"
+    fi
+
+    # Launcher carrying the environment the build itself does not know:
+    # the Python runtime for the decoders, and the firmware directory. A
+    # packaged build brings its own runtime, so it gets none.
+    if [ $PACKAGE -eq 0 ]; then
+        MINGW_WIN="$(cygpath -m /mingw64 2>/dev/null || echo 'D:/msys64/mingw64')"
+        cat > "$PVDIR/run_gui.bat" << RBEOF
+@echo off
+rem Start the build with the Python runtime and firmware the drivers need.
+cd /d "%~dp0"
+set "PYTHONHOME=$MINGW_WIN"
+set "PYTHONPATH="
+set "SIGROK_FIRMWARE_DIR=%~dp0share\\sigrok-firmware"
+start "" "%~dp0U3LogicAnalyzer.exe"
+RBEOF
+        echo "  run_gui.bat"
+    else
+        rm -f "$PVDIR/run_gui.bat" 2>/dev/null || true
+    fi
+
+    echo "  $(ls "$PVDIR"/*.dll 2>/dev/null | wc -l) DLLs"
     if [ $DEBUG -eq 0 ]; then
         echo "  Stripping debug symbols..."
         strip "$PVDIR/U3LogicAnalyzer.exe" 2>/dev/null || echo "  (strip not available, skipping)"

@@ -515,7 +515,8 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 		int pre_trigger_samples = 0;
 		if (devc->limit_samples > 0)
 			pre_trigger_samples = (devc->capture_ratio * devc->limit_samples) / 100;
-		devc->stl = soft_trigger_logic_new(sdi, trigger, pre_trigger_samples);
+		devc->stl = soft_trigger_logic_new(sdi, trigger, pre_trigger_samples,
+			0, FALSE);
 		if (!devc->stl)
 			return SR_ERR_MALLOC;
 

@@ -975,6 +975,12 @@ static gpointer data_read_thread(gpointer arg)
 
 		sr_dbg("Read %lu bytes from pipe %lu", length, pipe_num);
 
+		/*
+		 * A sample is unitsize bytes. A trailing partial sample cannot be
+		 * used, and keeping it would shift every sample after it by a byte.
+		 */
+		length -= length % unitsize;
+
 		cur_sample_count = length / unitsize;
 
 		/* Trigger handling */
@@ -1030,9 +1036,9 @@ static gpointer data_read_thread(gpointer arg)
 
 			/* There may be another trigger in the remaining data, go back and check for it */
 			if (processed_samples < cur_sample_count) {
-				/* Reset the trigger stage */
+				/* Start the next frame from a clean trigger state. */
 				if (devc->stl)
-					devc->stl->cur_stage = 0;
+					soft_trigger_logic_reset(devc->stl);
 				else {
 					std_session_send_df_frame_begin(sdi);
 					devc->trigger_fired = TRUE;
@@ -1329,9 +1335,31 @@ SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi)
 	if ((trigger = sr_session_trigger_get(sdi->session)))
 	{
 		int pre_trigger_samples = 0;
+		size_t unitsize;
+
 		if (devc->limit_samples > 0)
 			pre_trigger_samples = (devc->capture_ratio * devc->limit_samples) / 100;
-		devc->stl = soft_trigger_logic_new(sdi, trigger, pre_trigger_samples);
+
+		/*
+		 * The width of a sample on the wire follows the channel count that
+		 * was handed to the board, not the number of channels the device
+		 * has: in eight channel mode it is one byte. Passing it in keeps
+		 * the trigger from scanning the stream at the wrong stride, which
+		 * halves the trigger offset and reports a pre-trigger depth that is
+		 * only half of what was really captured.
+		 */
+		unitsize = (devc->mode == MODE_LOGIC_ANALYZER) ?
+			((devc->sample_width == SAMPLE_WIDTH_16BIT) ? 2 : 1) :
+			((devc->adc_width == ADC_WIDTH_10BIT) ? 2 : 1);
+
+		/*
+		 * Wait for the pre-trigger window to fill before matching. An edge
+		 * trigger fires on the first edge otherwise, and a capture that
+		 * starts on an active signal ends up with no pre-trigger data at
+		 * all - the trigger mark lands at the very left of the view.
+		 */
+		devc->stl = soft_trigger_logic_new(sdi, trigger, pre_trigger_samples,
+			(int)unitsize, TRUE);
 		if (!devc->stl)
 			return SR_ERR_MALLOC;
 		devc->trigger_fired = FALSE;

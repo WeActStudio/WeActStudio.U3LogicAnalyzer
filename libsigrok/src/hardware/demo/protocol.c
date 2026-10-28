@@ -716,10 +716,12 @@ SR_PRIV int demo_prepare_data(int fd, int revents, void *cb_data)
 					logic_fixup_feed(devc, &logic);
 					sr_session_send(sdi, &packet);
 					logic_done += sending_now - trigger_offset;
-					/* End acquisition */
-					sr_dbg("Triggered, stopping acquisition.");
-					sr_dev_acquisition_stop(sdi);
-					break;
+					/*
+					 * Carry on to the sample or time limit. Stopping right
+					 * here is what used to leave a triggered capture with
+					 * a single buffer worth of samples, and the limits the
+					 * user picked were never reached.
+					 */
 				} else {
 					/* Send nothing */
 					logic_done += sending_now;

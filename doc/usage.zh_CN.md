@@ -1,4 +1,4 @@
-# 使用说明
+# U3LogicAnalyzer 使用说明
 
 [English](usage.md) · [返回 README](../README_zh_CN.md)
 

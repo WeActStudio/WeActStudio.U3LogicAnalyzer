@@ -2023,13 +2023,18 @@ struct soft_trigger_logic {
 	uint8_t *pre_trigger_head;
 	int pre_trigger_size;
 	int pre_trigger_fill;
+	/* Samples still to be swallowed before matching may start; 0 = now. */
+	uint64_t samples_until_armed;
+	/* Value to reload samples_until_armed with on reset; 0 = never wait. */
+	uint64_t arm_after_samples;
 };
 
 SR_PRIV int logic_channel_unitsize(GSList *channels);
 SR_PRIV struct soft_trigger_logic *soft_trigger_logic_new(
 		const struct sr_dev_inst *sdi, struct sr_trigger *trigger,
-		int pre_trigger_samples);
+		int pre_trigger_samples, int unitsize, gboolean arm_when_full);
 SR_PRIV void soft_trigger_logic_free(struct soft_trigger_logic *st);
+SR_PRIV void soft_trigger_logic_reset(struct soft_trigger_logic *st);
 SR_PRIV int soft_trigger_logic_check(struct soft_trigger_logic *st, uint8_t *buf,
 		int len, int *pre_trigger_samples);
 
