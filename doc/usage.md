@@ -57,8 +57,9 @@ The gear button opens Device Options:
 - **Sample rate**: 25 steps from 4 MHz to 200 MHz on a USB 3.0 link; the table follows the link
   and the channel count (4 to 20 MHz at 16 channels, 4 to 40 MHz at 8 channels on USB 2.0).
   ![Sample rate](images/en/sample-rate.png)
-- **Sample count** (the duration box): 10 ms to 10 s. Together with the rate it decides how many
-  samples one capture holds (samples = rate × time, 2 bytes per sample at 16 channels).
+- **Sample count** (the duration box): from 10 ms up; the upper bound depends on PC memory
+  (samples = rate × time, 2 bytes per sample at 16 channels; the software works from an 18 GB
+  data ceiling, so 200 MHz / 16 ch is about 45 s and twice that at 8 channels).
 
 Rules of thumb:
 
