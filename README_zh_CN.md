@@ -85,4 +85,4 @@ WeAct Studio；`fx2lafw` 驱动（`libsigrok/src/hardware/fx2lafw/`）取自上�
 
 ## 许可
 
-GPL-2.0-or-later，见 [LICENSE](LICENSE)。
+GPL-3.0-or-later，见 [LICENSE](LICENSE)。
