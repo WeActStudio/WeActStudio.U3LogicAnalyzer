@@ -330,8 +330,6 @@ set "SIGROK_FIRMWARE_DIR=%~dp0share\\sigrok-firmware"
 start "" "%~dp0U3LogicAnalyzer.exe"
 RBEOF
         echo "  run_gui.bat"
-    else
-        rm -f "$PVDIR/run_gui.bat" 2>/dev/null || true
     fi
 
     echo "  $(ls "$PVDIR"/*.dll 2>/dev/null | wc -l) DLLs"
