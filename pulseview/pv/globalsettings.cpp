@@ -273,6 +273,7 @@ const QString GlobalSettings::Key_Dec_ColoredAnnotations = "Dec_ColoredAnnotatio
 const QString GlobalSettings::Key_Log_BufferSize = "Log_BufferSize";
 const QString GlobalSettings::Key_Log_NotifyOfStacktrace = "Log_NotifyOfStacktrace";
 const QString GlobalSettings::Key_ThresholdLevel = "ThresholdLevel";
+const QString GlobalSettings::Key_LedBrightness = "LedBrightness";
 vector<GlobalSettingsInterface*> GlobalSettings::callbacks_;
 bool GlobalSettings::tracking_ = false;
 bool GlobalSettings::is_dark_theme_ = false;
@@ -431,6 +432,8 @@ void GlobalSettings::set_defaults_where_needed()
 	}
 	if (!contains(Key_ThresholdLevel))
 		setValue(Key_ThresholdLevel, 2.3);
+	if (!contains(Key_LedBrightness))
+		setValue(Key_LedBrightness, 20);
 
 	// setValue(Key_View_ShowSamplingPoints, false);   //force 
 	// setValue(Key_View_ShowHoverMarker, false);      //force 

@@ -742,6 +742,9 @@ public:
 	static const ConfigKey * const USB_VERSION;
 	static const ConfigKey * const SEGMENT_CLEAR;
 	static const ConfigKey * const LINK_STOP_REASON;
+	static const ConfigKey * const KEY_START_STOP;
+	static const ConfigKey * const KEY_PRESSED;
+	static const ConfigKey * const LED_BRIGHTNESS;
     /** Data type used for this configuration key. */
     const DataType *data_type() const;
     /** String identifier for this configuration key, suitable for CLI use. */
@@ -871,5 +874,8 @@ protected:
 	static const ConfigKey _USB_VERSION;
 	static const ConfigKey _SEGMENT_CLEAR;
 	static const ConfigKey _LINK_STOP_REASON;
+	static const ConfigKey _KEY_START_STOP;
+	static const ConfigKey _KEY_PRESSED;
+	static const ConfigKey _LED_BRIGHTNESS;
 };
 }

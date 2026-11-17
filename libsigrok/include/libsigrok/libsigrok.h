@@ -1290,6 +1290,17 @@ enum sr_configkey {
 	 * from byte counts. Read after a capture to explain the stop; a host
 	 * that is merely too slow to consume the data stays at 0. */
 	SR_CONF_LINK_STOP_REASON,
+	/* Whether the key on the board starts and stops captures. Set it to
+	 * turn the key into a physical Start/Stop button; the device is told
+	 * with every start whether a press may end the capture it is running. */
+	SR_CONF_KEY_START_STOP,
+	/* Read-only: has the key been pressed since this was last asked?
+	 * Polling this is the only way to learn about a press while no capture
+	 * is running - the device cannot tell the host on its own, and a press
+	 * is over long before the next poll. Reading it clears the answer. */
+	SR_CONF_KEY_PRESSED,
+	/** Indicator brightness, percent of full scale (0-100). */
+	SR_CONF_LED_BRIGHTNESS,
 };
 
 /**

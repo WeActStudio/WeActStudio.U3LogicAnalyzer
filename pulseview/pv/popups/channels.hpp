@@ -87,6 +87,9 @@ public:
 	void set_usb2_mode(bool is_usb2);
 	bool is_usb2() const { return is_usb2_; }
 
+	/** What the key box was left on; applied when the page closes. */
+	bool key_enabled() const { return key_enabled_; }
+
 	QSize sizeHint() const override;
 
 	QRadioButton* radioChannels[4];
@@ -112,6 +115,8 @@ Q_SIGNALS:
 
 public Q_SLOTS:
 	void channelSelect(uint16_t index);
+	void key_start_stop_toggled(bool enabled);
+	void led_brightness_changed(int index);
 
 protected:
 	/* Called when the application language changed. */
@@ -176,6 +181,10 @@ private:
 	QGroupBox* analog_props_box_ = nullptr;
 
 	QDoubleSpinBox* pre_trigger_selector_;
+
+	QCheckBox* key_checkbox_ = nullptr;
+	bool key_enabled_ = false;
+	QComboBox* led_brightness_selector_ = nullptr;
 
 	vector<QCheckBox*> logic_checkboxes_;
 	vector<QCheckBox*> analog_checkboxes_;

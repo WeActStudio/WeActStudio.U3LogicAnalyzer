@@ -160,6 +160,74 @@ namespace pv
 	}
 
 	/*
+	 * Whether a board sits in its bootloader right now.
+	 *
+	 * Walked over libusb, not hidapi: both can do it, but the HID library in
+	 * this build never saw a board that arrived after the window was already
+	 * up, while libusb did - the bus watcher reports the same arrival.  A
+	 * context of its own is opened for the walk so that the watcher's is left
+	 * alone; it costs nothing while nothing is being enumerated.
+	 */
+	bool iap_device_present(QString *serial_out)
+	{
+		const UsbApi *const usb = usb_api();
+
+		if (serial_out)
+			serial_out->clear();
+
+		if (!usb || !usb->ready())
+			return false;
+
+		libusb_context *ctx = nullptr;
+
+		if (usb->init(&ctx) != 0)
+			return false;
+
+		libusb_device **list = nullptr;
+		const ssize_t count = usb->get_device_list(ctx, &list);
+
+		bool found = false;
+
+		for (ssize_t i = 0; i < count; i++) {
+			struct libusb_device_descriptor desc;
+
+			if (usb->get_device_descriptor(list[i], &desc) != 0)
+				continue;
+
+			if (desc.idVendor == WCH_VID &&
+					desc.idProduct == WCH_PID_CH32H417_HID) {
+				found = true;
+				break;
+			}
+		}
+
+		if (list)
+			usb->free_device_list(list, 1);
+
+		usb->exit(ctx);
+
+		/* A serial is only readable through an open handle, which is what the
+		 * upgrade opens anyway. Left empty, the worker takes the first board
+		 * in a bootloader - the only one there is, in practice. */
+		return found;
+	}
+
+	/*
+	 * Whether this page is one that could be waiting for a board to come back
+	 * in its bootloader.  Only an empty page qualifies: a board in its
+	 * bootloader is a HID device, which sigrok does not know, so the page that
+	 * would upgrade it shows nothing.  A page on another board is looking at
+	 * something else, and a file page has no bus at all.
+	 */
+	bool waiting_for_a_board(const shared_ptr<devices::Device> &device)
+	{
+		const shared_ptr<devices::HardwareDevice> hw =
+			dynamic_pointer_cast<devices::HardwareDevice>(device);
+
+		return hw && hw->hardware_device()->driver()->name() == "demo";
+	}
+
+	/*
 	 * Whether a bus event's chain is the place this identity sits in. Only the
 	 * libusb back end names a place by port chain ("usb/4-2.2", chain "2.2");
 	 * the vendor one writes "ch375/<hub>-<port>", which no chain of ports
@@ -976,6 +1044,14 @@ namespace pv
 			device_offline_ = true;
 			mask_kind_ = kind;
 
+			/* A board that is off the bus has no options to offer.  The page
+			 * would stay up describing it, with controls that write into
+			 * nothing, and the detach question that runs next is modal - the
+			 * rebuild that would otherwise remove the page never gets to run
+			 * before the board is back. */
+			if (channels_ && channels_->parent_dialog_)
+				channels_->parent_dialog_->close();
+
 			/* A mask already up stays on the page it was put on: taking it
 			 * down or re-texting it happens without a page to hand over, and
 			 * falling back to the window put it over the whole program. */
@@ -1036,6 +1112,11 @@ namespace pv
 
 			if (offline_mask_)
 				offline_mask_->hide();
+
+			/* The board is usable again.  Its firmware was reset while it was
+			 * away, so the level it was left on has to be pushed once more -
+			 * this is the first moment it can be. */
+			push_led_brightness();
 		}
 
 		void MainBar::set_device_upgrading(bool upgrading, QWidget *page)
@@ -1219,6 +1300,13 @@ namespace pv
 		{
 			rebuild_device_list();
 			update_device_config_widgets();
+
+			/* Every path that ends with a usable board runs through here -
+			 * a fresh bind, the same board coming back after being pulled,
+			 * a page built after the window was already up.  The firmware
+			 * forgets the level across a power cycle, so it is pushed again
+			 * each time rather than only when the device instance changes. */
+			push_led_brightness();
 		}
 
 		void MainBar::refresh_device_selector()
@@ -2165,8 +2253,10 @@ namespace pv
 				/* This page's own, and the value last used anywhere stays
 				 * what a page nobody has set up yet starts from. */
 				settings.setValue("ThresholdLevel", thresholdValue_ch32h417_);
+				settings.setValue("LedBrightness", led_brightness_);
 				GlobalSettings gs;
 				gs.setValue(GlobalSettings::Key_ThresholdLevel, thresholdValue_ch32h417_);
+				gs.setValue(GlobalSettings::Key_LedBrightness, led_brightness_);
 			}
 			else if (is_wch)
 			{
@@ -2399,7 +2489,24 @@ namespace pv
 
 			// Hide the widgets if no device is selected
 			// channels_button_action_->setVisible(!!device);
-			if (!device || !device->device())
+			/*
+			 * A pulled board leaves the demo device in its place, not an empty
+			 * slot - the session always holds something to draw.  That stand-in
+			 * is not a reason to tear the rest of the page down, but an options
+			 * page still up would be describing a board that has left the bus,
+			 * so it closes here and everything else is left alone.
+			 */
+			const shared_ptr<devices::HardwareDevice> page_hw =
+				std::dynamic_pointer_cast<devices::HardwareDevice>(device);
+			const bool board_gone =
+				!device || !device->device() || is_device_offline();
+			const bool shown_as_demo =
+				page_hw && page_hw->hardware_device()->driver()->name() == "demo";
+
+			if (shown_as_demo && channels_ && channels_->parent_dialog_)
+				channels_->parent_dialog_->reject();
+
+			if (board_gone)
 			{
 				// configure_button_action_->setVisible(false);
 				sample_count_.show_none();
@@ -2409,9 +2516,16 @@ namespace pv
 				 * would keep showing its settings and offer its controls,
 				 * and the vendor name is what tells the rest of the bar
 				 * which settings apply. */
-				if (channels_ && !channels_->parent_dialog_) {
-					delete channels_;
-					channels_ = nullptr;
+				if (channels_) {
+					if (channels_->parent_dialog_) {
+						/* The board is gone while its page is up: the page
+						 * describes something that no longer exists, so it
+						 * closes instead of sitting there offering it. */
+						channels_->parent_dialog_->reject();
+					} else {
+						delete channels_;
+						channels_ = nullptr;
+					}
 				}
 				set_vendorName(QString());
 				return;
@@ -2576,6 +2690,17 @@ namespace pv
 				else
 					// The CH32H417 hardware default threshold is 2.3 V
 					threshold_ch32h417_default_ = 2.3f;
+
+				/* Same ladder for the indicator: this page's own value first,
+				 * then the last one used anywhere, then what the board ships
+				 * with.  Pushed to the device when it is bound. */
+				const QString led_key = setting_group() + "/LedBrightness";
+				if (settings.contains(led_key))
+					led_brightness_ = settings.value(led_key).toInt();
+				else if (gs.contains(GlobalSettings::Key_LedBrightness))
+					led_brightness_ = gs.value(GlobalSettings::Key_LedBrightness).toInt();
+				else
+					led_brightness_ = 20;
 
 				// Disable analog channels A0/A1 in CH32H417 logic analyzer mode
 				for (const auto &sig : session_.signalbases())
@@ -3438,10 +3563,60 @@ namespace pv
 		void MainBar::update_upgrade_action()
 		{
 			/* An FX2 page has nothing the upgrade tool knows how to talk to;
-			 * hiding the entry says so without an error box. */
-			if (action_update_)
-				action_update_->setVisible(
-					upgradeable_device(session_.device()));
+			 * hiding the entry says so without an error box. A board sitting
+			 * in its bootloader is the exception: its page shows the demo
+			 * device, and that is exactly when the entry is needed. */
+			if (!action_update_)
+				return;
+
+			const bool hw_ok = upgradeable_device(session_.device());
+			const bool boot_ok = iap_device_present(nullptr);
+			const bool visible = hw_ok || boot_ok;
+
+			action_update_->setVisible(visible);
+
+			if (visible) {
+				if (upgrade_probe_timer_)
+					upgrade_probe_timer_->stop();
+				return;
+			}
+
+			/*
+			 * A board going to its bootloader leaves the device list before it
+			 * appears on the HID channel, and that channel is not one the bus
+			 * watcher follows - it has no port chain to name it by. So the only
+			 * way to notice the board arriving is to look. One enumeration is a
+			 * memory walk over a handful of devices; it runs only while a page
+			 * with nothing on it is showing, and gives up after a while rather
+			 * than watching an empty bus for the life of the page.
+			 */
+			if (!waiting_for_a_board(session_.device())) {
+				if (upgrade_probe_timer_)
+					upgrade_probe_timer_->stop();
+				return;
+			}
+
+			if (!upgrade_probe_timer_) {
+				upgrade_probe_timer_ = new QTimer(this);
+				upgrade_probe_timer_->setInterval(UpgradeProbeIntervalMs);
+				connect(upgrade_probe_timer_, &QTimer::timeout, this, [this]() {
+					if (!action_update_)
+						return;
+
+					if (upgradeable_device(session_.device()) ||
+							iap_device_present(nullptr)) {
+						action_update_->setVisible(true);
+						upgrade_probe_timer_->stop();
+						return;
+					}
+
+					if (++upgrade_probe_count_ >= UpgradeProbeMax)
+						upgrade_probe_timer_->stop();
+				});
+			}
+
+			upgrade_probe_count_ = 0;
+			upgrade_probe_timer_->start();
 		}
 
 		void MainBar::on_device_changed()
@@ -3483,6 +3658,10 @@ namespace pv
 			 */
 			if (view_)
 				view_->update_scale_offset(false);
+
+			/* The device has nowhere to keep this, so it is pushed again on
+			 * every bind, from the value restored above. */
+			push_led_brightness();
 		}
 
 		void MainBar::refresh_device_widgets()
@@ -3492,6 +3671,10 @@ namespace pv
 			 * that is no longer on any bus. */
 			update_device_config_widgets();
 			update_device_status_icon();
+
+			/* The same board coming back after being pulled: nothing changed
+			 * about the page, but the firmware has forgotten the level. */
+			push_led_brightness();
 		}
 
 		MainBar *MainBar::hot_plug_owner()
@@ -3578,6 +3761,187 @@ namespace pv
 			model_change_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 		}
 
+		void MainBar::set_key_listening(bool enabled)
+		{
+			key_listening_ = enabled;
+			key_poll_failures_ = 0;
+
+			if (!key_poll_timer_) {
+				key_poll_timer_ = new QTimer(this);
+				key_poll_timer_->setInterval(KeyPollIntervalMs);
+				connect(key_poll_timer_, &QTimer::timeout,
+					this, &MainBar::poll_board_key);
+			}
+
+			/* update_key_poll_timer() takes the baseline when it starts the
+			 * poll, so presses from before this was switched on are not
+			 * acted upon. */
+			update_key_poll_timer();
+		}
+
+		void MainBar::set_page_active(bool active)
+		{
+			page_active_ = active;
+			update_key_poll_timer();
+		}
+
+		int MainBar::led_brightness() const
+		{
+			return led_brightness_;
+		}
+
+		void MainBar::push_led_brightness()
+		{
+			const shared_ptr<devices::Device> target = session_.device();
+
+			if (!target || !target->device())
+				return;
+
+			if (!upgradeable_device(target))
+				return;
+
+			if (is_device_offline())
+				return;
+
+			try {
+				target->device()->config_set(sigrok::ConfigKey::LED_BRIGHTNESS,
+					Glib::Variant<guint64>::create((guint64)led_brightness_));
+			} catch (sigrok::Error &error) {
+				qDebug() << "Could not restore the indicator brightness:"
+						 << error.what();
+			}
+		}
+
+		void MainBar::apply_key_setting(bool enabled)
+		{
+			const shared_ptr<devices::Device> device = session_.device();
+
+			if (device && device->device()) {
+				try {
+					device->device()->config_set(
+						sigrok::ConfigKey::KEY_START_STOP,
+						Glib::Variant<bool>::create(enabled));
+				} catch (sigrok::Error &error) {
+					qDebug() << "Failed to set key start/stop:" << error.what();
+					return;
+				}
+			}
+
+			set_key_listening(enabled);
+		}
+
+		void MainBar::set_led_brightness(int level)
+		{
+			led_brightness_ = (level > 0) ? level : 20;
+
+			const shared_ptr<devices::Device> device = session_.device();
+
+			if (device && device->device()) {
+				try {
+					device->device()->config_set(
+						sigrok::ConfigKey::LED_BRIGHTNESS,
+						Glib::Variant<guint64>::create((guint64)led_brightness_));
+				} catch (sigrok::Error &error) {
+					qDebug() << "Could not set the indicator brightness:"
+							 << error.what();
+				}
+			}
+
+			/* Written out at once rather than through the delayed save: picking
+			 * a step from a list is one decision, not a drag, and a delayed
+			 * write that the window closes on never happens. */
+			write_setting_default();
+		}
+
+		void MainBar::sync_key_baseline()
+		{
+			const shared_ptr<devices::Device> device = session_.device();
+			if (!device || !device->device())
+				return;
+
+			try {
+				/* The value is not wanted: reading it is what moves the
+				 * driver's baseline to where the count stands now. */
+				device->device()->config_get(sigrok::ConfigKey::KEY_PRESSED);
+			} catch (sigrok::Error &error) {
+				qDebug() << "Could not take the key baseline:" << error.what();
+			}
+		}
+
+		void MainBar::update_key_poll_timer()
+		{
+			if (!key_poll_timer_)
+				return;
+
+			/*
+			 * The poll and the capture never overlap.  Reading the key is
+			 * what starts a capture, and the state does not turn to Running
+			 * until the session has been set up, so a poll that ran during
+			 * that gap would start a second capture on top of the first.
+			 * The state change is what starts the poll again afterwards.
+			 */
+			const bool idle =
+				(session_.get_capture_state() == Session::Stopped);
+			const bool should_run = key_listening_ && page_active_ && idle;
+			const bool running = key_poll_timer_->isActive();
+
+			if (should_run && !running) {
+				sync_key_baseline();
+				key_poll_timer_->start();
+			} else if (!should_run && running) {
+				key_poll_timer_->stop();
+			}
+		}
+
+		void MainBar::poll_board_key()
+		{
+			const shared_ptr<devices::Device> device = session_.device();
+
+			/*
+			 * Only while nothing is running on this page. A press made during
+			 * a capture is what ends that capture, and reading it here as well
+			 * would start another one the moment the first stopped.
+			 */
+			if (!device || !device->device() || session_.device_open_failed() ||
+					session_.get_capture_state() != Session::Stopped)
+				return;
+
+			bool pressed = false;
+
+			try {
+				pressed = Glib::VariantBase::cast_dynamic<Glib::Variant<bool>>(
+					device->device()->config_get(
+						sigrok::ConfigKey::KEY_PRESSED)).get();
+			} catch (sigrok::Error &error) {
+				qDebug() << "Key poll failed:" << error.what();
+
+				/*
+				 * A board that stopped answering fails every time and each
+				 * attempt waits for the USB timeout, so the poll gives up
+				 * instead of freezing the window every 150 ms.
+				 */
+				if (++key_poll_failures_ >= 3) {
+					key_poll_timer_->stop();
+					key_listening_ = false;
+					qWarning() << "Gave up polling the board key";
+				}
+				return;
+			}
+
+			key_poll_failures_ = 0;
+
+			if (pressed) {
+				/*
+				 * Stop polling before the capture is set up: the state does
+				 * not turn to Running until the session is ready, and a tick
+				 * in between would start a second capture on the same board.
+				 */
+				key_poll_timer_->stop();
+				session_.start_capture([](QString message) {
+					qWarning() << "Capture started by the key failed:" << message; });
+			}
+		}
+
 		void MainBar::update_runstop_status(int state)
 		{
 			if (state == Session::Stopped)
@@ -3591,6 +3955,10 @@ namespace pv
 				run_stop_button_->setIcon(QIcon(":/icons/Stop.png"));
 				run_stop_button_->setText(tr("Stop"));
 			}
+
+			/* This is where the key poll comes back after a capture it
+			 * started has ended. */
+			update_key_poll_timer();
 		}
 
 		void MainBar::on_actionNewView_triggered(QAction *action)
@@ -3839,6 +4207,11 @@ namespace pv
 			dialog->exec();
 
 			delete dialog;
+
+			/* What the key box was left on takes effect now that the page is
+			 * closed - a press while it was open was not a request. */
+			if (channels_)
+				apply_key_setting(channels_->key_enabled());
 		}
 
 		void MainBar::on_action_version_info_triggered()
@@ -3932,10 +4305,20 @@ namespace pv
 			 * The board this page is on is the one that gets upgraded. It is
 			 * the only one the page can speak for, and an FX2 running the
 			 * sigrok firmware takes no CH32H417 image at all.
+			 *
+			 * Unless the board is already in its bootloader: then there is no
+			 * page device to speak for - the page shows the demo device - but
+			 * the board is right there on the HID channel, and this is the
+			 * only way to write it.
 			 */
 			const shared_ptr<devices::Device> page_device = session_.device();
 
-			if (!upgradeable_device(page_device)) {
+			QString bootloader_serial;
+			const bool board_here = upgradeable_device(page_device);
+			const bool already_in_bootloader =
+				!board_here && iap_device_present(&bootloader_serial);
+
+			if (!board_here && !already_in_bootloader) {
 				pv::util::show_message(this, tr("Warning"),
 					tr("The current device does not support firmware upgrade.\nPlease connect the CH32H417 device and try again."),
 					pv::util::message_box_icon(QMessageBox::Warning), 350);
@@ -3953,14 +4336,18 @@ namespace pv
 					"wch-ch32h417-libusb";
 
 			/* Which board it is, and where the tool finds it: the ports it
-			 * sits in, not the order it happened to be enumerated in. */
-			const QString identity =
-				widgets::DeviceToolButton::device_identity(page_device);
-			const int target = upgrade_index_for(identity, iap_use_libusb);
+			 * sits in, not the order it happened to be enumerated in. A board
+			 * already in its bootloader has no port to look up and needs no
+			 * index - the image goes out over HID. */
+			const QString identity = board_here ?
+				widgets::DeviceToolButton::device_identity(page_device) : QString();
+			const int target = board_here ?
+				upgrade_index_for(identity, iap_use_libusb) : 0;
 			qDebug() << "Firmware upgrade:" << identity << "-> index" << target
-					 << (iap_use_libusb ? "(libusb)" : "(CH375)");
+					 << (iap_use_libusb ? "(libusb)" : "(CH375)")
+					 << (already_in_bootloader ? "(already in bootloader)" : "");
 
-			if (target < 0) {
+			if (!already_in_bootloader && target < 0) {
 				pv::util::show_message(this, tr("Warning"),
 					tr("The board this session is on could not be found for the upgrade."),
 					pv::util::message_box_icon(QMessageBox::Warning), 350);
@@ -3970,8 +4357,8 @@ namespace pv
 			/* The IAP channel carries no port, so the serial is what the
 			 * board is picked by once it is in its bootloader. */
 			const shared_ptr<sigrok::Device> page_sr = page_device->device();
-			const QString serial = page_sr ?
-				QString::fromStdString(page_sr->serial_number()) : QString();
+			const QString serial = already_in_bootloader ? bootloader_serial :
+				(page_sr ? QString::fromStdString(page_sr->serial_number()) : QString());
 
 			/* Let the user pick the firmware file */
 			QString firmwarePath = QFileDialog::getOpenFileName(this,
@@ -4011,7 +4398,7 @@ namespace pv
 			Q_EMIT device_upgrading(true, 0);
 
 			pv::dialogs::IAPWorker *worker = new pv::dialogs::IAPWorker(target,
-				firmwarePath, WCH_VID, WCH_PID_CH32H417_HID, false,
+				firmwarePath, WCH_VID, WCH_PID_CH32H417_HID, already_in_bootloader,
 				iap_use_libusb, serial);
 			QThread *workerThread = new QThread();
 			worker->moveToThread(workerThread);

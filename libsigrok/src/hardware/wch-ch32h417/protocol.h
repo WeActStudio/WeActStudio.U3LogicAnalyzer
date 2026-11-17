@@ -38,6 +38,13 @@
 #define USB_INTERFACE       0
 #define USB_CONFIGURATION   1
 #define USB_TIMEOUT         500
+/*
+ * How long a key poll may wait.  The poll runs on the thread that draws the
+ * window, so waiting the acquisition timeout there freezes the window for
+ * half a second every interval whenever the board is slow to answer.  A board
+ * that is listening answers in a millisecond; one that is not can be skipped.
+ */
+#define KEY_POLL_TIMEOUT_MS  20
 
 
 #define PIPE_CMD            1       /* Command */
@@ -56,6 +63,7 @@
 
 /* Logic analyzer commands */
 #define CMD_SET_LOGIC_PARAMS    0xA0
+#define CMD_SET_LED_BRIGHT      0xAF
 #define CMD_SET_LOGIC_LEVEL     0xA1
 #define CMD_START_LOGIC         0xA2
 #define CMD_STOP_LOGIC          0xA3
@@ -83,6 +91,7 @@
 #define RESP_SET_ADC_CHANNEL    0xB7
 #define RESP_GET_ADC_PARAMS     0xBA
 #define RESP_GET_ADC_CHANNEL    0xBB
+#define RESP_SET_LED_BRIGHT     0xBF
 #define RESP_GET_VERSION        0xBC
 
 /* Sample width */
@@ -177,6 +186,18 @@ struct dev_context {
 	/* Why the driver stopped the last acquisition, LINK_STOP_* */
 	guint link_stop_reason;
 
+	/*
+	 * The key on the board. The device counts presses and the host keeps the
+	 * number it read last, so a press is never hidden by one that happened
+	 * before the previous answer was read. Whether the key may end a capture
+	 * is the host's choice and travels down with the parameters.
+	 */
+	guint8 key_seq;            /* Count as the device last reported it */
+	guint8 last_key_seq;       /* Count the host has already acted on */
+	gboolean key_stop_enabled; /* A press ends the running capture */
+	uint8_t led_brightness;   /* Indicator level, percent */
+	gboolean key_available;    /* Firmware reports the counter at all */
+
 	/* CH375 device */
 	int device_index;          /* Device index */
 	void *device_handle;       /* Device handle */
@@ -220,9 +241,18 @@ SR_PRIV int ch32h417_receive_response(struct sr_dev_inst *sdi,
 	uint8_t expected_cmd, uint8_t *data, int data_size, int *len);
 
 SR_PRIV int ch32h417_set_logic_params(const struct sr_dev_inst *sdi);
+SR_PRIV int ch32h417_set_led_brightness(const struct sr_dev_inst *sdi,
+		uint8_t level);
 SR_PRIV int ch32h417_set_threshold_value(const struct sr_dev_inst *sdi, uint16_t value);
 SR_PRIV int ch32h417_get_logic_params(const struct sr_dev_inst *sdi,
-	uint8_t *width, uint8_t *div);
+	uint8_t *width, uint8_t *div, uint8_t *key_seq);
+/*
+ * Ask the device for its key counter and report whether it moved since the
+ * last call. One place reads it, so the caller that decides to start a
+ * capture and the one that explains why one ended cannot steal the press
+ * from each other.
+ */
+SR_PRIV gboolean ch32h417_key_seq_changed(const struct sr_dev_inst *sdi);
 SR_PRIV int ch32h417_get_logic_level(const struct sr_dev_inst *sdi,
 	uint8_t *level);
 

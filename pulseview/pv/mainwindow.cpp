@@ -958,7 +958,15 @@ shared_ptr<Session> MainWindow::add_session()
 
 	int index = session_selector_.addTab(window, name);
 	session_selector_.setCurrentIndex(index);
+
+	/* The page that comes up takes the key poll over from the one that was
+	 * in front, so that a press lands on the page the user is looking at. */
+	if (last_focused_session_ && last_focused_session_ != session &&
+			last_focused_session_->main_bar())
+		last_focused_session_->main_bar()->set_page_active(false);
 	last_focused_session_ = session;
+	if (session->main_bar())
+		session->main_bar()->set_page_active(true);
 
 	window->setDockNestingEnabled(true);
 
@@ -2581,6 +2589,18 @@ void MainWindow::run_device_attached()
 			 */
 			resume_device_events(false);
 			report_stalled_devices();
+
+			/*
+			 * A board that came back has been through a reset and forgotten
+			 * the indicator level.  Every page pushes its own, on the GUI
+			 * thread: this pass runs on the scan thread.
+			 */
+			QMetaObject::invokeMethod(this, [this]() {
+				for (const shared_ptr<Session> &session : sessions_) {
+					if (session && session->main_bar())
+						session->main_bar()->push_led_brightness();
+				}
+			}, Qt::QueuedConnection);
 				}, Qt::QueuedConnection);
 		}).detach();
 }
@@ -3916,7 +3936,19 @@ void MainWindow::on_focus_changed()
 
 void MainWindow::on_focused_session_changed(shared_ptr<Session> session)
 {
+	/*
+	 * Only the page in front watches for a key press. A press is meant to
+	 * start a capture the user can see, and a page they are not looking at
+	 * would start one behind their back.
+	 */
+	if (last_focused_session_ && last_focused_session_ != session &&
+			last_focused_session_->main_bar())
+		last_focused_session_->main_bar()->set_page_active(false);
+
 	last_focused_session_ = session;
+
+	if (session && session->main_bar())
+		session->main_bar()->set_page_active(true);
 
 	// setWindowTitle(WindowTitle + " - " + session->name());
 	setWindowTitle(WindowTitle);

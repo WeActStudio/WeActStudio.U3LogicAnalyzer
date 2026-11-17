@@ -78,7 +78,8 @@ Device::Device(shared_ptr<sigrok::Configurable> configurable) :
 			if ((key->id() == SR_CONF_CONTINUOUS) || (key->id() == SR_CONF_TRIGGER_MATCH) ||
 			    (key->id() == SR_CONF_CONN) || (key->id() == SR_CONF_SERIALCOMM) || (key->id() == SR_CONF_NUM_LOGIC_CHANNELS) ||
 			    (key->id() == SR_CONF_NUM_ANALOG_CHANNELS) || (key->id() == SR_CONF_SESSIONFILE) || (key->id() == SR_CONF_CAPTUREFILE) ||
-			    (key->id() == SR_CONF_CAPTURE_UNITSIZE) || (key->id() == SR_CONF_LINK_STOP_REASON))
+			    (key->id() == SR_CONF_CAPTURE_UNITSIZE) || (key->id() == SR_CONF_LINK_STOP_REASON) ||
+			    (key->id() == SR_CONF_KEY_PRESSED))
 				continue;
 
 			qDebug() << QString(tr("Note for device developers: Ignoring device configuration capability '%1' " \

@@ -2,120 +2,103 @@
 
 [中文](usage.zh_CN.md) · [Back to README](../README.md)
 
-How to connect the analyzer, capture, read the waveform, decode a protocol and save the result.
-Building and packaging are covered in [Building](building.md).
+This guide covers the everyday use of U3LogicAnalyzer: connecting a device, capturing, reading the waveform, adding protocol decoders and saving the result.
 
 ![Main window](images/en/main-window.png)
 
 ## Window layout
 
-| Area | What is there |
+| Area | Contents |
 |---|---|
-| Tool bar | Open / Save / device selector / device options / sample count / sample rate / mode / start / zoom to fit / cursors / decoder / decoding result / export |
+| Tool bar | Open / Save / device selector / device options / capture length / sample rate / capture mode / start / zoom to fit / measure / decoder / decoding result / export |
 | Waveform view | One row per channel, channel labels on the left, time axis on top |
-| Protocol decoder panel | Search box, decoder tree, description of the selected decoder |
-| Tab bar (bottom) | One tab per session: a board or a file |
+| Protocol decoder panel | Search box, decoder tree and the description of the selected decoder |
+| Tab bar (bottom) | One tab per session: one device or one file |
 | Status bar | Device name and connection id, e.g. `ch375/5-2` |
 
-The UI follows the system language. To pick one by hand: Help → Settings →
-"User interface language". The choice applies immediately.
+The interface follows the system language. To select one manually: Help → Settings → "User interface language"; the choice applies immediately.
 
-## Connecting a board
+## Connecting a device
 
-The device is scanned as soon as it is plugged in, and the device selector shows model and port,
-e.g. `WeAct Studio Logic Analyzer V2 ch375/5-2`.
+The application scans for devices as soon as one is plugged in, and the device selector shows the model and port, e.g. `WeAct Studio Logic Analyzer V2 ch375/5-2`.
 
-- **One board**: it is the only entry, just start capturing.
-- **Several boards**: the list holds one row per port. Each row has "open in a new session" on
-  the right, so every board can capture into a page of its own, at the same time.
-- **Hot plug**: unplugging the board that is capturing leaves that page behind an offline mask -
-  a capture cannot be started there until the board is back. Boards coming and going while a
-  capture runs do not disturb it.
+- **One device**: it is the only entry in the list; start capturing directly.
+- **Several devices**: the list holds one row per port. Each row offers "open in a new session", so every device can capture into a session of its own at the same time.
+- **Hot plug**: unplugging a capturing device leaves that page behind an offline mask, and no capture can be started there until the device is reconnected. Plugging or unplugging other devices during a capture does not affect the device being captured.
 
-On Windows the CH375DLL driver is the default. To use the libusb back end instead (or an FX2
-based analyzer), rebind the device to WinUSB with Zadig first - see the driver section of the README.
+On Windows the CH375DLL driver is the default. To use the libusb back end instead (or an FX2-based analyzer), rebind the device to WinUSB with Zadig first; see the README of the U3LogicAnalyzer repository.
 
 ## Device options
 
-The gear button opens Device Options:
+The device options button (gear icon) on the tool bar opens the device options panel:
 
 ![Device options](images/en/device-options.png)
 
-| Item | Meaning |
+| Item | Description |
 |---|---|
-| Threshold level | Range of the high/low decision, follows the input level |
-| Input level | Voltage of the signal under test, 1.0-3.3 V. Pick 3.3 V for 3.3 V logic |
-| Pre-trigger | Share of the capture window kept for the time before the trigger (0-100%) |
-| Channels | 2 / 4 / 8 / 16 logic channels. **8 channels** store one byte per sample, so the same memory holds twice the samples |
-| Channel boxes | Which channels take part in the capture (affects display and decoding; the data is still packed by channel count) |
+| Threshold level | Range of the high/low decision; follows the input level |
+| Input level | Voltage of the signal under test, 1.0–3.3 V. **It must match the level actually applied**: select 3.3 V for 3.3 V logic |
+| Pre-trigger | Share of the capture window reserved for the time before the trigger (0–100%); see Capturing |
+| Channel count | 2 / 4 / 8 / 16 channels. **With 8 channels** each sample takes one byte, so the same memory holds twice as many samples |
+| Channel boxes | Channels that take part in the capture (affects display and decoding only; the data is still packed by channel count) |
+| Indicator brightness | Five steps (Dim / Default / Bright / Brighter / Maximum). Remembered per device and restored when it is reconnected |
+| Board key start/stop | Ticks the key on the board as a start/stop button: one short press starts a capture, another ends it; a two-second hold still switches slots. **The change takes effect when this panel is closed** |
 
-> Changing the channel count rebuilds the sample rate table. That is a property of the device,
-> not a bug: settle the channel count first, then pick the rate.
+A wrong input level places the threshold incorrectly: set too high, genuine highs read as low; set too low, noise reads as high.
 
-## Sample rate and sample count
+> Changing the channel count rebuilds the table of available sample rates. This reflects the device itself rather than an application defect: settle the channel count first, then select the rate.
 
-- **Sample rate**: 25 steps from 4 MHz to 200 MHz on a USB 3.0 link; the table follows the link
-  and the channel count (4 to 20 MHz at 16 channels, 4 to 40 MHz at 8 channels on USB 2.0).
+## Sample rate and capture length
+
+- **Sample rate**: 25 steps from 4 MHz to 200 MHz on a USB 3.0 link; the table follows the link and the channel count (4–20 MHz at 16 channels and 4–40 MHz at 8 channels on USB 2.0).
   ![Sample rate](images/en/sample-rate.png)
-- **Sample count** (the duration box): from 10 ms up; the upper bound depends on PC memory
-  (samples = rate × time, 2 bytes per sample at 16 channels; the software works from an 18 GB
-  data ceiling, so 200 MHz / 16 ch is about 45 s and twice that at 8 channels).
+- **Capture length**: from 10 ms. The software uses an 18 GB data figure to define the length ceiling (samples = rate × time, 2 bytes per sample at 16 channels): about 45 s at 200 MHz / 16 channels, 90 s at 8 channels (the actual length is limited by free PC memory).
 
 Rules of thumb:
 
-| What you look at | Rate | Duration |
+| Use case | Rate | Duration |
 |---|---|---|
-| UART / I²C / SPI, slow buses | 5× the baud rate or clock, 10-50 MHz is usual | long enough for the message |
-| Fast parallel buses | 100-200 MHz | as short as possible, watch the memory |
-| Slow level changes | 4-10 MHz | seconds |
+| UART / I²C / SPI and other slow buses | At least 5× the baud rate or clock; 10–50 MHz is usual | Long enough for the message |
+| Fast parallel buses | 100–200 MHz | As short as possible; keep memory use in view |
+| Slow level changes | 4–10 MHz | A few seconds |
 
 ## Capturing
 
-Press Start on the tool bar, or the space bar, and press it again to stop. When the capture ends
-the view zooms to fit the data.
+Press Start on the tool bar, or the space bar, to begin; press again to stop. When the capture ends, the view zooms to fit the data.
 
-- **Mode → Single**: stops once the set number of samples is in.
+- **Mode → Single**: stops once the configured number of samples has been collected.
 - **Mode → Repeat**: captures continuously until stopped; each round replaces the previous one.
-- **Pre-trigger**: at 50% half of the window holds the samples before the trigger, the rest after.
-  The device has no hardware trigger unit - the setting divides the capture window, which is what
-  you need to see the state a signal came from.
-- **Long captures**: everything stays in memory. The application watches the free memory while the
-  data comes in and stops the capture below 512 MB with a message, keeping what was captured.
-  Fewer channels, a lower rate or a shorter run is what makes a longer capture fit.
+- **Pre-trigger**: at 50%, half of the window holds samples from before the trigger and the rest samples after it. The device has no hardware trigger unit; the setting divides the capture window, which is what reveals the state preceding an event.
+- **Long captures**: all data stays in memory. The application checks free memory while data arrives and stops the capture below 512 MB with a message, keeping the data already captured. Fewer channels, a lower rate or a shorter duration allow a longer capture.
 
 ## Reading the waveform
 
-| Action | How |
+| Action | Procedure |
 |---|---|
-| Zoom the time axis | Wheel over the view, or Zoom to Fit for the whole capture |
+| Zoom the time axis | Scroll the mouse wheel over the waveform view, or use Zoom to Fit for the whole capture |
 | Scroll | Drag the waveform, or use the scroll bar |
-| Measure | Cursors shows two markers; drag them and read the time difference and frequency |
-| Channel actions | Right click a channel label: rename, show/hide, change the height |
-| Sampling points | The view options can draw them, which shows how dense the sampling is |
+| Measure | The Measure button opens two cursors; drag them to read the time difference and frequency |
+| Channel actions | Right-click a channel label to rename it, show or hide it, or change its height |
+| Sample markers | The view options can draw sample points, which shows how dense the sampling is |
 
 ## Protocol decoders
 
-The Decoder button (or `D`) opens the panel on the right:
+The decoder button (or `D`) opens the panel on the right:
 
-1. Type a name into the search box, e.g. `uart`, `i2c`, `spi`.
-2. Open a category, or double click the decoder in the search result.
-3. In the dialog that follows, map the channels and set the options (RX channel and baud rate for
-   UART, for instance), then confirm.
-4. The decoded rows appear under the waveform; Decoding Result switches to a list view of them.
+1. Type a protocol name into the search box, e.g. `uart`, `i2c` or `spi`.
+2. Open a category, or double-click the decoder in the search results.
+3. In the configuration dialog, assign the channels and set the options (the RX channel and baud rate for UART, for instance), then confirm.
+4. The decoded rows appear below the waveform; Decoding Result switches to a list view of them.
 
-A session can stack several decoders - SPI flash commands and data on one bus, say. There are 132
-of them, the full list is `libsigrokdecode/decoders/`.
+A session can stack several decoders, for example SPI flash commands and data on one bus. There are 132 decoders; the full list is in the `decoders` folder of the installation directory (e.g. `C:\Program Files\WeAct Studio\U3LogicAnalyzer\decoders`).
 
-Decoded results can be exported: the Export button writes several text formats, and
-"Export to a New Session" copies the waveform and its decoders into a new tab so the original
-capture stays untouched.
+Decoded results can be exported: the Export button writes several text formats, and "Export to a New Session" copies the waveform and its decoders into a new tab, which leaves the original capture unchanged.
 
 ## Saving and exporting
 
-- **Save / Save As**: a sigrok session file (`.sr`, a zip container) with the channel data and the
-  sample rate. An 8 channel capture stays 8 channels wide and is not read back as 16.
+- **Save / Save As**: a sigrok session file (`.sr`, a zip container) holding channel data and the sample rate. An 8-channel capture stays 8 channels wide and is not read back as 16.
 - **Save Selected Range As**: only the samples in the current view.
-- **Save Session Setup**: the configuration only (device options, decoders, view), no data.
+- **Save Session Setup**: the configuration only (device options, decoders, view), without data.
 - **Open**: from the menu, or on the command line:
 
 ```bash
@@ -123,44 +106,37 @@ capture stays untouched.
 ./U3LogicAnalyzer -i capture.sr
 ```
 
-A file brings the channels it actually holds: those are the ones given a row, and the channel
-popup lists them alone.
+Opening a file builds the session from the channels it actually holds: only those channels get a row, and the channel dialog lists those alone.
 
 ![Session file](images/en/waveform.png)
 
-## Sessions and several devices
+## Sessions and multiple devices
 
-- The tab bar at the bottom holds several sessions at once: one per board, or one per `.sr` file.
+- The tab bar at the bottom holds several sessions at once: one per device, or one per `.sr` file.
 - The first session cannot be closed, and opening a file always adds a tab.
-- "Export to a New Session" copies the result into a tab of its own; the capture it came from is
-  left as it was.
-- Closing the last file tab brings the device session back.
+- "Export to a New Session" copies the result into a tab of its own; the capture it came from stays unchanged.
+- Closing the last file tab restores the device session.
 
 ## Firmware update
 
 Help menu → **FW Update**.
 
-- The update runs over the device IAP. The tab cannot be closed while it runs, so an interrupted
-  write cannot leave the board stuck in its bootloader without a page to retry from.
-- Progress is shown over the page; the device reconnects and is read again when it is done.
-- Do not unplug during the write. If it fails, retry - the board is still in IAP mode.
+- The update runs over the device IAP. The tab cannot be closed while it runs, so an interrupted write still has a tab from which to retry.
+- Progress is shown on the page; the device reconnects and is read again when the update finishes.
+- Do not unplug the device during the write. A failed update can be retried while the device is still in IAP mode.
 
 ## Troubleshooting
 
-**The board is not in the device list**
-- Windows: make sure no other program holds it; the libusb back end needs a WinUSB rebind with
-  Zadig first.
-- Linux: `lsusb` lists it but the application does not - that is a permission problem. Run
-  `sudo ./install_udev_rules.sh` and replug.
+**The device is not in the device list**
+- Windows: make sure no other program holds the device; the libusb back end requires a WinUSB rebind with Zadig first.
+- Linux: `lsusb` lists the device but the application does not. This is a permission problem: run `sudo ./install_udev_rules.sh` and reconnect the device.
 
 **The capture stops at once with 0 samples**
-- The sample rate is beyond what the link carries, or the sample count is too large. Lower the
-  rate or shorten the duration and try again.
-- The board may still be held by a previous program: unplug and replug it.
+- The sample rate exceeds what the link supports, or the sample count is too large. Lower the rate or shorten the duration and try again.
+- The device may still be held by a previous program: unplug and reconnect it.
 
-**The UI is in a language I did not pick**
-- Help → Settings → "User interface language" and pick the one you want.
+**The interface is in English**
+- The language was set manually. Go to Help → Settings → "User interface language" and select the required language.
 
-**A low memory notice appears at startup**
-- The application checks the free memory before it starts and asks for confirmation below 4 GB.
-  Close something, or just confirm.
+**A low-memory notice appears at startup**
+- The application checks free memory at startup and asks for confirmation below 4 GB. Close some programs or confirm to continue.

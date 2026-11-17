@@ -107,6 +107,7 @@ public:
 	static const QString Key_Log_NotifyOfStacktrace;
 	
 	static const QString Key_ThresholdLevel;
+	static const QString Key_LedBrightness;
 
 	enum ConvThrDispMode {
 		ConvThrDispMode_None = 0,

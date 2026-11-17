@@ -57,6 +57,9 @@ static const uint32_t devopts[] = {
 	SR_CONF_HARDWARE_VERSION | SR_CONF_GET,
 	SR_CONF_USB_VERSION | SR_CONF_GET | SR_CONF_LIST,
 	SR_CONF_LINK_STOP_REASON | SR_CONF_GET | SR_CONF_LIST,
+	SR_CONF_KEY_START_STOP | SR_CONF_GET | SR_CONF_SET,
+	SR_CONF_KEY_PRESSED | SR_CONF_GET,
+	SR_CONF_LED_BRIGHTNESS | SR_CONF_GET | SR_CONF_SET,
 };
 
 /* ADC channel group device options */
@@ -566,6 +569,21 @@ static int dev_open(struct sr_dev_inst *sdi)
 		devc->cur_samplerate = devc->samplerates[0];
 	}
 
+	/*
+	 * Ask whether this firmware reports the board key at all, and take the
+	 * count it is at now as the starting point.  Without that, the first poll
+	 * would read every press from before the page was opened as a fresh one.
+	 */
+	{
+		uint8_t seq = 0;
+
+		if (ch32h417_libusb_get_logic_params(sdi, NULL, NULL, &seq) == SR_OK)
+		{
+			devc->key_seq = seq;
+			devc->last_key_seq = seq;
+		}
+	}
+
 	sr_info("Opened device at index %d", devc->device_index);
 
 	return SR_OK;
@@ -650,6 +668,24 @@ static int config_get(uint32_t key, GVariant **data,
 		/* See the LINK_STOP_* values in protocol.h. */
 		*data = g_variant_new_uint64((uint64_t)devc->link_stop_reason);
 		break;
+	case SR_CONF_KEY_START_STOP:
+		/* A host uses this failing to know the option should not be offered */
+		if (!devc->key_available)
+			return SR_ERR_NA;
+		*data = g_variant_new_boolean(devc->key_stop_enabled);
+		break;
+	case SR_CONF_LED_BRIGHTNESS:
+		*data = g_variant_new_uint64(devc->led_brightness);
+		break;
+	case SR_CONF_KEY_PRESSED:
+		/*
+		 * Reading this asks the device, so it is the host's polling that
+		 * keeps the answer current. A device that cannot tell is reported
+		 * as "no press" rather than as an error: a host that polls anyway
+		 * should not have to care which firmware it is talking to.
+		 */
+		*data = g_variant_new_boolean(ch32h417_libusb_key_seq_changed(sdi));
+		break;
 	case SR_CONF_ADC_PRECISION:
 		/* Return the ADC resolution: 8 or 10 */
 		*data = g_variant_new_uint64((devc->adc_width == ADC_WIDTH_8BIT) ? 8 : 10);
@@ -707,6 +743,34 @@ static int config_set(uint32_t key, GVariant *data,
 		}
 		devc->capture_ratio = ratio;
 		break;
+	}
+	case SR_CONF_KEY_START_STOP:
+		if (!devc->key_available)
+		{
+			sr_warn("This firmware does not report the board key; "
+					"update it to use the key as a start/stop button");
+			return SR_ERR_NA;
+		}
+		devc->key_stop_enabled = g_variant_get_boolean(data);
+		sr_info("Key start/stop %s",
+				devc->key_stop_enabled ? "enabled" : "disabled");
+		break;
+	case SR_CONF_LED_BRIGHTNESS:
+	{
+		uint64_t level = g_variant_get_uint64(data);
+
+		if (level > 100)
+		{
+			sr_err("Invalid indicator brightness: %" PRIu64
+					" (must be 0-100)", level);
+			return SR_ERR_ARG;
+		}
+
+		devc->led_brightness = (uint8_t)level;
+
+		/* Applied at once: the LED is the only thing this changes, and a
+		 * host that set it expects to see it without starting a capture. */
+		return ch32h417_libusb_set_led_brightness(sdi, devc->led_brightness);
 	}
 	case SR_CONF_NUM_LOGIC_CHANNELS:
 	{

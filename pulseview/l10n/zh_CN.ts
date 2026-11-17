@@ -1234,6 +1234,46 @@ Please check the device connection and firmware file.</source>
         <translation>对周期信号触发点会浮动，此处是上限而非固定位置。</translation>
     </message>
     <message>
+        <location filename="../pv/popups/channels.cpp" line="395"/>
+        <source>Use the board key to start and stop captures</source>
+        <translation>使用设备按键开始/停止采集</translation>
+    </message>
+    <message>
+        <location filename="../pv/popups/channels.cpp" line="669"/>
+        <source>Indicator brightness</source>
+        <translation>指示灯亮度</translation>
+    </message>
+    <message>
+        <location filename="../pv/popups/channels.cpp" line="674"/>
+        <source>Dim</source>
+        <translation>暗</translation>
+    </message>
+    <message>
+        <location filename="../pv/popups/channels.cpp" line="675"/>
+        <source>Default</source>
+        <translation>默认</translation>
+    </message>
+    <message>
+        <location filename="../pv/popups/channels.cpp" line="676"/>
+        <source>Bright</source>
+        <translation>较亮</translation>
+    </message>
+    <message>
+        <location filename="../pv/popups/channels.cpp" line="677"/>
+        <source>Brighter</source>
+        <translation>亮</translation>
+    </message>
+    <message>
+        <location filename="../pv/popups/channels.cpp" line="678"/>
+        <source>Maximum</source>
+        <translation>最亮</translation>
+    </message>
+    <message>
+        <location filename="../pv/popups/channels.cpp" line="398"/>
+        <source>One short press starts a capture, another one ends it. Holding the key for two seconds still switches slots.</source>
+        <translation>短按一次开始采集，再按一次结束。按住两秒仍是切换固件槽。</translation>
+    </message>
+    <message>
         <location filename="../pv/popups/channels.cpp" line="234"/>
         <location filename="../pv/popups/channels.cpp" line="1320"/>
         <source>Options</source>

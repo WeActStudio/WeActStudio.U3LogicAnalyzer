@@ -287,7 +287,7 @@ static int samplerate_to_divider(const uint64_t *rates,
 SR_PRIV int ch32h417_set_logic_params(const struct sr_dev_inst *sdi)
 {
 	struct dev_context *devc;
-	uint8_t params[2];
+	uint8_t params[3];
 	int ret;
 
 	devc = sdi->priv;
@@ -305,13 +305,40 @@ SR_PRIV int ch32h417_set_logic_params(const struct sr_dev_inst *sdi)
 	}
 	params[1] = (uint8_t)div;
 
-	sr_info("Setting logic params: width=0x%02x, div=%d", params[0], params[1]);
+	/* Third byte: whether the key on the board may end this capture. Firmware
+	 * that predates the key stops reading after the second byte. */
+	params[2] = devc->key_stop_enabled ? 1 : 0;
 
-	ret = ch32h417_send_command((struct sr_dev_inst *)sdi, CMD_SET_LOGIC_PARAMS, 2, params);
+	sr_info("Setting logic params: width=0x%02x, div=%d, key_stop=%d",
+			params[0], params[1], params[2]);
+
+	ret = ch32h417_send_command((struct sr_dev_inst *)sdi, CMD_SET_LOGIC_PARAMS, 3, params);
 	if (ret != SR_OK)
 		return ret;
 
 	return ch32h417_receive_response((struct sr_dev_inst *)sdi, RESP_SET_LOGIC_PARAMS, NULL, 0, NULL);
+}
+
+/*
+ * Set the indicator brightness, percent of full scale.
+ */
+SR_PRIV int ch32h417_set_led_brightness(const struct sr_dev_inst *sdi,
+		uint8_t level)
+{
+	int ret;
+
+	if (level > 100)
+		level = 100;
+
+	sr_info("Setting indicator brightness: %u%%", (unsigned int)level);
+
+	ret = ch32h417_send_command((struct sr_dev_inst *)sdi,
+			CMD_SET_LED_BRIGHT, 1, &level);
+	if (ret != SR_OK)
+		return ret;
+
+	return ch32h417_receive_response((struct sr_dev_inst *)sdi,
+			RESP_SET_LED_BRIGHT, NULL, 0, NULL);
 }
 
 /*
@@ -340,9 +367,12 @@ SR_PRIV int ch32h417_set_threshold_value(const struct sr_dev_inst *sdi, uint16_t
  * Get the logic analyzer parameters
  */
 SR_PRIV int ch32h417_get_logic_params(const struct sr_dev_inst *sdi,
-								   uint8_t *width, uint8_t *div)
+								   uint8_t *width, uint8_t *div, uint8_t *key_seq)
 {
-	uint8_t data[2] = {0};
+	struct dev_context *devc = sdi->priv;
+	/* Three bytes now: the two as before plus the key counter.  Firmware
+	 * without the key answers with two, and the length is what says so. */
+	uint8_t data[3] = {0};
 	int len = 0;
 	int ret;
 	gint64 t1, t2;
@@ -361,14 +391,57 @@ SR_PRIV int ch32h417_get_logic_params(const struct sr_dev_inst *sdi,
 	if (ret != SR_OK)
 		return ret;
 
+	devc->key_available = (len >= 3);
+
 	if (width)
 		*width = data[0];
 	if (div)
 		*div = data[1];
+	if (key_seq)
+		*key_seq = devc->key_available ? data[2] : 0;
 
-	sr_dbg("Got logic params: width=0x%02x, div=%d", data[0], data[1]);
+	sr_dbg("Got logic params: width=0x%02x, div=%d, key_seq=%d%s (len=%d)",
+			data[0], data[1], devc->key_available ? data[2] : 0,
+			devc->key_available ? "" : " (no key support)", len);
 
 	return SR_OK;
+}
+
+/*
+ * Has the board key been pressed since this was last asked?
+ *
+ * The counter is compared against the copy the host keeps, so a press is
+ * reported exactly once whether the caller is the poll that starts a capture
+ * or the one that explains why a capture ended.
+ */
+SR_PRIV gboolean ch32h417_key_seq_changed(const struct sr_dev_inst *sdi)
+{
+	struct dev_context *devc = sdi->priv;
+	uint8_t seq = 0;
+	int ret;
+
+	if (!devc->key_available)
+		return FALSE;
+
+	/*
+	 * This runs on the thread that draws the window, so it may not wait for
+	 * the acquisition timeout: a board that is listening answers at once,
+	 * and one that is not is better skipped than frozen for half a second.
+	 */
+	ch375_set_timeout(devc->device_index, KEY_POLL_TIMEOUT_MS, KEY_POLL_TIMEOUT_MS);
+	ret = ch32h417_get_logic_params(sdi, NULL, NULL, &seq);
+	ch375_set_timeout(devc->device_index, USB_TIMEOUT, USB_TIMEOUT);
+
+	if (ret != SR_OK)
+		return FALSE;
+
+	devc->key_seq = seq;
+
+	if (seq == devc->last_key_seq)
+		return FALSE;
+
+	devc->last_key_seq = seq;
+	return TRUE;
 }
 
 /*
@@ -592,6 +665,9 @@ SR_PRIV struct dev_context *ch32h417_dev_new(void)
 	struct dev_context *devc;
 
 	devc = g_malloc0(sizeof(struct dev_context));
+	/* Shipped level: the firmware boots at 20 %, so a host that never sets it
+	 * reads back what the board is actually showing. */
+	devc->led_brightness = 20;
 	devc->mode = MODE_LOGIC_ANALYZER;
 	devc->cur_samplerate = logic_samplerates_usb3[0];
 	devc->limit_samples = 0;
@@ -1078,10 +1154,23 @@ static gpointer data_read_thread(gpointer arg)
 	 * there because nothing else came.
 	 */
 	if (link_dead) {
-		devc->link_stop_reason = LINK_STOP_NO_DATA;
+		/*
+		 * A board that fell silent because its key was pressed is not a link
+		 * problem, and saying it is would send the user off to change the
+		 * sample rate for nothing.  Anything else - a rate the link cannot
+		 * carry, a board that was pulled - still is one, and asking the device
+		 * is what tells the two apart.
+		 */
+		if (ch32h417_key_seq_changed(sdi))
+			devc->link_stop_reason = LINK_STOP_NONE;
+		else
+			devc->link_stop_reason = LINK_STOP_NO_DATA;
+
 		send_stop_command_once(sdi);
-		sr_info("No data for %d ms, device may have stopped",
-				(int)no_data_timeout_ms);
+		sr_info("No data for %d ms, %s",
+				(int)no_data_timeout_ms,
+				devc->link_stop_reason == LINK_STOP_NONE ?
+					"stopped by the key" : "device may have stopped");
 		g_free(buffer);
 		/* Flag the thread as exiting; the timer callback handles the stop */
 		acquisition_set_aborted(devc, TRUE);

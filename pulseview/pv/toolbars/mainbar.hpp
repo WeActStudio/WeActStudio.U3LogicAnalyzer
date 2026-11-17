@@ -234,6 +234,44 @@ public:
 	 */
 	void set_capture_buttons_visible(bool mode, bool run);
 
+	/**
+	 * Watch the key on the board, or stop watching it.
+	 *
+	 * Only this board has one and only firmware that reports it can act on
+	 * it, so the option in the device settings is what starts and stops the
+	 * polling.
+	 */
+	void set_key_listening(bool enabled);
+	/**
+	 * Set the indicator brightness, percent of full scale.
+	 *
+	 * Applied now and remembered per board, the way the input level is: the
+	 * device has nowhere to keep it, so it is written out here and pushed
+	 * again every time a board is bound.
+	 */
+	void set_led_brightness(int level);
+	/** The level this page keeps, whether or not a board is bound. */
+	int led_brightness() const;
+	/**
+	 * Push the remembered level to the board.
+	 *
+	 * Called whenever a board becomes usable again - a fresh bind, or the
+	 * same one coming back after it was pulled - because the device has
+	 * nowhere to keep it across a power cycle.
+	 */
+	void push_led_brightness();
+	/** Apply the key switch the options page was left on. */
+	void apply_key_setting(bool enabled);
+
+	/**
+	 * Tell this bar whether its page is the one in front.
+	 *
+	 * The key belongs to a board, but a press starts a capture on one page
+	 * only: polling from a page the user is not looking at would start a
+	 * capture they never see.
+	 */
+	void set_page_active(bool active);
+
 	/** The directory the last session file was saved in, for the next one. */
 	static QString last_save_directory();
 	static void remember_save_directory(const QString &path);
@@ -515,6 +553,39 @@ private:
 	 */
 	QTimer *setting_save_timer_ = nullptr;
 	static const int SettingSaveDelayMs = 300;
+
+	/*
+	 * The board key is read by asking the device, so it has to be asked
+	 * often enough that a tap is not missed and rarely enough that the
+	 * traffic does not matter. Only runs while the option is on and this
+	 * page has nothing capturing.
+	 */
+	QTimer *key_poll_timer_ = nullptr;
+	bool key_listening_ = false;
+	bool page_active_ = true;
+	int key_poll_failures_ = 0;
+	int led_brightness_ = 20;
+	static const int KeyPollIntervalMs = 150;
+	void poll_board_key();
+	void update_key_poll_timer();
+	/**
+	 * Take the key's current count as the point from which presses count.
+	 *
+	 * Called every time the poll (re)starts: presses made while nothing was
+	 * watching - before the option was switched on, or during a capture -
+	 * are history, not a request to start one now.
+	 */
+	void sync_key_baseline();
+
+	/*
+	 * A board going to its bootloader is not on the bus watcher's list - the
+	 * HID channel has no port chain - so the only way to see it arrive is to
+	 * look. Runs while the upgrade entry is hidden, then gives up.
+	 */
+	QTimer *upgrade_probe_timer_ = nullptr;
+	int upgrade_probe_count_ = 0;
+	static const int UpgradeProbeIntervalMs = 2000;
+	static const int UpgradeProbeMax = 30;
 
 	uint64_t sample_count_value_ = 12500;
 	uint64_t sample_rate_value_ = SR_KHZ(500);

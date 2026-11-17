@@ -49,6 +49,7 @@
 #include <pv/data/signalbase.hpp>
 #include <pv/devices/device.hpp>
 #include <pv/devices/hardwaredevice.hpp>
+#include <pv/toolbars/mainbar.hpp>
 
 using std::make_shared;
 using std::map;
@@ -383,6 +384,23 @@ void Channels::init_other_ui()
 	}
 }
 
+void Channels::key_start_stop_toggled(bool enabled)
+{
+	/* Held until the page is closed.  Switching the poll on from inside the
+	 * page would let a press fire a capture while the page is still up,
+	 * which is not what the operator asked for by ticking the box. */
+	key_enabled_ = enabled;
+}
+
+void Channels::led_brightness_changed(int index)
+{
+	const int level = led_brightness_selector_->itemData(index).toInt();
+
+	/* Kept, applied and written out by the bar, the way the input level is. */
+	if (session_.main_bar())
+		session_.main_bar()->set_led_brightness(level);
+}
+
 void Channels::init_channel_state()
 {
 	updating_channels_ = true;
@@ -613,6 +631,72 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 
 		threshold_selector_1_ = nullptr;
 		threshold_selector_2_ = nullptr;
+
+		/*
+		 * The key on the board, as a physical Start/Stop button.  Only this
+		 * board carries one, and only firmware that reports it can act on
+		 * it: getting the setting is how the driver says which of the two
+		 * it is, so a firmware without the key leaves no option behind.
+		 */
+		if (is_weact_logic_v2_) {
+			bool supported = false;
+			bool enabled = false;
+
+			try {
+				enabled = Glib::VariantBase::cast_dynamic<Glib::Variant<bool>>(
+					device->config_get(sigrok::ConfigKey::KEY_START_STOP)).get();
+				supported = true;
+			} catch (sigrok::Error &error) {
+				qDebug() << "This firmware has no key start/stop:" << error.what();
+			}
+
+			if (supported) {
+				key_checkbox_ = new QCheckBox(
+					tr("Use the board key to start and stop captures"));
+				key_checkbox_->setChecked(enabled);
+				key_enabled_ = enabled;
+				key_checkbox_->setToolTip(tr(
+					"One short press starts a capture, another one ends it. "
+					"Holding the key for two seconds still switches slots."));
+				connect(key_checkbox_, &QCheckBox::toggled,
+					this, &Channels::key_start_stop_toggled);
+			}
+
+			/* Indicator level in five steps. Remembered per board and pushed
+			 * again every time one is bound, so the choice follows the board
+			 * rather than the page. */
+			led_brightness_selector_ = new QComboBox();
+			led_brightness_selector_->setMinimumWidth(100);
+			led_brightness_selector_->addItem(tr("Dim"), 10);
+			led_brightness_selector_->addItem(tr("Default"), 20);
+			led_brightness_selector_->addItem(tr("Bright"), 40);
+			led_brightness_selector_->addItem(tr("Brighter"), 70);
+			led_brightness_selector_->addItem(tr("Maximum"), 100);
+
+			/* Shown from the bar's copy, the way the input level is.  The
+			 * device only ever holds what was last pushed to it, and that
+			 * happens when a board is bound - reading it back would show the
+			 * previous board's level in the gap before that. */
+			const int level = session_.main_bar() ?
+				session_.main_bar()->led_brightness() : 20;
+
+			const int index = led_brightness_selector_->findData(level);
+			led_brightness_selector_->setCurrentIndex(index >= 0 ? index : 1);
+
+			connect(led_brightness_selector_,
+				QOverload<int>::of(&QComboBox::currentIndexChanged),
+				this, &Channels::led_brightness_changed);
+
+			/* The switch and how bright it makes the indicator: one row. */
+			QHBoxLayout* key_row = new QHBoxLayout();
+			key_row->setContentsMargins(0, 0, 0, 0);
+			if (key_checkbox_)
+				key_row->addWidget(key_checkbox_);
+			key_row->addWidget(new QLabel(tr("Indicator brightness")));
+			key_row->addWidget(led_brightness_selector_);
+			key_row->addStretch();
+			layout->addRow(key_row);
+		}
 	}
 }
 

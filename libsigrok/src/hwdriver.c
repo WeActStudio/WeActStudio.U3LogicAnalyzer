@@ -287,6 +287,12 @@ static struct sr_key_info sr_key_info_config[] = {
 		"segment clear", NULL},
 	{SR_CONF_LINK_STOP_REASON, SR_T_UINT64, "link_stop_reason",
 		"link stop reason", NULL},
+	{SR_CONF_KEY_START_STOP, SR_T_BOOL, "key_start_stop",
+		"key start stop", NULL},
+	{SR_CONF_KEY_PRESSED, SR_T_BOOL, "key_pressed",
+		"key pressed", NULL},
+	{SR_CONF_LED_BRIGHTNESS, SR_T_UINT64, "led_brightness",
+		"LED brightness", NULL},
 	ALL_ZERO
 };
 
