@@ -1235,7 +1235,7 @@ Please check the device connection and firmware file.</source>
     </message>
     <message>
         <location filename="../pv/popups/channels.cpp" line="395"/>
-        <source>Use the board key to start and stop captures</source>
+        <source>Use board key for capture</source>
         <translation>使用设备按键开始/停止采集</translation>
     </message>
     <message>

@@ -652,7 +652,7 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 
 			if (supported) {
 				key_checkbox_ = new QCheckBox(
-					tr("Use the board key to start and stop captures"));
+					tr("Use board key for capture"));
 				key_checkbox_->setChecked(enabled);
 				key_enabled_ = enabled;
 				key_checkbox_->setToolTip(tr(
@@ -692,7 +692,8 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 			key_row->setContentsMargins(0, 0, 0, 0);
 			if (key_checkbox_)
 				key_row->addWidget(key_checkbox_);
-			key_row->addWidget(new QLabel(tr("Indicator brightness")));
+			led_brightness_label_ = new QLabel(tr("Indicator brightness"));
+			key_row->addWidget(led_brightness_label_);
 			key_row->addWidget(led_brightness_selector_);
 			key_row->addStretch();
 			layout->addRow(key_row);
@@ -1446,6 +1447,22 @@ void Channels::retranslate_ui()
 			QString::number(voltage_level_spinbox_->value() / 2, 'f', 2) + "V" +
 			", " + QString::number(voltage_level_spinbox_->value() / 2 * 1.394, 'f', 2) +
 			"V" + "(" + tr("Buffer Board") + ")");
+
+	if (key_checkbox_) {
+		key_checkbox_->setText(tr("Use board key for capture"));
+		key_checkbox_->setToolTip(tr(
+			"One short press starts a capture, another one ends it. "
+			"Holding the key for two seconds still switches slots."));
+	}
+	if (led_brightness_label_)
+		led_brightness_label_->setText(tr("Indicator brightness"));
+	if (led_brightness_selector_ && led_brightness_selector_->count() > 4) {
+		led_brightness_selector_->setItemText(0, tr("Dim"));
+		led_brightness_selector_->setItemText(1, tr("Default"));
+		led_brightness_selector_->setItemText(2, tr("Bright"));
+		led_brightness_selector_->setItemText(3, tr("Brighter"));
+		led_brightness_selector_->setItemText(4, tr("Maximum"));
+	}
 
 	update_channel_radio_texts();
 }

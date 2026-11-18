@@ -184,6 +184,7 @@ private:
 
 	QCheckBox* key_checkbox_ = nullptr;
 	bool key_enabled_ = false;
+	QLabel* led_brightness_label_ = nullptr;
 	QComboBox* led_brightness_selector_ = nullptr;
 
 	vector<QCheckBox*> logic_checkboxes_;

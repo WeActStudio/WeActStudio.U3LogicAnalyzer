@@ -1443,6 +1443,38 @@ Bitte überprüfen Sie die Verbindung und die Firmware Datei.</translation>
         <source>Port:</source>
         <translation>Anschluss:</translation>
     </message>
+    <message>
+        <source>Use board key for capture</source>
+        <translation>Board-Taste für Aufnahme verwenden</translation>
+    </message>
+    <message>
+        <source>One short press starts a capture, another one ends it. Holding the key for two seconds still switches slots.</source>
+        <translation>Kurzer Druck startet eine Aufnahme, ein weiterer beendet sie. Zwei Sekunden Halten wechselt weiterhin den Firmware-Slot.</translation>
+    </message>
+    <message>
+        <source>Indicator brightness</source>
+        <translation>Anzeigehelligkeit</translation>
+    </message>
+    <message>
+        <source>Dim</source>
+        <translation>Dunkel</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>Standard</translation>
+    </message>
+    <message>
+        <source>Bright</source>
+        <translation>Hell</translation>
+    </message>
+    <message>
+        <source>Brighter</source>
+        <translation>Heller</translation>
+    </message>
+    <message>
+        <source>Maximum</source>
+        <translation>Maximal</translation>
+    </message>
 </context>
 <context>
     <name>pv::prop::Bool</name>

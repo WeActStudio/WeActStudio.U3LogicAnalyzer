@@ -1439,6 +1439,38 @@ Por favor, compruebe la conexión del dispositivo y el archivo de firmware.</tra
         <source>Port:</source>
         <translation>Puerto:</translation>
     </message>
+    <message>
+        <source>Use board key for capture</source>
+        <translation>Usar tecla de la placa para capturar</translation>
+    </message>
+    <message>
+        <source>One short press starts a capture, another one ends it. Holding the key for two seconds still switches slots.</source>
+        <translation>Una pulsación corta inicia una captura, otra la finaliza. Mantener dos segundos sigue cambiando de ranura de firmware.</translation>
+    </message>
+    <message>
+        <source>Indicator brightness</source>
+        <translation>Brillo del indicador</translation>
+    </message>
+    <message>
+        <source>Dim</source>
+        <translation>Tenue</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>Predeterminado</translation>
+    </message>
+    <message>
+        <source>Bright</source>
+        <translation>Brillante</translation>
+    </message>
+    <message>
+        <source>Brighter</source>
+        <translation>Más brillante</translation>
+    </message>
+    <message>
+        <source>Maximum</source>
+        <translation>Máximo</translation>
+    </message>
 </context>
 <context>
     <name>pv::prop::Bool</name>

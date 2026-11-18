@@ -1440,6 +1440,38 @@ Please check the device connection and firmware file.</source>
         <source>Port:</source>
         <translation>Порт:</translation>
     </message>
+    <message>
+        <source>Use board key for capture</source>
+        <translation>Использовать кнопку платы для захвата</translation>
+    </message>
+    <message>
+        <source>One short press starts a capture, another one ends it. Holding the key for two seconds still switches slots.</source>
+        <translation>Короткое нажатие начинает захват, следующее завершает его. Удержание две секунды по-прежнему переключает слот прошивки.</translation>
+    </message>
+    <message>
+        <source>Indicator brightness</source>
+        <translation>Яркость индикатора</translation>
+    </message>
+    <message>
+        <source>Dim</source>
+        <translation>Тускло</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>По умолчанию</translation>
+    </message>
+    <message>
+        <source>Bright</source>
+        <translation>Ярко</translation>
+    </message>
+    <message>
+        <source>Brighter</source>
+        <translation>Ярче</translation>
+    </message>
+    <message>
+        <source>Maximum</source>
+        <translation>Максимум</translation>
+    </message>
 </context>
 <context>
     <name>pv::prop::Bool</name>
