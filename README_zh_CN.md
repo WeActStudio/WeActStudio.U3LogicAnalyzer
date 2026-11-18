@@ -45,12 +45,11 @@ English: [Usage](doc/usage.md) · [Building](doc/building.md)
 | | Windows | Linux | macOS |
 |---|---|---|---|
 | `wch-ch32h417`（CH375DLL） | 默认绑定 | 不参与构建 | 不参与构建 |
-| `wch-ch32h417-libusb`（libusb） | 需先用 Zadig 改绑 WinUSB | 支持 | 未验证 |
+| `wch-ch32h417-libusb`（libusb） | 固件 0.2 起自动绑定；旧固件需 Zadig | 支持 | 未验证 |
 | `fx2lafw`（libusb，FX2 方案设备） | 需先用 Zadig 改绑 WinUSB | 支持 | 未验证 |
 | 固件升级（IAP） | 两个后端都行 | 仅 libusb 后端 | 未验证 |
 
-Windows 上设备默认绑在 `CH375WDM.sys`（走 `wch-ch32h417` 驱动），想用 libusb 后端需先用
-Zadig 改绑 WinUSB。非 Windows 平台只有 libusb 后端，其中 Linux 已实机验证，macOS 未适配。
+Windows 上已安装 CH375 驱动时设备绑在 `CH375WDM.sys`，走 `wch-ch32h417` 驱动。固件 0.2 起设备自带 Microsoft OS 描述符，未安装 CH375 驱动的电脑会自动绑定 WinUSB，无需手动改绑；更早版本的固件或 FX2 方案设备仍需用 Zadig 改绑 WinUSB。非 Windows 平台只有 libusb 后端，其中 Linux 已实机验证，macOS 未适配。
 
 ## 目录结构
 
