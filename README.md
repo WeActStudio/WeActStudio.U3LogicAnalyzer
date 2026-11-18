@@ -47,15 +47,16 @@ sudo ./install_udev_rules.sh      # open the device without root (once)
 | | Windows | Linux | macOS |
 |---|---|---|---|
 | `wch-ch32h417` (CH375DLL) | yes, the default binding | not built | not built |
-| `wch-ch32h417-libusb` (libusb) | automatic since firmware 0.2; Zadig for older firmware | yes | unverified |
+| `wch-ch32h417-libusb` (libusb) | uninstall the device and delete its driver, then automatic from firmware 0.2; Zadig for older firmware | yes | unverified |
 | `fx2lafw` (libusb, FX2 based analyzers) | yes, after rebinding to WinUSB with Zadig | yes | unverified |
 | Firmware upgrade (IAP) | either back end | libusb only | unverified |
 
 On Windows the device is bound to `CH375WDM.sys` when the CH375 driver is installed, which is what
-the `wch-ch32h417` driver talks to. From firmware version 0.2 the device carries a Microsoft OS
-descriptor, so a computer without the CH375 driver binds WinUSB automatically. Older firmware and
-FX2-based analyzers still need a WinUSB rebind with Zadig. Off Windows only the libusb back end
-exists. Of the two, Linux has been built and run; macOS has not been ported.
+the `wch-ch32h417` driver talks to. To use WinUSB instead, uninstall the device in Device Manager
+with "Delete the driver software for this device" checked, then replug: firmware 0.2 binds WinUSB
+automatically. Older firmware and FX2-based analyzers still need a WinUSB rebind with Zadig. Off
+Windows only the libusb back end exists. Of the two, Linux has been built and run; macOS has not
+been ported.
 
 ## Layout
 

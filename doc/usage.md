@@ -26,7 +26,7 @@ The application scans for devices as soon as one is plugged in, and the device s
 - **Several devices**: the list holds one row per port. Each row offers "open in a new session", so every device can capture into a session of its own at the same time.
 - **Hot plug**: unplugging a capturing device leaves that page behind an offline mask, and no capture can be started there until the device is reconnected. Plugging or unplugging other devices during a capture does not affect the device being captured.
 
-On Windows the CH375DLL driver is the default. From firmware version 0.2 (`sw=0x02` in the `0xAC` reply), the device carries a Microsoft OS descriptor, so a computer without the CH375 driver binds WinUSB automatically and no manual rebinding is needed. On a computer with the CH375 driver already installed, CH375DLL is still used and no change is necessary. Earlier firmware and FX2-based analyzers still need a WinUSB rebind with Zadig; see the README of the U3LogicAnalyzer repository.
+On Windows the CH375DLL driver is the default. To use WinUSB instead, uninstall the device in Device Manager with "Delete the driver software for this device" checked, then replug: firmware 0.2 (`sw=0x02` in the `0xAC` reply) binds WinUSB automatically. Older firmware and FX2-based analyzers still need a WinUSB rebind with Zadig.
 
 ## Device options
 
@@ -128,7 +128,7 @@ Help menu → **FW Update**.
 ## Troubleshooting
 
 **The device is not in the device list**
-- Windows: make sure no other program holds the device; firmware older than 0.2 and FX2-based devices need a WinUSB rebind with Zadig first.
+- Windows: make sure no other program holds the device; switching to WinUSB requires uninstalling the device in Device Manager with "Delete the driver software for this device" checked. Older firmware and FX2-based devices also need a WinUSB rebind with Zadig.
 - Linux: `lsusb` lists the device but the application does not. This is a permission problem: run `sudo ./install_udev_rules.sh` and reconnect the device.
 
 **The capture stops at once with 0 samples**
