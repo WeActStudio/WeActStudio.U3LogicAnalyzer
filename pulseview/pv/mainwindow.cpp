@@ -1834,11 +1834,17 @@ void MainWindow::show_device_detach(const shared_ptr<Session> &session)
 	qWarning() << "[DETACH] asking about"
 		<< widgets::DeviceToolButton::device_identity(session->device());
 
+	/* Which board left, shared by the title and the question below: the page
+	 * keeps its name after the device is gone, but that name is the short one
+	 * - the model is what names the board completely. */
+	const shared_ptr<devices::Device> gone = session->device();
+	const shared_ptr<sigrok::Device> sr = gone ? gone->device() : nullptr;
+
 	attach_process_done = false;
 	QDialog* dialog = new QDialog(this);
-	/* Which session is asking: several can be open, and each has its own
-	 * board on its own port. */
-	dialog->setWindowTitle(tr("Warning") + QStringLiteral(" - ") + session->name());
+	dialog->setWindowTitle(tr("Warning") + QStringLiteral(" - ") +
+		(sr && !sr->model().empty() ?
+		 QString::fromStdString(sr->model()) : session->name()));
 
 	/*
 	 * No close button: the answer finishes the detach, and a dialog that
@@ -1877,9 +1883,6 @@ void MainWindow::show_device_detach(const shared_ptr<Session> &session)
 	 */
 	QString which;
 	{
-		const shared_ptr<devices::Device> gone = session->device();
-		const shared_ptr<sigrok::Device> sr = gone ? gone->device() : nullptr;
-
 		if (sr && !sr->model().empty())
 			which = tr("Model: %1").arg(QString::fromStdString(sr->model()));
 

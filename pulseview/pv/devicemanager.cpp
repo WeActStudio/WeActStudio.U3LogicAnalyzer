@@ -425,8 +425,30 @@ bool was_up_since(const string &place, qint64 since_ms)
 	return it != s_last_up.end() && it->second > since_ms;
 }
 
-/* The node the bus lists at this place, if any: the exact key first, then a
- * key with the same chain under any bus number. */
+/* A vendor board: the application firmware, or its IAP loader. */
+bool is_vendor_board(const UsbNode &node)
+{
+	return node.vid == 0x1a86 &&
+		(node.pid == 0x5537 || node.pid == 0xfe17);
+}
+
+/* An fx2 board, before or after its firmware was uploaded. */
+bool is_fx2_board(const UsbNode &node)
+{
+	return node.vid == 0x1d50 &&
+		(node.pid == 0x608c || node.pid == 0x608d);
+}
+
+/* Either id means a board the bus can still be waiting for. */
+bool is_board_node(const UsbNode &node)
+{
+	return is_vendor_board(node) || is_fx2_board(node);
+}
+
+/* The node at this place: the exact key first, then the same chain on another
+ * bus. The fallback crosses buses, so it only accepts a board - a virtual hub
+ * can put a bluetooth or HID device at the same port number, and taking that
+ * for the board leaves the page waiting for one that has already left. */
 const UsbNode *node_at(const map<string, UsbNode> &nodes, const string &place)
 {
 	const auto hit = nodes.find(place);
@@ -435,7 +457,7 @@ const UsbNode *node_at(const map<string, UsbNode> &nodes, const string &place)
 
 	const string chain = chain_of_place(place);
 	for (const auto &entry : nodes)
-		if (chain_of_place(entry.first) == chain)
+		if (chain_of_place(entry.first) == chain && is_board_node(entry.second))
 			return &entry.second;
 
 	return nullptr;
@@ -460,7 +482,7 @@ bool fx2_is_running(const map<string, UsbNode> &nodes,
 		return false;
 
 	const UsbNode &node = *found;
-	if (node.vid != 0x1d50 || (node.pid != 0x608c && node.pid != 0x608d))
+	if (!is_fx2_board(node))
 		return false;
 
 	/* The firmware puts a version and its strings in the descriptor; a
@@ -468,16 +490,9 @@ bool fx2_is_running(const map<string, UsbNode> &nodes,
 	return node.bcd != 0 || node.named;
 }
 
-/* A vendor board on the bus: the application firmware, or its IAP loader. */
-bool is_vendor_board(const UsbNode &node)
-{
-	return node.vid == 0x1a86 &&
-		(node.pid == 0x5537 || node.pid == 0xfe17);
-}
-
 bool vendor_is_running(const UsbNode &node)
 {
-	return node.vid == 0x1a86 && node.pid == 0x5537;
+	return is_vendor_board(node) && node.pid == 0x5537;
 }
 
 } // namespace

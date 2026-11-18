@@ -307,7 +307,9 @@ cp -r "$DIR"/. "$PREFIX"/
 rm -f "$PREFIX/install.sh" "$PREFIX/uninstall.sh"
 chmod +x "$PREFIX/U3LogicAnalyzer"
 
-sed "s|^Exec=.*|Exec=$PREFIX/U3LogicAnalyzer|; s|^Icon=.*|Icon=U3LogicAnalyzer|" \
+# libsigrok only searches standard XDG data dirs for FX2 firmware, not the
+# install prefix, so point the launcher at the bundled copy explicitly.
+sed "s|^Exec=.*|Exec=env SIGROK_FIRMWARE_DIR=$PREFIX/share/sigrok-firmware $PREFIX/U3LogicAnalyzer|; s|^Icon=.*|Icon=U3LogicAnalyzer|" \
     "$DIR/U3LogicAnalyzer.desktop" > "$APP_DIR/U3LogicAnalyzer.desktop"
 
 # A hicolor tree from the packager is preferred: there the sizes match the
@@ -402,7 +404,8 @@ if command -v dpkg-deb >/dev/null 2>&1; then
     cp -r "${DIST_DIR}/." "${DEB_ROOT}/opt/U3LogicAnalyzer/"
     chmod +x "${DEB_ROOT}/opt/U3LogicAnalyzer/U3LogicAnalyzer"
 
-    sed "s|^Exec=.*|Exec=/opt/U3LogicAnalyzer/U3LogicAnalyzer|; s|^Icon=.*|Icon=U3LogicAnalyzer|; \
+    # Same as install.sh: the deb's firmware lives outside the default search dirs.
+    sed "s|^Exec=.*|Exec=env SIGROK_FIRMWARE_DIR=/opt/U3LogicAnalyzer/share/sigrok-firmware /opt/U3LogicAnalyzer/U3LogicAnalyzer|; s|^Icon=.*|Icon=U3LogicAnalyzer|; \
          s|^Categories=.*|Categories=Development;Electronics;|" \
         "${DIST_DIR}/U3LogicAnalyzer.desktop" \
         > "${DEB_ROOT}/usr/share/applications/U3LogicAnalyzer.desktop"
@@ -544,12 +547,16 @@ if [ -n "${TOOL}" ] && [ -f "${DIST_DIR}/U3LogicAnalyzer" ]; then
              "${APPDIR}/usr/share/icons/hicolor/256x256/apps" \
              "${APPDIR}/usr/share/icons/hicolor/48x48/apps" \
              "${APPDIR}/usr/share/pixmaps" \
-             "${APPDIR}/usr/share/libsigrokdecode"
+             "${APPDIR}/usr/share/libsigrokdecode" \
+             "${APPDIR}/usr/share/sigrok-firmware"
 
     cp "${DIST_DIR}/U3LogicAnalyzer" "${APPDIR}/usr/bin/"
     cp -P "${DIST_DIR}"/libsigrok*.so* "${APPDIR}/usr/lib/" 2>/dev/null || true
     cp -r "${DIST_DIR}/share/libsigrokdecode/decoders" \
           "${APPDIR}/usr/share/libsigrokdecode/" 2>/dev/null || true
+    # fx2lafw needs these at scan time; without them the board is not listed.
+    cp "${DIST_DIR}"/share/sigrok-firmware/*.fw \
+       "${APPDIR}/usr/share/sigrok-firmware/" 2>/dev/null || true
 
     sed "s|^Exec=.*|Exec=U3LogicAnalyzer|; s|^Icon=.*|Icon=U3LogicAnalyzer|" \
         "${DIST_DIR}/U3LogicAnalyzer.desktop" > "${APPDIR}/U3LogicAnalyzer.desktop"
@@ -574,6 +581,7 @@ if [ -n "${TOOL}" ] && [ -f "${DIST_DIR}/U3LogicAnalyzer" ]; then
 HERE="\$(dirname "\$(readlink -f "\$0")")"
 export LD_LIBRARY_PATH="\$HERE/usr/lib:\${LD_LIBRARY_PATH}"
 export SIGROKDECODE_DIR="\$HERE/usr/share/libsigrokdecode/decoders"
+export SIGROK_FIRMWARE_DIR="\$HERE/usr/share/sigrok-firmware"
 
 # Desktop integration. The shell resolves the icon of a running window
 # from its app id (Wayland) or WM_CLASS (X11) by looking up the matching
