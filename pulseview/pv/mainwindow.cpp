@@ -3615,6 +3615,11 @@ void MainWindow::closeEvent(QCloseEvent *event)
 		dialog.setFont(font);
 		dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
+#ifdef __linux__
+		// X11 decorations squeeze the title text on a narrow dialog.
+		dialog.setMinimumWidth(400);
+#endif
+
 		QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
 		// Create the label
