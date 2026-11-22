@@ -564,11 +564,18 @@ int64_t DecodeSignal::get_working_sample_count(uint32_t segment_id) const
 				return 0;
 
 			const shared_ptr<const LogicSegment> segment = logic_data->logic_segments()[segment_id]->get_shared_ptr();
-			if (segment)
-				count = min(count, (int64_t)segment->get_sample_count());
+			// A missing segment means the data is not there yet. Keeping the
+			// running INT64_MAX would let the muxer copy an unbounded range
+			// and allocate until the process dies.
+			if (!segment)
+				return 0;
+			count = min(count, (int64_t)segment->get_sample_count());
 		}
 
-	return (no_signals_assigned ? 0 : count);
+	if (no_signals_assigned || count == std::numeric_limits<int64_t>::max())
+		return 0;
+
+	return count;
 }
 
 int64_t DecodeSignal::get_decoded_sample_count(uint32_t segment_id,

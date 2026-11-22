@@ -11,10 +11,10 @@ U3LogicAnalyzer 都由 `build.sh` 一次编完。日常操作见 [使用说明](
 |---|---|---|
 | Windows 10/11 + MSYS2 MINGW64 | 支持 | `./setup_env.sh` |
 | Linux（Debian / Ubuntu） | 支持 | `./setup_env_linux.sh`（apt） |
-| macOS | **未适配** | 不提供（`setup_env_macos.sh` 保留但不再维护） |
+| macOS 13 及以上 | 支持 | `./setup_env_macos.sh`（Homebrew，Qt 6） |
 
-> `setup_env_macos.sh` 与 `build.sh` 里的 macOS 分支是早期留下的，从未在 macOS 上编译或运行过。
-> libusb 后端在代码层面不依赖 Windows 专有库，理论上能工作，但目前不提供 macOS 支持。
+> `setup_env_macos.sh` 用 Homebrew 安装依赖，默认 Qt 6，可用 `--qt5` 切换。
+> 已在 Apple Silicon 真机上完成采集验证。
 
 ## Windows（MSYS2 MINGW64）
 
@@ -53,6 +53,37 @@ apt 装的是 `qt6-base-dev` / `qt6-base-dev-tools` / `qt6-svg-dev` / `qt6-tools
 `qt6-l10n-tools`（`--qt5` 时换成 `qtbase5-dev` 那一套），以及 glibmm、libusb、hidapi、libzip、
 boost 的开发包。用系统 Qt，不编静态版。
 
+## macOS
+
+```bash
+./setup_env_macos.sh            # Homebrew，默认 Qt 6
+./setup_env_macos.sh --qt5      # 改用 Qt 5
+```
+
+Homebrew 会安装 `cmake`、`ninja`、`pkg-config`、`glib`、`glibmm@2.66`、`libsigc++@2`、
+`libusb`、`hidapi`、`libzip`、`boost`、`qtbase`/`qtsvg`/`qttools`/`qttranslations`、
+`python@3.12` 与 `gettext`。这里不使用 Homebrew 默认的 `glibmm`（2.88），因为 PulseView 依赖的
+是 `glibmm-2.4` 系列接口。Qt 同样使用动态库，不编静态版。
+
+最低系统版本由 `build.sh` 决定：默认 13.0，但会先读取所用 Qt 的
+`QtCore.framework` 中 `LC_BUILD_VERSION minos`，**Qt 要求更高时以 Qt 为准**，再据此设置
+`MACOSX_DEPLOYMENT_TARGET` 与 `Info.plist` 的 `LSMinimumSystemVersion`。
+
+> **注意：** Homebrew 的 `qtbase` 目前为 6.12，`minos` 是 **14.4**。直接用它打包，生成的应用
+> 最低系统版本会被抬到 14.4，macOS 13 的用户无法安装。要生成 13.0 的包，需改用按 13.0 编译的
+> Qt（自行编译，或取自更旧的系统），并通过 `PV_QT_PREFIX` 指定：
+>
+> ```bash
+> PV_QT_PREFIX=$HOME/Qt/6.11.1/macos ./build.sh
+> ```
+>
+> 自行编译的 Qt 若基于更旧的 sysroot，可加 `PV_SYSROOT=<dir>`。打包后用以下两条命令核对：
+>
+> ```bash
+> otool -l <app>/Contents/Frameworks/QtCore.framework/Versions/A/QtCore | grep -A3 LC_BUILD_VERSION
+> /usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" <app>/Contents/Info.plist
+> ```
+
 ## 构建
 
 ```bash
@@ -90,6 +121,10 @@ export SIGROKDECODE_DIR=install/share/libsigrokdecode/decoders
 export LD_LIBRARY_PATH=install/lib:$LD_LIBRARY_PATH
 cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer
 ```
+
+macOS 上直接 `./start_pv.sh`：脚本在同一分支里设置 `SIGROKDECODE_DIR` 与 Python 路径。程序要在
+已登录的图形会话里运行，纯 SSH 会话（没有登录的桌面）起不了窗口。若提示找不到 `libsigrok*.dylib`，
+把 `install/lib` 加进 `DYLD_LIBRARY_PATH`。
 
 > 写进 `~/.bashrc` 可永久生效。已安装的 deb / 归档 / AppImage 不需要这些变量。
 
@@ -134,6 +169,28 @@ hicolor 图标树与 AppStream 元数据 —— 没有元数据时软件中心�
 - 打包前把 `uruntime-<arch>` 放进 `dist/`，可产出完全不需要 FUSE 的 AppImage。
 - 首次运行时 `AppRun` 会把启动器与图标注册进 `~/.local/share`，桌面环境才能按 app id
   显示名称和图标。设 `U3LA_NO_INTEGRATION=1` 可跳过。
+
+### macOS
+
+```bash
+./package_installer.sh              # 构建 + 打包（Qt 6）
+./package_installer.sh --no-clean   # 复用已有构建目录
+```
+
+产物为 `dist/U3LogicAnalyzer-<版本>-git-<提交号>-macos-<架构>.dmg`，其中包含 `.app` 与指向
+`/Applications` 的链接，安装方式为拖入该文件夹。
+
+- 卷名与文件名均带版本号与提交号。同名 dmg 会使 Finder 沿用上一次的窗口尺寸
+  （`FXRecentFolders` 优先于 `.DS_Store` 中的 `WindowBounds`），加后缀可避免这一沿用。
+- 安装界面的背景图、图标位置与窗口尺寸由 `packaging/macos/dmg-settings.py` 定义，背景图由
+  `packaging/macos/make-dmg-background.py` 生成，两者均在仓库内。
+- 需安装 `dmgbuild`：`pip install 'dmgbuild==1.6.1'`。更新的版本会调用 `diskutil image --plist`，
+  macOS 13 不支持该选项，打包会直接失败。未安装 dmgbuild 时脚本退回 `hdiutil`，仍可生成 dmg，
+  但没有背景图与图标布局。
+- 应用使用 ad-hoc 签名，未做公证，首次启动需右键选择「打开」。
+- 打包前不要在 `dist/` 中运行应用，也不要手工改动包内文件：两者都会破坏代码签名的封装完整性，
+  打包时报 `a sealed resource is missing`。脚本在打包前会执行一次
+  `codesign --verify --deep --strict`，失败时提示重新构建。
 
 ## udev 规则（Linux 免 root）
 
@@ -192,3 +249,15 @@ USBee AX/DX、sigrok fx2grok 等）。FX2 自身没有 flash，固件由驱动�
 
 **Python 报 `Failed to import encodings module`**
 - `PYTHONHOME` 没设或设错。Windows 上必须是 `/mingw64`，且运行时不要带外部的 `PYTHONPATH`。
+
+**macOS 打出来的 dmg 装到 macOS 13 上提示系统版本过低**
+- 所用 Qt 的 `minos` 高于 13.0，`build.sh` 会跟着它抬高 `LSMinimumSystemVersion`。换一份按
+  13.0 编译的 Qt 并用 `PV_QT_PREFIX` 指定，见上文 macOS 一节。
+
+**macOS 报 `a sealed resource is missing`**
+- `.app` 的签名封装被破坏。常见原因是打包前在 `dist/` 中运行过应用（Python 会往 framework 里
+  写入 `__pycache__`），或手工改动过包内文件。重新执行 `./build.sh --package` 生成干净的应用
+  再打包。
+
+**`dmgbuild` 报 `diskutil: unrecognized option --plist`**
+- 装的 dmgbuild 版本太新。固定到 `pip install 'dmgbuild==1.6.1'`。

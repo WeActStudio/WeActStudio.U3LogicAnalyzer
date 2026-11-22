@@ -14,7 +14,20 @@ pkg_check_modules(GLIB REQUIRED glib-2.0>=2.32.0)
 # libsigrokdecode embeds Python, so prefer python3-embed.
 pkg_check_modules(PYTHON3 python3-embed>=3.2)
 if(NOT PYTHON3_FOUND)
-	pkg_check_modules(PYTHON3 REQUIRED python3>=3.2)
+	pkg_check_modules(PYTHON3 python3>=3.2)
+endif()
+# Homebrew's python installs no .pc file at all. FindPython3 knows the
+# framework layout and exposes the same variables the rest of this file uses.
+if(NOT PYTHON3_FOUND)
+	find_package(Python3 COMPONENTS Development.Embed)
+	if(Python3_Development.Embed_FOUND)
+		set(PYTHON3_INCLUDE_DIRS ${Python3_INCLUDE_DIRS})
+		set(PYTHON3_LIBRARIES Python3::Python)
+		set(PYTHON3_FOUND TRUE)
+	endif()
+endif()
+if(NOT PYTHON3_FOUND)
+	message(FATAL_ERROR "Python 3 embedding library not found")
 endif()
 
 # Platform
@@ -23,6 +36,10 @@ if(WIN32 OR MINGW)
     set(CONF_HOST "x86_64-w64-mingw32")
     add_definitions(-DWIN32_LEAN_AND_MEAN)
 add_definitions(-DDECODERS_DIR="./decoders")
+elseif(APPLE)
+    # libSystem already provides pthread and dlopen; -lpthread/-ldl do not exist.
+    set(PLATFORM_LIBS)
+    set(CONF_HOST "${CMAKE_SYSTEM_PROCESSOR}-apple-darwin")
 else()
     set(PLATFORM_LIBS m pthread dl)
     set(CONF_HOST "${CMAKE_SYSTEM_PROCESSOR}-pc-linux-gnu")

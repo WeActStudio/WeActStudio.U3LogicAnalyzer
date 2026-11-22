@@ -1580,6 +1580,18 @@ Please check the device connection and firmware file.</source>
 <context>
     <name>pv::toolbars::MainBar</name>
     <message>
+        <source>Open-source logic analyzer built on sigrok and PulseView</source>
+        <translation>基于 sigrok 与 PulseView 构建的开源逻辑分析仪</translation>
+    </message>
+    <message>
+        <source>Source code</source>
+        <translation>源代码</translation>
+    </message>
+    <message>
+        <source>Modified from: Q2H2</source>
+        <translation>修改自 Q2H2</translation>
+    </message>
+    <message>
         <source>Device offline</source>
         <translation>设备已离线</translation>
     </message>

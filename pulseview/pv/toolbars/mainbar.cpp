@@ -4498,18 +4498,34 @@ namespace pv
 			Application* a = qobject_cast<Application*>(QApplication::instance());
 			auto version_info = a->get_version_info();
 			QString appName = version_info[0].first;
-			QString appVersion = version_info[0].second;
+			// The window title keeps its "base on sigrok pulseview" suffix; the
+			// tagline says the same thing, in the reader's language.
+			QString appVersion = version_info[0].second.section(" base on", 0, 0);
+			QString site = QString("www.%1").arg(QApplication::organizationDomain());
+			QString site_link = QString("<a href=\"https://%1\">%1</a>").arg(site);
+			QString repo_link =
+				QString("<a href=\"https://github.com/WeActStudio/"
+					"WeActStudio.U3LogicAnalyzer\">%1</a>")
+					.arg(tr("Source code"));
+			QString credit_link =
+				QString("<a href=\"https://oshwhub.com/q2h2\">%1</a>")
+					.arg(tr("Modified from: Q2H2"));
+
 			QString text = QString(
-						   "<b>%1 (%2)</b><br/>"
-						   "<a href=\"https://oshwhub.com/q2h2\">Modified from: Q2H2</a><br/><br/>"
-						   "<a href=\"https://%3\">%3</a>")
-						   .arg(appName)
-						   .arg(appVersion)
-						   .arg(QApplication::organizationDomain());
+						   "<b style=\"font-size:15pt\">%1</b><br/>"
+						   "<span style=\"color:#8a8a8e\">%2</span><br/><br/>"
+						   "%3<br/><br/>"
+						   "<span style=\"color:#8a8a8e\">Copyright &copy; 2026 "
+						   "WeAct Studio &nbsp;&bull;&nbsp; GPL-3.0-or-later</span>"
+						   "<br/><br/>"
+						   "%4 &nbsp;&bull;&nbsp; %5 &nbsp;&bull;&nbsp; %6")
+						   .arg(appName, appVersion,
+						        tr("Open-source logic analyzer built on sigrok and PulseView"),
+						        site_link, repo_link, credit_link);
 
 			pv::util::show_message(this, tr("About"), text,
 				QPixmap(":/icons/pulseview.png"),
-				500, true, true);
+				460, true, true);
 		}
 
 		/* CH32H417 device event handler - runs on the main thread */

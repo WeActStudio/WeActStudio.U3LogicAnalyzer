@@ -23,6 +23,11 @@ through one script.
 sudo ./install_udev_rules.sh      # open the device without root (once)
 ./build.sh
 ./start_pv.sh
+
+# macOS 13 or newer (Homebrew, Qt 6)
+./setup_env_macos.sh
+./build.sh
+./start_pv.sh
 ```
 
 ## Documentation
@@ -30,7 +35,7 @@ sudo ./install_udev_rules.sh      # open the device without root (once)
 | Document | Contents |
 |---|---|
 | [doc/usage.md](doc/usage.md) | Connecting a board, capturing, device options, reading the waveform, protocol decoders, saving and exporting, sessions, firmware update, troubleshooting |
-| [doc/building.md](doc/building.md) | Dependencies, building on Windows and Linux, running from the build tree, packaging, udev rules, FX2 firmware, adding a driver, build problems |
+| [doc/building.md](doc/building.md) | Dependencies, building on Windows, Linux and macOS, running from the build tree, packaging (including the dmg), udev rules, FX2 firmware, adding a driver, build problems |
 
 中文文档：[使用说明](doc/usage.zh_CN.md) · [构建说明](doc/building.zh_CN.md)
 
@@ -40,23 +45,29 @@ sudo ./install_udev_rules.sh      # open the device without root (once)
 |---|---|---|
 | Windows 10/11 + MSYS2 MINGW64 | supported | `./setup_env.sh` |
 | Linux (Debian / Ubuntu) | supported | `./setup_env_linux.sh` (apt) |
-| macOS | **not ported** | none (`setup_env_macos.sh` is kept but no longer maintained) |
+| macOS 13 or newer | supported (Intel and Apple Silicon, tested on hardware) | `./setup_env_macos.sh` (Homebrew, Qt 6) |
 
 ## Device access and driver back ends
 
 | | Windows | Linux | macOS |
 |---|---|---|---|
 | `wch-ch32h417` (CH375DLL) | yes, the default binding | not built | not built |
-| `wch-ch32h417-libusb` (libusb) | uninstall the device and delete its driver, then automatic from firmware 0.2; Zadig for older firmware | yes | unverified |
+| `wch-ch32h417-libusb` (libusb) | uninstall the device and delete its driver, then automatic from firmware 0.2; Zadig for older firmware | yes | yes, no driver needed |
 | `fx2lafw` (libusb, FX2 based analyzers) | yes, after rebinding to WinUSB with Zadig | yes | unverified |
-| Firmware upgrade (IAP) | either back end | libusb only | unverified |
+| Firmware upgrade (IAP) | either back end | libusb only | libusb only |
 
 On Windows the device is bound to `CH375WDM.sys` when the CH375 driver is installed, which is what
 the `wch-ch32h417` driver talks to. To use WinUSB instead, uninstall the device in Device Manager
 with "Delete the driver software for this device" checked, then replug: firmware 0.2 binds WinUSB
 automatically. Older firmware and FX2-based analyzers still need a WinUSB rebind with Zadig. Off
-Windows only the libusb back end exists. Of the two, Linux has been built and run; macOS has not
-been ported.
+Windows only the libusb back end exists and no driver has to be installed: Linux takes access
+through udev rules, macOS uses the USB interfaces the system already provides.
+
+All three platforms have been tested with the hardware. The macOS build is distributed as a dmg
+with a minimum of macOS 13.0; it is installed by dragging the application into "Applications", and
+since it is not notarised the first launch needs right-click → Open. The interface language follows
+the system, and so does the application name in the menu bar and in the application menu, while the
+Dock tooltip and the `.app` file on disk stay `U3LogicAnalyzer`.
 
 ## Layout
 
@@ -65,9 +76,10 @@ been ported.
 ├── doc/                         # usage and build documentation (EN / zh_CN) with screenshots
 ├── setup_env.sh                 # environment setup, Windows
 ├── setup_env_linux.sh           # environment setup, Debian/Ubuntu
-├── setup_env_macos.sh           # environment setup, macOS (kept, not ported)
+├── setup_env_macos.sh           # environment setup, macOS (Homebrew)
 ├── build.sh                     # build + portable package
-├── package_installer.sh         # installer (NSIS / deb + tar.gz + AppImage)
+├── package_installer.sh         # installer (NSIS / deb + tar.gz + AppImage / dmg)
+├── packaging/macos/             # dmg layout, background image and the script that draws it
 ├── install_udev_rules.sh        # installs the udev rules on Linux
 ├── start_pv.sh                  # start with the environment set (-l 5)
 ├── install/                     # libsigrok / libsigrokcxx / libsigrokdecode

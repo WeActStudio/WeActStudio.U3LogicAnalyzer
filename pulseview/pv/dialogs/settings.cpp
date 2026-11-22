@@ -537,9 +537,11 @@ QWidget *Settings::get_about_page(QWidget *parent) const
 
 	// Setup the license field with the project homepage link
 	QLabel *gpl_home_info = new QLabel();
-	gpl_home_info->setText(tr("%1<br /><a href=\"http://%2\">%2</a>").arg(
+	// The "www." belongs to what is shown, not to the organisation domain:
+	// that one also decides where QSettings lives and must stay "WeActStudio.com".
+	gpl_home_info->setText(tr("%1<br /><a href=\"https://%2\">%2</a>").arg(
 		tr("GNU GPL, version 3 or later"),
-		QApplication::organizationDomain()));
+		QString("www.%1").arg(QApplication::organizationDomain())));
 	gpl_home_info->setOpenExternalLinks(true);
 
 	QString s;

@@ -299,6 +299,17 @@ include(GetGitRevisionDescription)
 git_describe(PV_TAG_VERSION_STRING --match "pulseview-${PV_VERSION_STRING}" --exact-match)
 if(NOT PV_TAG_VERSION_STRING)
 	get_git_head_revision(PV_REVSPEC PV_HASH)
+	# A source tarball carries no .git. The hash then comes from the caller
+	# (-DPV_GIT_HASH) or from the .git-revision file the packer wrote, so a
+	# build from an archive still names the commit in the window title.
+	if(NOT PV_HASH)
+		if(DEFINED PV_GIT_HASH AND PV_GIT_HASH)
+			set(PV_HASH "${PV_GIT_HASH}")
+		elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git-revision")
+			file(READ "${CMAKE_CURRENT_SOURCE_DIR}/.git-revision" PV_HASH)
+			string(STRIP "${PV_HASH}" PV_HASH)
+		endif()
+	endif()
 	if(PV_HASH)
 		string(SUBSTRING "${PV_HASH}" 0 7 PV_SHORTHASH)
 		set(PV_VERSION_STRING "${PV_VERSION_STRING}-git-${PV_SHORTHASH}")
@@ -316,6 +327,18 @@ if(PV_VERSION_STRING MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)(-[-0-9a-z]*)?$")
 	set(PV_VERSION_MINOR ${CMAKE_MATCH_2})
 	set(PV_VERSION_MICRO ${CMAKE_MATCH_3})
 	set(PV_VERSION_SUFFIX ${CMAKE_MATCH_4})
+endif()
+
+# The Windows resource version is four integers and cannot carry the
+# "-git-<hash>" suffix PV_VERSION_STRING may end up with. That suffix still
+# reaches the user through the window title, which formats PV_VERSION_STRING.
+# "DEFINED", not a bare test: a major version of 0 reads as false in if().
+if(DEFINED PV_VERSION_MAJOR)
+	set(PV_VERSION_QUAD_COMMA "${PV_VERSION_MAJOR},${PV_VERSION_MINOR},${PV_VERSION_MICRO},0")
+	set(PV_VERSION_QUAD_DOT "${PV_VERSION_MAJOR}.${PV_VERSION_MINOR}.${PV_VERSION_MICRO}.0")
+else()
+	set(PV_VERSION_QUAD_COMMA 0,0,0,0)
+	set(PV_VERSION_QUAD_DOT 0.0.0.0)
 endif()
 
 message(STATUS "${PV_TITLE} version: ${PV_VERSION_STRING}")
@@ -526,7 +549,12 @@ if(WIN32)
 	# Use the sigrok icon for the pulseview.exe executable.
 	set(CMAKE_RC_COMPILE_OBJECT "${CMAKE_RC_COMPILER} -O coff -I${CMAKE_CURRENT_SOURCE_DIR} <SOURCE> <OBJECT>")
 	enable_language(RC)
-	list(APPEND pulseview_SOURCES pulseviewico.rc)
+	# Generated, not checked in: the version lives in one place only.
+	configure_file(
+		${CMAKE_CURRENT_SOURCE_DIR}/pulseviewico.rc.in
+		${PROJECT_BINARY_DIR}/pulseviewico.rc
+		@ONLY)
+	list(APPEND pulseview_SOURCES ${PROJECT_BINARY_DIR}/pulseviewico.rc)
 endif()
 
 if(ANDROID)
@@ -771,7 +799,9 @@ endif()
 #-------------------------------------------------------------------------------
 
 link_directories(${Boost_LIBRARY_DIRS})
-link_directories(/mingw64/lib)
+if(WIN32 OR MINGW)
+	link_directories(/mingw64/lib)
+endif()
 
 set(PULSEVIEW_LINK_LIBS
 	${Boost_LIBRARIES}
@@ -845,7 +875,16 @@ if(WIN32)
 	# Add hidapi for IAP dialog
 	list(APPEND PULSEVIEW_LINK_LIBS -lhidapi -lsetupapi -lusb-1.0 -ldwmapi)
 elseif(APPLE)
-	list(APPEND PULSEVIEW_LINK_LIBS -lhidapi -lusb-1.0)
+	# The pkg-config lookups above normally cover both libraries; Homebrew's
+	# hidapi ships hidapi.pc rather than the -libusb variant, which the last
+	# fallback there catches. Only a machine with no .pc file at all needs the
+	# bare names, and even then the -L has to come from the environment.
+	if(NOT HIDAPI_LIBUSB_FOUND AND NOT HIDAPI_HIDRAW_FOUND AND NOT HIDAPI_ANY_FOUND)
+		list(APPEND PULSEVIEW_LINK_LIBS -lhidapi)
+	endif()
+	if(NOT LIBUSB_LINK_FOUND)
+		list(APPEND PULSEVIEW_LINK_LIBS -lusb-1.0)
+	endif()
 endif()
 
 if(ENABLE_STACKTRACE)

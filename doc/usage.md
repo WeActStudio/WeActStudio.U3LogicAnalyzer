@@ -28,6 +28,10 @@ The application scans for devices as soon as one is plugged in, and the device s
 
 On Windows the CH375DLL driver is the default. To use WinUSB instead, uninstall the device in Device Manager with "Delete the driver software for this device" checked, then replug: firmware 0.2 (`sw=0x02` in the `0xAC` reply) binds WinUSB automatically. Older firmware and FX2-based analyzers still need a WinUSB rebind with Zadig.
 
+On Linux, a device that `lsusb` lists but the application does not is a permission problem: run `sudo ./install_udev_rules.sh` and reconnect it.
+
+macOS needs no driver and recognises the device as soon as it is plugged in. The package is a dmg: open it, drag the application into "Applications", then eject the disk image (⌘E). The application is not notarised, so the first launch has to be done by right-clicking the icon in Finder and choosing "Open".
+
 ## Device options
 
 The device options button (gear icon) on the tool bar opens the device options panel:
@@ -53,6 +57,8 @@ A wrong input level places the threshold incorrectly: set too high, genuine high
 - **Sample rate**: 25 steps from 4 MHz to 200 MHz on a USB 3.0 link; the table follows the link and the channel count (4–20 MHz at 16 channels and 4–40 MHz at 8 channels on USB 2.0).
   ![Sample rate](images/en/sample-rate.png)
 - **Capture length**: from 10 ms. The software uses an 18 GB data figure to define the length ceiling (samples = rate × time, 2 bytes per sample at 16 channels): about 45 s at 200 MHz / 16 channels, 90 s at 8 channels (the actual length is limited by free PC memory).
+
+> 16 channels at 200 MHz produce 400 MB/s. Both Windows and Linux have been measured to capture continuously at that rate. On a Mac with Apple Silicon (M-series chip) this link carries 375 MB/s reliably: 16 channels at 187.5 MHz capture continuously, while 200 MHz stops about 40 ms after the start. On such a Mac, use 8 channels for 200 MHz or lower the rate to 187.5 MHz.
 
 Rules of thumb:
 
@@ -124,19 +130,28 @@ Help menu → **FW Update**.
 - The update runs over the device IAP. The tab cannot be closed while it runs, so an interrupted write still has a tab from which to retry.
 - Progress is shown on the page; the device reconnects and is read again when the update finishes.
 - Do not unplug the device during the write. A failed update can be retried while the device is still in IAP mode.
+- A board that is already sitting in update mode (it shows up as a HID device in the operating system and no analyzer is available in the application) can still be written from the same menu item: the application finds boards in that state and writes them directly, without having to get the board back to normal operation first.
 
 ## Troubleshooting
 
 **The device is not in the device list**
 - Windows: make sure no other program holds the device; switching to WinUSB requires uninstalling the device in Device Manager with "Delete the driver software for this device" checked. Older firmware and FX2-based devices also need a WinUSB rebind with Zadig.
-- Linux: `lsusb` lists the device but the application does not. This is a permission problem: run `sudo ./install_udev_rules.sh` and reconnect the device.
+- Linux: `lsusb` lists the device but the application does not. This is a permission problem: run `sudo ./install_udev_rules.sh` and reconnect the device. Inside a virtual machine, a device missing from `lsusb` altogether is usually not passed through: connect it to the virtual machine again, and restart the virtual machine if it still does not appear.
+- macOS: no driver is needed. First check that the cable carries data and not only power. Look for `Logic Analyzer V2` under "System Information → Hardware → USB": on the USB 3.1 bus it is fine, while on the USB 2.0 bus the cable or adapter carries USB 2 only and the sample rate ceiling drops accordingly. A board that is in update mode does not appear under that name; write normal firmware to it with Help → FW Update.
 
 **The capture stops at once with 0 samples**
 - The sample rate exceeds what the link supports, or the sample count is too large. Lower the rate or shorten the duration and try again.
+- On a Mac with Apple Silicon (M-series chip), 16 channels at 200 MHz need 400 MB/s, which is above the ceiling of that platform, and the capture fails the same way. Use 8 channels, or lower the rate to 187.5 MHz.
 - The device may still be held by a previous program: unplug and reconnect it.
 
 **The interface is in English**
-- The language was set manually. Go to Help → Settings → "User interface language" and select the required language.
+- The language was set manually. Go to Help → Settings → "User interface language" and select the required language. On macOS the application name in the menu bar and in the Dock follows the system language and is independent of that setting.
+
+**macOS refuses to open the application because the developer cannot be verified**
+- The application is not notarised, so this is expected. Right-click the icon in Finder and choose "Open", or use "Open Anyway" under "System Settings → Privacy & Security". The confirmation is needed once.
+
+**On macOS the disk image window does not close after the application has been dragged into "Applications"**
+- The system performs no further action once the copy finishes. Eject the image manually, with the eject button next to the disk image in the Finder sidebar or with ⌘E.
 
 **A low-memory notice appears at startup**
 - The application checks free memory at startup and asks for confirmation below 4 GB. Close some programs or confirm to continue.

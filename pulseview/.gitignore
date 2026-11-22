@@ -68,3 +68,4 @@ test/cmake_install.cmake
 
 # Translation binaries
 *.qm
+.git-revision

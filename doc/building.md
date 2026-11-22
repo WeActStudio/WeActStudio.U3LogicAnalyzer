@@ -12,11 +12,10 @@ application are all built by CMake through one script. Using the application is 
 |---|---|---|
 | Windows 10/11 + MSYS2 MINGW64 | supported | `./setup_env.sh` |
 | Linux (Debian / Ubuntu) | supported | `./setup_env_linux.sh` (apt) |
-| macOS | **not ported** | none (`setup_env_macos.sh` is kept but no longer maintained) |
+| macOS 13 or newer | supported | `./setup_env_macos.sh` (Homebrew, Qt 6) |
 
-> `setup_env_macos.sh` and the macOS branch of `build.sh` are left over from an earlier attempt and
-> were never compiled or run on macOS. The libusb back end needs nothing Windows specific, so it
-> could work in principle, but macOS is not supported for now.
+> `setup_env_macos.sh` installs the dependencies with Homebrew and defaults to Qt 6; `--qt5` is
+> available. Capturing from the hardware has been verified on an Apple Silicon machine.
 
 ## Windows (MSYS2 MINGW64)
 
@@ -56,6 +55,40 @@ sudo ./install_udev_rules.sh    # open the device without root (once)
 apt installs `qt6-base-dev` / `qt6-base-dev-tools` / `qt6-svg-dev` / `qt6-tools-dev` /
 `qt6-l10n-tools` (`qtbase5-dev` and friends with `--qt5`), together with the development packages
 of glibmm, libusb, hidapi, libzip and boost. The system Qt is used; no static build here.
+
+## macOS
+
+```bash
+./setup_env_macos.sh            # Homebrew, Qt 6 by default
+./setup_env_macos.sh --qt5      # Qt 5 instead
+```
+
+Homebrew installs `cmake`, `ninja`, `pkg-config`, `glib`, `glibmm@2.66`, `libsigc++@2`, `libusb`,
+`hidapi`, `libzip`, `boost`, `qtbase`/`qtsvg`/`qttools`/`qttranslations`, `python@3.12` and
+`gettext`. Homebrew's default `glibmm` (2.88) is not used, because PulseView depends on the
+`glibmm-2.4` series. Qt is used as a dynamic build, not a static one.
+
+The minimum system version is decided by `build.sh`: 13.0 by default, but it first reads
+`LC_BUILD_VERSION minos` from the `QtCore.framework` in use and **takes Qt's value when that is
+higher**, then sets `MACOSX_DEPLOYMENT_TARGET` and the `LSMinimumSystemVersion` in `Info.plist`
+accordingly.
+
+> **Note:** Homebrew's `qtbase` is currently 6.12, with `minos` **14.4**. Packaging with it raises
+> the minimum system version of the application to 14.4, which keeps macOS 13 users from installing
+> it. A 13.0 build needs a Qt compiled against 13.0 (built locally, or taken from an older system),
+> selected through `PV_QT_PREFIX`:
+>
+> ```bash
+> PV_QT_PREFIX=$HOME/Qt/6.11.1/macos ./build.sh
+> ```
+>
+> A self-built Qt that was compiled against an older sysroot also accepts `PV_SYSROOT=<dir>`. Check
+> the result after packaging with:
+>
+> ```bash
+> otool -l <app>/Contents/Frameworks/QtCore.framework/Versions/A/QtCore | grep -A3 LC_BUILD_VERSION
+> /usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" <app>/Contents/Info.plist
+> ```
 
 ## Building
 
@@ -97,6 +130,11 @@ cd build_cmake/logicanalyzer_build && ./U3LogicAnalyzer
 
 > Put these into `~/.bashrc` to keep them. An installed deb, archive or AppImage does not need any
 > of them.
+
+On macOS just run `./start_pv.sh`: the script sets `SIGROKDECODE_DIR` and the Python path in the same
+branch. The application needs a logged-in graphical session; a plain SSH session without a desktop
+cannot open a window. If a `libsigrok*.dylib` cannot be found, add `install/lib` to
+`DYLD_LIBRARY_PATH`.
 
 ## Packaging
 
@@ -143,6 +181,33 @@ about the app and shows a placeholder tile.
 - Dropping `uruntime-<arch>` into `dist/` before packaging produces an AppImage that needs no FUSE.
 - On the first run `AppRun` registers the launcher and the icons under `~/.local/share`, which is
   what makes the shell show the application by name and icon. Set `U3LA_NO_INTEGRATION=1` to skip it.
+
+### macOS
+
+```bash
+./package_installer.sh              # build + package (Qt 6)
+./package_installer.sh --no-clean   # reuse the existing build directory
+```
+
+The result is `dist/U3LogicAnalyzer-<version>-git-<revision>-macos-<arch>.dmg`, holding the `.app`
+and a link to `/Applications`; the application is installed by dragging it into that folder.
+
+- The volume name and the file name both carry the version and the revision. Two images of the same
+  name make Finder reuse the window size it remembered (`FXRecentFolders` takes precedence over the
+  `WindowBounds` in `.DS_Store`); the suffix prevents that reuse.
+- The background image, the icon positions and the window size of the installer come from
+  `packaging/macos/dmg-settings.py`; the background image itself is produced by
+  `packaging/macos/make-dmg-background.py`. Both are part of the repository.
+- `dmgbuild` is required: `pip install 'dmgbuild==1.6.1'`. Newer versions call
+  `diskutil image --plist`, which macOS 13 does not support, and packaging fails. Without dmgbuild
+  the script falls back to `hdiutil`: the image is still produced, but without background or icon
+  layout.
+- The application is ad-hoc signed and not notarised, so the first launch has to be started with
+  right-click → Open.
+- Do not run the application from `dist/` before packaging, and do not modify files inside the
+  bundle. Both break the seal of the code signature, and packaging then reports
+  `a sealed resource is missing`. The script runs `codesign --verify --deep --strict` beforehand and
+  asks for a rebuild when it fails.
 
 ## udev rules (Linux, without root)
 
@@ -207,3 +272,16 @@ value coming from the environment wins.
 **Python fails with `Failed to import encodings module`**
 - `PYTHONHOME` is missing or wrong. On Windows it must be `/mingw64`, and no outside `PYTHONPATH`
   should be set.
+
+**The macOS dmg reports an unsupported system version on macOS 13**
+- The Qt in use has a `minos` above 13.0 and `build.sh` follows it when raising
+  `LSMinimumSystemVersion`. Use a Qt built against 13.0 and point `PV_QT_PREFIX` at it, see the
+  macOS section above.
+
+**macOS reports `a sealed resource is missing`**
+- The seal of the `.app` is broken, usually because the application was run from `dist/` before
+  packaging (Python writes `__pycache__` into the framework) or because files inside the bundle were
+  edited. Rebuild a clean application with `./build.sh --package` and package again.
+
+**`dmgbuild` fails with `diskutil: unrecognized option --plist`**
+- The installed dmgbuild is too new. Pin it: `pip install 'dmgbuild==1.6.1'`.

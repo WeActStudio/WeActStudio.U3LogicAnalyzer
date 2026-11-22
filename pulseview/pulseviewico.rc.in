@@ -1,0 +1,26 @@
+IDI_ICON1	ICON	DISCARDABLE	"icons/pulseview.ico"
+
+
+1 VERSIONINFO
+FILEVERSION     @PV_VERSION_QUAD_COMMA@
+PRODUCTVERSION  @PV_VERSION_QUAD_COMMA@
+FILEOS          0x00040004
+FILETYPE        0x00000001
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404B0"
+        BEGIN
+            VALUE "FileDescription", "U3LogicAnalyzer\0"
+            VALUE "FileVersion", "@PV_VERSION_QUAD_DOT@\0"
+            VALUE "ProductName", "U3LogicAnalyzer\0"
+            VALUE "ProductVersion", "@PV_VERSION_QUAD_DOT@\0"
+            VALUE "CompanyName", "WeAct Studio"
+            VALUE "LegalCopyright", "Copyright (C) 2026 WeAct Studio"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x804, 1200
+    END
+END

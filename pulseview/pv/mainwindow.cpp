@@ -1955,7 +1955,7 @@ void MainWindow::show_device_detach(const shared_ptr<Session> &session)
 		is_wch_device(session->main_bar()->channels_->device_name_))
 		session->main_bar()->set_setting_default();
 
-	connect(exportBtn, &QPushButton::clicked, [=, session](){
+	connect(exportBtn, &QPushButton::clicked, [=](){
 		/* The capture goes to a page of its own first, while it is still
 		 * here to be handed over. */
 		copy_session_to_new_session(session);
@@ -1963,7 +1963,7 @@ void MainWindow::show_device_detach(const shared_ptr<Session> &session)
 		dialog->deleteLater();
 	});
 
-	connect(saveBtn, &QPushButton::clicked, [=, session](){
+	connect(saveBtn, &QPushButton::clicked, [=](){
 		/*
 		 * Written here rather than through the save action: that one hands
 		 * the work to a progress dialog and returns, and the capture would
@@ -1985,7 +1985,7 @@ void MainWindow::show_device_detach(const shared_ptr<Session> &session)
 		dialog->deleteLater();
 	});
 
-	connect(discardBtn, &QPushButton::clicked, [=, session](){
+	connect(discardBtn, &QPushButton::clicked, [=](){
 		apply_device_detach(session);
 		dialog->deleteLater();
 	});
@@ -1996,7 +1996,7 @@ void MainWindow::show_device_detach(const shared_ptr<Session> &session)
 	 * like the third button; what it must not do is leave the device
 	 * events held back, or the list would never be read again.
 	 */
-	connect(dialog, &QDialog::rejected, [=, session](){
+	connect(dialog, &QDialog::rejected, [=](){
 		apply_device_detach(session);
 		dialog->deleteLater();
 	});

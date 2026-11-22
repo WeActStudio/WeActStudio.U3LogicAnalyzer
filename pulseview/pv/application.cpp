@@ -177,11 +177,12 @@ void Application::switch_language(const QString& language)
 		QString tr_path(QLibraryInfo::location(QLibraryInfo::TranslationsPath));
 #endif
 
+		/* "qt_<lang>.qm" is only a list of the module catalogues to pull in;
+		 * it cannot load unless every one of them is installed, and a Qt
+		 * source build ships none of the modules this app does not use. The
+		 * widgets strings all live in qtbase, so that is the one to insist on. */
 		if (qt_translator_.load("qt_" + language, tr_path))
 			installTranslator(&qt_translator_);
-		else
-			qWarning() << "QT translations for" << language << "not found at" <<
-				tr_path << ", Qt translations package is probably missing";
 
 		// Qt base translations
 		if (qtbase_translator_.load("qtbase_" + language, tr_path))

@@ -22,6 +22,9 @@ pkg_check_modules(LIBZIP libzip>=0.10)
 # Windows-specific libs
 if(WIN32 OR MINGW)
     set(PLATFORM_LIBS ws2_32 setupapi ole32)
+elseif(APPLE)
+    # libSystem already provides pthread and dlopen; -lpthread/-ldl do not exist.
+    set(PLATFORM_LIBS)
 else()
     set(PLATFORM_LIBS m pthread dl)
 endif()
@@ -32,6 +35,8 @@ endif()
 # Determine host
 if(WIN32 OR MINGW)
     set(CONF_HOST "x86_64-w64-mingw32")
+elseif(APPLE)
+    set(CONF_HOST "${CMAKE_SYSTEM_PROCESSOR}-apple-darwin")
 else()
     set(CONF_HOST "${CMAKE_SYSTEM_PROCESSOR}-pc-linux-gnu")
 endif()

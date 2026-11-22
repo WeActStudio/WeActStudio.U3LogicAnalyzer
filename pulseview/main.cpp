@@ -245,6 +245,24 @@ int main(int argc, char *argv[])
 
 	Application a(argc, argv);
 
+#ifdef Q_OS_MACOS
+	// The bundled Python is a plain dylib, so CPython cannot derive its
+	// standard library location and falls back to the path it was built
+	// against. Point it at the copy inside the bundle instead; the decoders
+	// fail to import anything without this.
+	{
+		const QString py_home = QCoreApplication::applicationDirPath()
+			+ QStringLiteral("/../Frameworks/Python.framework/Versions/3.12");
+		if (QDir(py_home).exists() && qEnvironmentVariableIsEmpty("PYTHONHOME"))
+			qputenv("PYTHONHOME", py_home.toUtf8());
+		// Bytecode caches are written next to the sources, which is inside the
+		// bundle: it breaks the code signature and fails outright when the app
+		// runs from the read-only disk image.
+		if (qEnvironmentVariableIsEmpty("PYTHONDONTWRITEBYTECODE"))
+			qputenv("PYTHONDONTWRITEBYTECODE", "1");
+	}
+#endif
+
 	/*
 	 * Say which binary is running. The application is often installed next
 	 * to a build tree, so "the change is not in the build I started" has to
@@ -351,9 +369,11 @@ int main(int argc, char *argv[])
 	Srf::init();
 #endif
 
+#ifdef _WIN32
 	QFont currentFont = a.font();
 	currentFont.setFamily("Microsoft YaHei");
 	a.setFont(currentFont);
+#endif
 
 #ifdef ANDROID
 	srau_init_environment();

@@ -398,7 +398,7 @@ void LogicSegment::append_payload(void *data, uint64_t data_size)
 	uint64_t prev_sample_count = sample_count_;
 	uint64_t sample_count = 0;
 	if (channel_num_ < 8)
-		sample_count = data_size * unit_size_temp;
+		sample_count = (uint64_t)(data_size * unit_size_temp);
 	else
 		sample_count = data_size / unit_size_;
 
@@ -1123,7 +1123,7 @@ void LogicSegment::append_payload_to_mipmap()
 			else
 				channel_switch_2(src_ptr, count, data_zoom_ptr);
 			src_ptr = data_zoom;
-			count *= unit_size_temp;
+			count = (uint64_t)(count * unit_size_temp);
 		}
 		count = std::min(count, len_sample);
 		// Submit these contiguous samples to downsampling in bulk

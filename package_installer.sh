@@ -3,6 +3,8 @@
 # package_installer.sh - build the installer of the current platform
 #
 #   Windows: U3LogicAnalyzer_Setup.exe                    (NSIS)
+#   macOS:   U3LogicAnalyzer-<ver>-macos-<arch>.dmg       (app bundle, drag to
+#                                                          /Applications)
 #   Linux:   U3LogicAnalyzer-<ver>-linux-<arch>.tar.gz    (archive + install.sh)
 #            U3LogicAnalyzer-<ver>-linux-<arch>.deb       (needs dpkg-deb)
 #            U3LogicAnalyzer-<ver>-<arch>.AppImage        (needs appimagetool,
@@ -65,6 +67,12 @@ else
     IS_WINDOWS=0
 fi
 
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    IS_MACOS=1
+else
+    IS_MACOS=0
+fi
+
 # --- Build + package ---
 if [ $SKIP_BUILD -eq 0 ]; then
     echo ">>> Step 1/3: build and package... (Qt ${QT_MAJOR})"
@@ -88,6 +96,11 @@ else
     if [ $IS_WINDOWS -eq 1 ]; then
         [ -f "${DIST_DIR}/U3LogicAnalyzer.exe" ] || {
             echo "[error] ${DIST_DIR}/U3LogicAnalyzer.exe not found, run ./build.sh --package first"
+            exit 1
+        }
+    elif [ $IS_MACOS -eq 1 ]; then
+        [ -d "${DIST_DIR}/U3LogicAnalyzer.app" ] || {
+            echo "[error] ${DIST_DIR}/U3LogicAnalyzer.app not found, run ./build.sh --package first"
             exit 1
         }
     else
@@ -186,6 +199,113 @@ echo "============================================"
 echo " Installer done!"
 echo " ${OUTPUT}"
 echo " Qt: ${QT_MAJOR}"
+echo "============================================"
+
+# ============================================================================
+# macOS: .dmg disk image with the app bundle
+# ============================================================================
+elif [ $IS_MACOS -eq 1 ]; then
+
+APP="${DIST_DIR}/U3LogicAnalyzer.app"
+ARCH="$(uname -m)"
+
+# The revision goes in the file name as well as the volume name. Builds of one
+# release are kept side by side, and a name without it makes them overwrite
+# each other. There is no .git when the sources arrived as an archive, hence
+# the file build.sh refreshes on every build.
+PV_REV="$(tr -d '[:space:]' < "${SCRIPT_DIR}/pulseview/.git-revision" 2>/dev/null || true)"
+if [ -z "$PV_REV" ] && command -v git >/dev/null 2>&1; then
+    PV_REV="$(git -C "${SCRIPT_DIR}" rev-parse --short=7 HEAD 2>/dev/null || true)"
+fi
+case "$PV_REV" in
+    ''|*[!0-9a-f]*) PV_REV="" ;;
+esac
+
+VERSION_TAG="$VERSION"
+if [ -n "$PV_REV" ] && [ "${VERSION#*-git-}" = "$VERSION" ]; then
+    VERSION_TAG="${VERSION}-git-${PV_REV}"
+fi
+
+BASENAME="U3LogicAnalyzer-${VERSION_TAG}-macos-${ARCH}"
+DMG="${SCRIPT_DIR}/dist/${BASENAME}.dmg"
+STAGE="${SCRIPT_DIR}/dist/${BASENAME}-stage"
+
+echo ">>> Step 2/3: building ${BASENAME}.dmg..."
+
+# The image must not seal a stale signature: a run of the app from dist/
+# writes __pycache__ into the framework and invalidates it.
+codesign --verify --deep --strict "${APP}" >/dev/null 2>&1 || {
+    echo "[warning] the app bundle does not verify; rebuilding it is safer"
+    echo "          (run ./build.sh --package, or ./package_installer.sh without --skip-build)"
+}
+
+# ditto, not cp -R: it keeps the symlinks, permissions and extended
+# attributes that the code signature seals.
+SETTINGS="${SCRIPT_DIR}/packaging/macos/dmg-settings.py"
+BACKGROUND="${SCRIPT_DIR}/packaging/macos/dmg-background.png"
+
+# dmgbuild writes the .DS_Store itself instead of asking Finder to, which a
+# non-interactive session cannot authorise. It is optional: without it the
+# image still works, it just has no background and no icon layout.
+DMGBUILD=""
+for cand in "${DMGBUILD_BIN:-}" "$(command -v dmgbuild 2>/dev/null)" \
+            "${HOME}/la-work/conda/bin/dmgbuild"; do
+    [ -n "$cand" ] && [ -x "$cand" ] && DMGBUILD="$cand" && break
+done
+
+# Finder keys its remembered window size on the volume name
+# (com.apple.finder.plist, FXRecentFolders) and that beats the WindowBounds
+# written into .DS_Store, so an older image of the same name leaves the window
+# at whatever size it was last dragged to. The version and the revision in the
+# name give every build a fresh record.
+VOL_NAME="U3LogicAnalyzer ${VERSION_TAG}"
+
+rm -f "${DMG}"
+if [ -n "$DMGBUILD" ] && [ -f "$SETTINGS" ] && [ -f "$BACKGROUND" ]; then
+    echo "  dmgbuild: background image and icon layout"
+    "$DMGBUILD" -s "$SETTINGS" \
+        -D "app_path=${APP}" \
+        -D "bg_path=${BACKGROUND}" \
+        "$VOL_NAME" "${DMG}"
+else
+    echo "  (dmgbuild not found: image without background or layout;"
+    echo "   install it with pip install 'dmgbuild==1.6.1')"
+    rm -rf "${STAGE}"
+    mkdir -p "${STAGE}"
+    ditto "${APP}" "${STAGE}/U3LogicAnalyzer.app"
+    ln -s /Applications "${STAGE}/Applications"
+    hdiutil create -volname "$VOL_NAME" -srcfolder "${STAGE}" \
+        -ov -format UDZO -quiet -imagekey zlib-level=9 "${DMG}"
+    rm -rf "${STAGE}"
+fi
+
+# Get Info on the image file shows this. It is an extended attribute rather
+# than anything inside the image, so a browser download can drop it; the same
+# text is painted into the background for that reason.
+/usr/bin/python3 - "${DMG}" "${VOL_NAME}" <<'PY' 2>/dev/null || true
+import plistlib, subprocess, sys
+
+dmg, volume = sys.argv[1], sys.argv[2]
+comment = (
+    f"WeAct Studio {volume}\n"
+    "开源逻辑分析仪，基于 sigrok 与 PulseView 构建。\n"
+    "https://github.com/WeActStudio/WeActStudio.U3LogicAnalyzer"
+)
+data = plistlib.dumps(comment, fmt=plistlib.FMT_BINARY)
+subprocess.run(
+    ["xattr", "-wx", "com.apple.metadata:kMDItemFinderComment", data.hex(), dmg],
+    check=True)
+PY
+
+echo ""
+echo "============================================"
+echo " Installer done! (Qt ${QT_MAJOR})"
+echo " ${DMG}"
+echo " $(du -h "${DMG}" | cut -f1) on disk"
+echo ""
+echo " Open the image and drag U3LogicAnalyzer into Applications."
+echo " The bundle is ad-hoc signed and not notarised, so on a machine other"
+echo " than the build one the first launch needs right click -> Open."
 echo "============================================"
 
 # ============================================================================
@@ -453,9 +573,20 @@ Description: CH32H417 Logic Analyzer (WeAct Studio)
 CTRLEOF
 
     # Debian policy wants a copyright file, and software centres read the
-    # licence from there as well.
+    # holder from it: the licence text on its own names no one.
     mkdir -p "${DEB_ROOT}/usr/share/doc/${DEB_PKG}"
-    cp "${SCRIPT_DIR}/LICENSE" "${DEB_ROOT}/usr/share/doc/${DEB_PKG}/copyright" 2>/dev/null || true
+    {
+        echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/"
+        echo "Upstream-Name: U3LogicAnalyzer"
+        echo "Source: https://github.com/WeActStudio/WeActStudio.U3LogicAnalyzer"
+        echo ""
+        echo "Files: *"
+        echo "Copyright: 2026 WeAct Studio"
+        echo " Parts carried over from the Q2H2 project: 2026 Q2H2"
+        echo "License: GPL-3+"
+        [ -f "${SCRIPT_DIR}/LICENSE" ] &&
+            sed -e 's/[[:space:]]*$//' -e 's/^/ /' "${SCRIPT_DIR}/LICENSE"
+    } > "${DEB_ROOT}/usr/share/doc/${DEB_PKG}/copyright"
 
     cat > "${DEB_ROOT}/DEBIAN/postinst" << 'PIEOF'
 #!/bin/sh

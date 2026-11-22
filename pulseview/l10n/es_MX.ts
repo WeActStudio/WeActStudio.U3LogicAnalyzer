@@ -1571,6 +1571,18 @@ Por favor, compruebe la conexión del dispositivo y el archivo de firmware.</tra
 <context>
     <name>pv::toolbars::MainBar</name>
     <message>
+        <source>Open-source logic analyzer built on sigrok and PulseView</source>
+        <translation>Analizador lógico de código abierto basado en sigrok y PulseView</translation>
+    </message>
+    <message>
+        <source>Source code</source>
+        <translation>Código fuente</translation>
+    </message>
+    <message>
+        <source>Modified from: Q2H2</source>
+        <translation>Basado en: Q2H2</translation>
+    </message>
+    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="945"/>
         <source>Initializing device</source>
         <translation>Inicializando dispositivo</translation>

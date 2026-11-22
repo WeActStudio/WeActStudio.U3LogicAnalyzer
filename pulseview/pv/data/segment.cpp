@@ -393,7 +393,7 @@ void Segment::append_samples(void* data, uint64_t samples)
 	if (channel_num_ >= 8)
 		sample_count_ += samples;
 	else
-		sample_count_ += samples * unit_size_temp;
+		sample_count_ += (uint64_t)(samples * unit_size_temp);
 }
 
 const uint8_t* Segment::get_raw_sample(uint64_t sample_num) const
@@ -411,8 +411,9 @@ const uint8_t* Segment::get_raw_sample(uint64_t sample_num) const
 	uint64_t chunk_offs = (sample_num * unit_size_) % chunk_size_;
 
 	if (channel_num_ < 8){
-		chunk_num /= unit_size_temp;
-		chunk_offs /= unit_size_temp;
+		// unit_size_temp is whole here: only 16 channels gives a fraction.
+		chunk_num /= (uint64_t)unit_size_temp;
+		chunk_offs /= (uint64_t)unit_size_temp;
 	}
 
 	lock_guard<recursive_mutex> lock(mutex_);  // Because of free_unused_memory()
@@ -574,7 +575,7 @@ void Segment::set_channel_numner(uint16_t channel_num)
 	 * past its end. Replace it whenever the size it is meant to have
 	 * changes, and remember a failed allocation instead of a stale pointer.
 	 */
-	const size_t wanted = (size_t)chunk_size_ * unit_size_temp;
+	const size_t wanted = (size_t)(chunk_size_ * unit_size_temp);
 	if (data_zoom != NULL && data_zoom_size_ == wanted)
 		return;
 

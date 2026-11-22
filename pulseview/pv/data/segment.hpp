@@ -101,7 +101,9 @@ public:
 	void set_channel_numner(uint16_t channel_num);
 	void set_unit_size(uint16_t unit_size);
 	uint16_t channel_num_ = 16;
-	unsigned int unit_size_temp = 1;
+	// Samples per byte, 8 / channel_num_. It is fractional for 16 channels,
+	// and an integer type here truncates it to 0 and divides by zero later.
+	double unit_size_temp = 1.0;
 
 Q_SIGNALS:
 	void completed();

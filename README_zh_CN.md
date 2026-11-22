@@ -21,6 +21,11 @@
 sudo ./install_udev_rules.sh      # 免 root 打开设备（只需一次）
 ./build.sh
 ./start_pv.sh
+
+# macOS 13 及以上（Homebrew，Qt 6）
+./setup_env_macos.sh
+./build.sh
+./start_pv.sh
 ```
 
 ## 文档
@@ -28,7 +33,7 @@ sudo ./install_udev_rules.sh      # 免 root 打开设备（只需一次）
 | 文档 | 内容 |
 |---|---|
 | [使用说明](doc/usage.zh_CN.md) | 连接设备、设备选项、采集、看波形、协议解码、保存导出、多会话、固件升级、常见问题 |
-| [构建说明](doc/building.zh_CN.md) | 依赖安装、Windows / Linux 构建、运行、打包、udev 规则、FX2 固件、添加驱动、构建问题 |
+| [构建说明](doc/building.zh_CN.md) | 依赖安装、Windows / Linux / macOS 构建、运行、打包（含 dmg）、udev 规则、FX2 固件、添加驱动、构建问题 |
 
 English: [Usage](doc/usage.md) · [Building](doc/building.md)
 
@@ -38,18 +43,20 @@ English: [Usage](doc/usage.md) · [Building](doc/building.md)
 |---|---|---|
 | Windows 10/11 + MSYS2 MINGW64 | 支持 | `./setup_env.sh` |
 | Linux（Debian / Ubuntu） | 支持 | `./setup_env_linux.sh`（apt） |
-| macOS | **未适配** | 不提供（`setup_env_macos.sh` 保留但不再维护） |
+| macOS 13 及以上 | 支持（Intel 与 Apple Silicon，已真机验证） | `./setup_env_macos.sh`（Homebrew，Qt 6） |
 
 ## 设备访问与驱动后端
 
 | | Windows | Linux | macOS |
 |---|---|---|---|
 | `wch-ch32h417`（CH375DLL） | 默认绑定 | 不参与构建 | 不参与构建 |
-| `wch-ch32h417-libusb`（libusb） | 需在设备管理器中卸载设备并删除驱动，固件 0.2 起重新插拔后自动绑定；旧固件需 Zadig | 支持 | 未验证 |
+| `wch-ch32h417-libusb`（libusb） | 需在设备管理器中卸载设备并删除驱动，固件 0.2 起重新插拔后自动绑定；旧固件需 Zadig | 支持 | 支持（无需驱动） |
 | `fx2lafw`（libusb，FX2 方案设备） | 需先用 Zadig 改绑 WinUSB | 支持 | 未验证 |
-| 固件升级（IAP） | 两个后端都行 | 仅 libusb 后端 | 未验证 |
+| 固件升级（IAP） | 两个后端都行 | 仅 libusb 后端 | 仅 libusb 后端 |
 
-Windows 上已安装 CH375 驱动时设备绑在 `CH375WDM.sys`，走 `wch-ch32h417` 驱动。需要改用 WinUSB 时，在设备管理器中卸载设备并勾选「删除此设备的驱动程序软件」，重新插拔后固件 0.2 会自动绑定 WinUSB；更早版本的固件或 FX2 方案设备仍需用 Zadig 改绑。非 Windows 平台只有 libusb 后端，其中 Linux 已实机验证，macOS 未适配。
+Windows 上已安装 CH375 驱动时设备绑在 `CH375WDM.sys`，走 `wch-ch32h417` 驱动。需要改用 WinUSB 时，在设备管理器中卸载设备并勾选「删除此设备的驱动程序软件」，重新插拔后固件 0.2 会自动绑定 WinUSB；更早版本的固件或 FX2 方案设备仍需用 Zadig 改绑。非 Windows 平台只有 libusb 后端，无需安装任何驱动：Linux 依靠 udev 规则取得权限，macOS 直接使用系统自带的 USB 接口。
+
+三个平台均已在真机上验证。macOS 版本以 dmg 分发，最低系统版本为 13.0；安装方式是把应用拖入「应用程序」文件夹，未做公证签名，首次启动需右键选择「打开」。界面语言跟随系统，菜单栏与应用菜单中的应用名也随之本地化；程序坞的悬停提示与磁盘上的 `.app` 文件名固定为 `U3LogicAnalyzer`。
 
 ## 目录结构
 
@@ -58,9 +65,10 @@ Windows 上已安装 CH375 驱动时设备绑在 `CH375WDM.sys`，走 `wch-ch32h
 ├── doc/                         # 使用说明与构建说明（中英双语，含截图）
 ├── setup_env.sh                 # Windows 环境部署
 ├── setup_env_linux.sh           # Linux（Debian/Ubuntu）环境部署
-├── setup_env_macos.sh           # macOS 环境部署（保留，未适配、不再维护）
+├── setup_env_macos.sh           # macOS 环境部署（Homebrew）
 ├── build.sh                     # 构建 + 便携包
-├── package_installer.sh         # 安装包（NSIS / deb+tar.gz+AppImage）
+├── package_installer.sh         # 安装包（NSIS / deb+tar.gz+AppImage / dmg）
+├── packaging/macos/             # dmg 布局、背景图与其生成脚本
 ├── install_udev_rules.sh        # Linux udev 规则安装
 ├── start_pv.sh                  # 带环境变量启动（-l 5）
 ├── install/                     # libsigrok / libsigrokcxx / libsigrokdecode
