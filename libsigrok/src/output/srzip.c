@@ -2,6 +2,7 @@
  * This file is part of the libsigrok project.
  *
  * Copyright (C) 2014 Bert Vermeulen <bert@biot.com>
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -147,24 +148,14 @@ static int zip_create(const struct sr_output *o)
 	 * 16 probes for that would make every read-back sample straddle two
 	 * of the ones that were stored.
 	 *
-	 * Only narrow it as far as every enabled channel still fits, so
-	 * that no channel would be named outside the file's own width.
+	 * Narrowing is unconditional for the same reason: the channels past
+	 * the width of the data have no bit in the file, and naming them
+	 * would pad every sample with positions that were never captured,
+	 * which read back as channels stuck at zero.
 	 */
 	if (outc->logic_unitsize > 0 &&
 			outc->logic_unitsize * 8 < logic_channels) {
-		size_t stored_channels = outc->logic_unitsize * 8;
-		gboolean fits = TRUE;
-
-		for (l = o->sdi->channels; l; l = l->next) {
-			ch = l->data;
-			if (ch->type == SR_CHANNEL_LOGIC && ch->enabled &&
-					(size_t)ch->index >= stored_channels) {
-				fits = FALSE;
-				break;
-			}
-		}
-		if (fits)
-			logic_channels = stored_channels;
+		logic_channels = outc->logic_unitsize * 8;
 	}
 
 	/* When reading the file, the first index of the analog channels
@@ -200,6 +191,9 @@ static int zip_create(const struct sr_output *o)
 		s = NULL;
 		switch (ch->type) {
 		case SR_CHANNEL_LOGIC:
+			/* Past the width of the data there is no bit to name. */
+			if ((size_t)ch->index >= logic_channels)
+				continue;
 			ch_nr = ch->index + 1;
 			s = g_strdup_printf("probe%zu", ch_nr);
 			break;
