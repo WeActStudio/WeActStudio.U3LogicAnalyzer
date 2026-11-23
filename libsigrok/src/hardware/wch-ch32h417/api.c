@@ -3,6 +3,7 @@
  * LogicAnaylzer is based on libsigrok.
  *
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -59,7 +60,7 @@ static const uint32_t devopts[] = {
 	SR_CONF_LINK_STOP_REASON | SR_CONF_GET | SR_CONF_LIST,
 	SR_CONF_KEY_START_STOP | SR_CONF_GET | SR_CONF_SET,
 	SR_CONF_KEY_PRESSED | SR_CONF_GET,
-	SR_CONF_LED_BRIGHTNESS | SR_CONF_GET | SR_CONF_SET,
+	SR_CONF_LED_BRIGHTNESS | SR_CONF_GET | SR_CONF_SET | SR_CONF_LIST,
 };
 
 /* ADC channel group device options */
@@ -97,6 +98,11 @@ static const uint64_t usb_versions[] = {
 static const uint64_t link_stop_reasons[] = {
 	LINK_STOP_NONE,
 	LINK_STOP_NO_DATA,
+};
+
+/* Percentages of the peak the indicator is driven at. */
+static const uint64_t led_brightness_levels[] = {
+	10, 20, 40, 70, 100,
 };
 
 static const uint16_t voltage_to_raw[][2] = {
@@ -367,6 +373,13 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 				ch375_close_device(i);
 				continue;
 			}
+		}
+
+		/* A scan option naming one connection reports only that board. */
+		if (conn && *conn && strcmp(conn, connection_id))
+		{
+			ch375_close_device(i);
+			continue;
 		}
 
 		sr_info("Device at index %d: connection id '%s'", i, connection_id);
@@ -702,12 +715,23 @@ static int config_get(uint32_t key, GVariant **data,
 		*data = g_variant_new_uint64((uint64_t)devc->link_stop_reason);
 		break;
 	case SR_CONF_KEY_START_STOP:
-		/* A host uses this failing to know the option should not be offered */
-		if (!devc->key_available)
+		/* A host uses this failing to know the option should not be offered.
+		 * The key came with firmware 2, so a 0.1 board offers no option even
+		 * if it happens to answer the parameter query in full. */
+		if (devc->fw_version == 0)
+			ch32h417_get_fw_version(sdi);
+		if (!devc->key_available || (devc->fw_version >> 8) < 2)
 			return SR_ERR_NA;
 		*data = g_variant_new_boolean(devc->key_stop_enabled);
 		break;
 	case SR_CONF_LED_BRIGHTNESS:
+		/* Boards of the 0.1 generation do not drive the indicator. Asking
+		 * the version is how the driver tells them apart, and it happens
+		 * once: a board that answers always reports a nonzero version. */
+		if (devc->fw_version == 0)
+			ch32h417_get_fw_version(sdi);
+		if (!devc->led_available)
+			return SR_ERR_NA;
 		*data = g_variant_new_uint64(devc->led_brightness);
 		break;
 	case SR_CONF_KEY_PRESSED:
@@ -778,7 +802,7 @@ static int config_set(uint32_t key, GVariant *data,
 		break;
 	}
 	case SR_CONF_KEY_START_STOP:
-		if (!devc->key_available)
+		if (!devc->key_available || (devc->fw_version >> 8) < 2)
 		{
 			sr_warn("This firmware does not report the board key; "
 					"update it to use the key as a start/stop button");
@@ -791,6 +815,18 @@ static int config_set(uint32_t key, GVariant *data,
 	case SR_CONF_LED_BRIGHTNESS:
 	{
 		uint64_t level = g_variant_get_uint64(data);
+
+		/* Sending the command to firmware that has none would block on a
+		 * response that never comes, so the generation is established first
+		 * and the command is refused up front. */
+		if (devc->fw_version == 0)
+			ch32h417_get_fw_version(sdi);
+		if (!devc->led_available)
+		{
+			sr_warn("This firmware does not drive the indicator; "
+					"update it to set the brightness");
+			return SR_ERR_NA;
+		}
 
 		if (level > 100)
 		{
@@ -919,7 +955,8 @@ static int config_set(uint32_t key, GVariant *data,
 
 			if(code < 10.0 || code > 33.0)
 			{
-				sr_err("voltage_threshold Input Level value out of range: %.0f (must be 10-33)", code);
+				sr_err("voltage_threshold %.2f V is out of range: this board takes "
+				       "0.60 V to 1.50 V at the pins", threshold);
 				return SR_ERR_ARG;
 			}
 			set = (uint16_t)code;
@@ -937,7 +974,8 @@ static int config_set(uint32_t key, GVariant *data,
 				}
 			}
 			if (set > 1024) {
-				sr_err("voltage_threshold DAC value out of range: %" PRIu16 " (must be 0-1024)", set);
+				sr_err("voltage_threshold %.2f V is out of range: this board takes "
+				       "0.80 V to 2.30 V", threshold);
 				return SR_ERR_ARG;
 			}
 		}
@@ -1036,6 +1074,9 @@ static int config_list(uint32_t key, GVariant **data,
 		break;
 	case SR_CONF_LINK_STOP_REASON:
 		*data = std_gvar_array_u64(ARRAY_AND_SIZE(link_stop_reasons));
+		break;
+	case SR_CONF_LED_BRIGHTNESS:
+		*data = std_gvar_array_u64(ARRAY_AND_SIZE(led_brightness_levels));
 		break;
 	default:
 		return SR_ERR_NA;

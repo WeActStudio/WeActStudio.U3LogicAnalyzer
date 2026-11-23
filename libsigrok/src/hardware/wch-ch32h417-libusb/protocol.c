@@ -682,6 +682,7 @@ SR_PRIV struct dev_context *ch32h417_libusb_dev_new(void)
 	devc->adc_width = ADC_WIDTH_8BIT;
 	devc->adc_channel = ADC_CHANNEL_1;
 	devc->fw_version = 0;
+	devc->led_available = FALSE;
 	devc->is_usb2 = FALSE;
 	devc->samplerates = ch32h417_libusb_logic_samplerates_usb3;
 	devc->num_samplerates = ARRAY_SIZE(ch32h417_libusb_logic_samplerates_usb3);
@@ -777,10 +778,16 @@ SR_PRIV int ch32h417_libusb_get_fw_version(const struct sr_dev_inst *sdi)
 		 * version); a missing hardware version is treated as 0 instead of reading stale data. */
 		hw_version = (len >= 2) ? data[1] : 0;
 		devc->fw_version = ((uint16_t)data[0] << 8) | hw_version;
-		sr_info("Firmware version: %d, Hardware version: %d", data[0], hw_version);
+		/* The board key and the indicator brightness arrived with firmware 2:
+		 * a 0.1 board answers with version 1 and has neither, so a host can
+		 * skip offering them instead of sending commands into the void. */
+		devc->led_available = (data[0] >= 2);
+		sr_info("Firmware version: %d, IAP version: %d%s", data[0], hw_version,
+				devc->led_available ? "" : " (no key or indicator control)");
 	} else {
 		sr_warn("Version response too short: %d", len);
 		devc->fw_version = 0;
+		devc->led_available = FALSE;
 	}
 
 	sr_dbg("Firmware version: 0x%04x", devc->fw_version);
@@ -1061,6 +1068,14 @@ static gpointer data_read_thread(gpointer arg)
 
 		if (devc->trigger_fired) {
 			if (!devc->limit_samples || devc->sent_samples < devc->limit_samples) {
+				/* A capture without a trigger never announces its
+				 * frame, and a frame end with no begin before it
+				 * leaves the stream unbalanced. */
+				if (!devc->frame_open) {
+					std_session_send_df_frame_begin(sdi);
+					devc->frame_open = TRUE;
+				}
+
 				/* Send the incoming transfer to the session bus. */
 				num_samples = cur_sample_count - processed_samples;
 				if (devc->limit_samples && devc->sent_samples + num_samples > devc->limit_samples)
@@ -1078,6 +1093,7 @@ static gpointer data_read_thread(gpointer arg)
 				&pre_trigger_samples);
 			if (trigger_offset > -1) {
 				std_session_send_df_frame_begin(sdi);
+				devc->frame_open = TRUE;
 				devc->sent_samples += pre_trigger_samples;
 				num_samples = cur_sample_count - processed_samples - trigger_offset;
 				if (devc->limit_samples &&
@@ -1105,6 +1121,7 @@ static gpointer data_read_thread(gpointer arg)
 			devc->sent_samples = 0;
 			devc->trigger_fired = FALSE;
 			std_session_send_df_frame_end(sdi);
+			devc->frame_open = FALSE;
 
 			/* There may be another trigger in the remaining data, go back and check for it */
 			if (processed_samples < cur_sample_count) {
@@ -1113,6 +1130,7 @@ static gpointer data_read_thread(gpointer arg)
 					soft_trigger_logic_reset(devc->stl);
 				else {
 					std_session_send_df_frame_begin(sdi);
+					devc->frame_open = TRUE;
 					devc->trigger_fired = TRUE;
 				}
 				if (!final_frame)
@@ -1302,6 +1320,7 @@ SR_PRIV int ch32h417_libusb_acquisition_start(const struct sr_dev_inst *sdi)
 	acquisition_set_aborted(devc, FALSE);
 	devc->link_stop_reason = LINK_STOP_NONE;
 	devc->num_frames = 0;
+	devc->frame_open = FALSE;
 	devc->acq_started = FALSE;
 
 	/* Flush endpoint 0 */

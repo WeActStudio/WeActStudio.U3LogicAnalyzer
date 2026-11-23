@@ -168,6 +168,7 @@ struct dev_context {
 	uint64_t capture_ratio;
 	uint64_t num_frames;
 	uint64_t sent_samples;
+	gboolean frame_open;       /* a frame begin was sent and not yet ended */
 	uint8_t sample_width;      /* 8bit or 16bit */
 	int32_t num_channels;      /* 8 or 16 channels */
 	double cur_threshold;    /* Current threshold value (0.6-1.5V/0.8-2.3V) */
@@ -198,6 +199,7 @@ struct dev_context {
 	gboolean key_stop_enabled; /* A press ends the running capture */
 	uint8_t led_brightness;   /* Indicator level, percent */
 	gboolean key_available;    /* Firmware reports the counter at all */
+	gboolean led_available;    /* Firmware drives the indicator at all */
 
 	gboolean acq_started;     /* Acquisition fully started: the session source and the DF header exist */
 	gboolean stop_sent;       /* Stop command already sent for this acquisition */
