@@ -591,6 +591,34 @@ You can run this application as root later, or copy the rule files from the repo
     </message>
 </context>
 <context>
+    <name>pv::dialogs::AgentPrompts</name>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="143"/>
+        <source>Agent Prompts</source>
+        <translation>Agent 提示词</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="155"/>
+        <source>Copy a prompt and paste it into your AI assistant.</source>
+        <translation>复制下列提示词，粘贴到 AI 助手的对话框即可。</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="179"/>
+        <source>Close</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="204"/>
+        <source>Copy</source>
+        <translation>复制</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="229"/>
+        <source>Copied</source>
+        <translation>已复制</translation>
+    </message>
+</context>
+<context>
     <name>pv::dialogs::Connect</name>
     <message>
         <location filename="../pv/dialogs/connect.cpp" line="58"/>
@@ -1655,6 +1683,16 @@ Please check the device connection and firmware file.</source>
         <translation>设置</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="533"/>
+        <source>User Guide</source>
+        <translation>使用说明</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="884"/>
+        <source>Agent Prompts</source>
+        <translation>Agent 提示词</translation>
+    </message>
+    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="508"/>
         <source>&amp;Open...</source>
         <translation>打开... ( &amp;O )</translation>
@@ -1788,7 +1826,7 @@ Please check the device connection and firmware file.</source>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="538"/>
         <source>Model</source>
-        <translation>模式</translation>
+        <translation>型号</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="543"/>
@@ -1886,14 +1924,14 @@ Please check the device connection and firmware file.</source>
         <location filename="../pv/toolbars/mainbar.cpp" line="3027"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="3046"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="3058"/>
-        <source>&lt;b&gt;Software Version:&lt;/b&gt; %1&lt;br/&gt;</source>
-        <translation>&lt;b&gt;软件版本：&lt;/b&gt; %1&lt;br/&gt;</translation>
+        <source>Software Version</source>
+        <translation>软件版本</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3047"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="3059"/>
-        <source>&lt;b&gt;Firmware Version:&lt;/b&gt; %1&lt;br/&gt;</source>
-        <translation>&lt;b&gt;固件版本：&lt;/b&gt; %1&lt;br/&gt;</translation>
+        <source>Firmware Version</source>
+        <translation>固件版本</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3105"/>
@@ -1969,8 +2007,19 @@ Please check the device connection and firmware file.</source>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3212"/>
-        <source>The PDF file could not be opened. Make sure a PDF reader is installed.</source>
-        <translation>无法打开PDF文件，请确认系统已安装PDF阅读器。</translation>
+        <source>The file could not be opened. Make sure a PDF reader is installed.</source>
+        <translation>无法打开该文件，请确认系统已安装 PDF 阅读器。</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="3212"/>
+        <source>The user guide was not found:
+%1
+
+Reinstall the application to restore it.</source>
+        <translation>找不到使用说明：
+%1
+
+重新安装程序即可恢复该文件。</translation>
     </message>
     <message>
         <location filename="../pv/util.cpp" line="474"/>
@@ -2056,8 +2105,23 @@ Please check the device connection and firmware file.</source>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3060"/>
-        <source>&lt;b&gt;FPGA Version:&lt;/b&gt; %1</source>
-        <translation>&lt;b&gt;FPGA 版本：&lt;/b&gt;%1</translation>
+        <source>FPGA Version</source>
+        <translation>FPGA 版本</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="0"/>
+        <source>Driver</source>
+        <translation>驱动</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="0"/>
+        <source>USB</source>
+        <translation>USB</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="0"/>
+        <source>IAP Version</source>
+        <translation>IAP 版本</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3201"/>

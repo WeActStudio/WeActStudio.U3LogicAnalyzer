@@ -594,6 +594,34 @@ Die Aufnahme wurde gestoppt. Die bis dahin erfassten Daten sind möglicherweise 
     </message>
 </context>
 <context>
+    <name>pv::dialogs::AgentPrompts</name>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="143"/>
+        <source>Agent Prompts</source>
+        <translation>Agent-Eingabeaufforderungen</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="155"/>
+        <source>Copy a prompt and paste it into your AI assistant.</source>
+        <translation>Kopieren Sie eine Eingabeaufforderung und fügen Sie sie in den Dialog Ihres KI-Assistenten ein.</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="179"/>
+        <source>Close</source>
+        <translation>Schließen</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="204"/>
+        <source>Copy</source>
+        <translation>Kopieren</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="229"/>
+        <source>Copied</source>
+        <translation>Kopiert</translation>
+    </message>
+</context>
+<context>
     <name>pv::dialogs::Connect</name>
     <message>
         <location filename="../pv/dialogs/connect.cpp" line="58"/>
@@ -1769,6 +1797,16 @@ Bitte überprüfen Sie die Verbindung und die Firmware Datei.</translation>
         <translation>Einstellungen</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="533"/>
+        <source>User Guide</source>
+        <translation>Benutzerhandbuch</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="884"/>
+        <source>Agent Prompts</source>
+        <translation>Agent-Eingabeaufforderungen</translation>
+    </message>
+    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="543"/>
         <source>Decoder</source>
         <translation>Dekoder</translation>
@@ -1963,19 +2001,34 @@ Bitte überprüfen Sie die Verbindung und die Firmware Datei.</translation>
         <location filename="../pv/toolbars/mainbar.cpp" line="3027"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="3046"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="3058"/>
-        <source>&lt;b&gt;Software Version:&lt;/b&gt; %1&lt;br/&gt;</source>
-        <translation>&lt;b&gt;Softwareversion:&lt;/b&gt; %1&lt;br/&gt;</translation>
+        <source>Software Version</source>
+        <translation>Softwareversion</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3047"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="3059"/>
-        <source>&lt;b&gt;Firmware Version:&lt;/b&gt; %1&lt;br/&gt;</source>
-        <translation>&lt;b&gt;Firmwareversion:&lt;/b&gt; %1&lt;br/&gt;</translation>
+        <source>Firmware Version</source>
+        <translation>Firmwareversion</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3060"/>
-        <source>&lt;b&gt;FPGA Version:&lt;/b&gt; %1</source>
-        <translation>&lt;b&gt;FPGA-Version:&lt;/b&gt; %1</translation>
+        <source>FPGA Version</source>
+        <translation>FPGA-Version</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="0"/>
+        <source>Driver</source>
+        <translation>Treiber</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="0"/>
+        <source>USB</source>
+        <translation>USB</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="0"/>
+        <source>IAP Version</source>
+        <translation>IAP-Version</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3105"/>

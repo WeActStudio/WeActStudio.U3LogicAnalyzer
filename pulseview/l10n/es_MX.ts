@@ -590,6 +590,34 @@ La adquisición se detuvo. Los datos capturados antes de eso pueden estar incomp
     </message>
 </context>
 <context>
+    <name>pv::dialogs::AgentPrompts</name>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="143"/>
+        <source>Agent Prompts</source>
+        <translation>Indicaciones para el agente</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="155"/>
+        <source>Copy a prompt and paste it into your AI assistant.</source>
+        <translation>Copie una indicación y péguela en el cuadro de diálogo de su asistente de IA.</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="179"/>
+        <source>Close</source>
+        <translation>Cerrar</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="204"/>
+        <source>Copy</source>
+        <translation>Copiar</translation>
+    </message>
+    <message>
+        <location filename="../pv/dialogs/agent_prompts.cpp" line="229"/>
+        <source>Copied</source>
+        <translation>Copiado</translation>
+    </message>
+</context>
+<context>
     <name>pv::dialogs::Connect</name>
     <message>
         <location filename="../pv/dialogs/connect.cpp" line="58"/>
@@ -1760,6 +1788,16 @@ Por favor, compruebe la conexión del dispositivo y el archivo de firmware.</tra
         <translation>Configuraciones</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="533"/>
+        <source>User Guide</source>
+        <translation>Guía del usuario</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="884"/>
+        <source>Agent Prompts</source>
+        <translation>Indicaciones para el agente</translation>
+    </message>
+    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="543"/>
         <source>Decoder</source>
         <translation>Decoder</translation>
@@ -1959,19 +1997,34 @@ Por favor, compruebe la conexión del dispositivo y el archivo de firmware.</tra
         <location filename="../pv/toolbars/mainbar.cpp" line="3027"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="3046"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="3058"/>
-        <source>&lt;b&gt;Software Version:&lt;/b&gt; %1&lt;br/&gt;</source>
-        <translation>&lt;b&gt;Versión de software:&lt;/b&gt; %1&lt;br/&gt;</translation>
+        <source>Software Version</source>
+        <translation>Versión de software</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3047"/>
         <location filename="../pv/toolbars/mainbar.cpp" line="3059"/>
-        <source>&lt;b&gt;Firmware Version:&lt;/b&gt; %1&lt;br/&gt;</source>
-        <translation>&lt;b&gt;Versión de firmware:&lt;/b&gt; %1&lt;br/&gt;</translation>
+        <source>Firmware Version</source>
+        <translation>Versión de firmware</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3060"/>
-        <source>&lt;b&gt;FPGA Version:&lt;/b&gt; %1</source>
-        <translation>&lt;b&gt;Versión de FPGA:&lt;/b&gt; %1</translation>
+        <source>FPGA Version</source>
+        <translation>Versión de FPGA</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="0"/>
+        <source>Driver</source>
+        <translation>Controlador</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="0"/>
+        <source>USB</source>
+        <translation>USB</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="0"/>
+        <source>IAP Version</source>
+        <translation>Versión de IAP</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3105"/>
