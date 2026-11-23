@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2012 Joel Holdsworth <joel@airwebreathe.org.uk>
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -138,7 +139,7 @@ MainWindow::MainWindow(QWidget *parent) :
 	icon_green_(":/icons/status-green.svg"),
 	icon_grey_(":/icons/status-grey.svg")
 {
-	WindowTitle = "WeAct Studio " + Application::applicationName() + " " + Application::applicationVersion();
+	WindowTitle = "WeAct Studio " + Application::applicationName() + " " + Application::display_version();
 
 	installEventFilter(this);
     qApp->installEventFilter(this);

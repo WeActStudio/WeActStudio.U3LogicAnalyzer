@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2014 Martin Ling <martin-sigrok@earth.li>
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -100,6 +101,20 @@ Application::Application(int &argc, char* argv[]) :
 				settings.apply_theme();
 		});
 #endif
+}
+
+QString Application::display_version()
+{
+	/*
+	 * The window title carries the release number alone. The commit hash an
+	 * untagged build appends and the "base on sigrok pulseview" note are
+	 * provenance rather than identity: together they make the title wide
+	 * enough that a window which is not maximised cuts it off mid-word.
+	 */
+	QString version = QCoreApplication::applicationVersion();
+	version = version.section(" base on", 0, 0);
+	version = version.section("-git-", 0, 0);
+	return version;
 }
 
 const QStringList Application::get_languages() const

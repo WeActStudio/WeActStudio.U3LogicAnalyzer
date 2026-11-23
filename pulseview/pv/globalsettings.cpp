@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2017 Soeren Apel <soeren@apelpie.net>
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -274,6 +275,7 @@ const QString GlobalSettings::Key_Log_BufferSize = "Log_BufferSize";
 const QString GlobalSettings::Key_Log_NotifyOfStacktrace = "Log_NotifyOfStacktrace";
 const QString GlobalSettings::Key_ThresholdLevel = "ThresholdLevel";
 const QString GlobalSettings::Key_LedBrightness = "LedBrightness";
+const QString GlobalSettings::Key_KeyStartStop = "KeyStartStop";
 vector<GlobalSettingsInterface*> GlobalSettings::callbacks_;
 bool GlobalSettings::tracking_ = false;
 bool GlobalSettings::is_dark_theme_ = false;
@@ -434,6 +436,8 @@ void GlobalSettings::set_defaults_where_needed()
 		setValue(Key_ThresholdLevel, 2.3);
 	if (!contains(Key_LedBrightness))
 		setValue(Key_LedBrightness, 20);
+	if (!contains(Key_KeyStartStop))
+		setValue(Key_KeyStartStop, false);
 
 	// setValue(Key_View_ShowSamplingPoints, false);   //force 
 	// setValue(Key_View_ShowHoverMarker, false);      //force 

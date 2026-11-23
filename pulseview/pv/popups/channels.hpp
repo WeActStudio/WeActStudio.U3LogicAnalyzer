@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2012 Joel Holdsworth <joel@airwebreathe.org.uk>
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -89,6 +90,13 @@ public:
 
 	/** What the key box was left on; applied when the page closes. */
 	bool key_enabled() const { return key_enabled_; }
+
+	/**
+	 * Show a value the page was built before: the settings are put back
+	 * after the page exists, so the controls have to be told again.
+	 */
+	void show_key_enabled(bool enabled);
+	void show_led_brightness(int level);
 
 	QSize sizeHint() const override;
 

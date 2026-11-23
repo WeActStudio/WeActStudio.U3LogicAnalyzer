@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2012-2015 Joel Holdsworth <joel@airwebreathe.org.uk>
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,6 +62,7 @@
 #include <pv/devices/hardwaredevice.hpp>
 #include <pv/devices/inputfile.hpp>
 #include <pv/devices/sessionfile.hpp>
+#include <pv/dialogs/agent_prompts.hpp>
 #include <pv/dialogs/connect.hpp>
 #include <pv/dialogs/inputoutputoptions.hpp>
 #include <pv/dialogs/storeprogress.hpp>
@@ -658,16 +660,18 @@ namespace pv
 			// help button menu
 			menu_help_view_ = new QMenu();
 			action_settings_ = menu_help_view_->addAction(QString());
+			action_use_guide_ = menu_help_view_->addAction(QString());
+			action_agent_prompts_ = menu_help_view_->addAction(QString());
 			action_version_info_ = menu_help_view_->addAction(QString());
 			// QAction *action_feedback = menu_help_view_->addAction(tr("feedback"));
 			action_update_ = menu_help_view_->addAction(QString());
-			// QAction *action_use_guide = menu_help_view_->addAction(tr("User Guide"));
 			action_about_ = menu_help_view_->addAction(QString());
 			connect(action_settings_, SIGNAL(triggered(bool)), this, SIGNAL(settings_triggered()));
+			connect(action_use_guide_, SIGNAL(triggered(bool)), this, SLOT(on_action_use_guide_triggered()));
+			connect(action_agent_prompts_, SIGNAL(triggered(bool)), this, SLOT(on_action_agent_prompts_triggered()));
 			connect(action_version_info_, SIGNAL(triggered(bool)), this, SLOT(on_action_version_info_triggered()));
 			// connect(action_feedback, SIGNAL(triggered(bool)), this, SLOT(on_action_feedback_triggered()));
 			connect(action_update_, SIGNAL(triggered(bool)), this, SLOT(on_action_update_triggered()));
-			// connect(action_use_guide, SIGNAL(triggered(bool)), this, SLOT(on_action_use_guide_triggered()));
 			connect(action_about_, SIGNAL(triggered(bool)), this, SLOT(on_action_about_triggered()));
 			// Open button
 			vector<QAction *> open_actions;
@@ -877,6 +881,8 @@ namespace pv
 		action_single_->setText(tr("Single"));
 		action_repeat_->setText(tr("Repeat"));
 		action_settings_->setText(tr("Settings"));
+		action_use_guide_->setText(tr("User Guide"));
+		action_agent_prompts_->setText(tr("Agent Prompts"));
 		action_version_info_->setText(tr("Version Info"));
 		action_update_->setText(tr("FW Update"));
 		action_about_->setText(tr("About"));
@@ -1117,6 +1123,7 @@ namespace pv
 			 * away, so the level it was left on has to be pushed once more -
 			 * this is the first moment it can be. */
 			push_led_brightness();
+			push_key_setting();
 		}
 
 		void MainBar::set_device_upgrading(bool upgrading, QWidget *page)
@@ -1307,6 +1314,7 @@ namespace pv
 			 * forgets the level across a power cycle, so it is pushed again
 			 * each time rather than only when the device instance changes. */
 			push_led_brightness();
+			push_key_setting();
 		}
 
 		void MainBar::refresh_device_selector()
@@ -2254,9 +2262,11 @@ namespace pv
 				 * what a page nobody has set up yet starts from. */
 				settings.setValue("ThresholdLevel", thresholdValue_ch32h417_);
 				settings.setValue("LedBrightness", led_brightness_);
+				settings.setValue("KeyStartStop", key_enabled_);
 				GlobalSettings gs;
 				gs.setValue(GlobalSettings::Key_ThresholdLevel, thresholdValue_ch32h417_);
 				gs.setValue(GlobalSettings::Key_LedBrightness, led_brightness_);
+				gs.setValue(GlobalSettings::Key_KeyStartStop, key_enabled_);
 			}
 			else if (is_wch)
 			{
@@ -2702,6 +2712,16 @@ namespace pv
 				else
 					led_brightness_ = 20;
 
+				/* Same ladder for the key switch: this page, then the last
+				 * one used anywhere, then off. */
+				const QString key_key = setting_group() + "/KeyStartStop";
+				if (settings.contains(key_key))
+					key_enabled_ = settings.value(key_key).toBool();
+				else if (gs.contains(GlobalSettings::Key_KeyStartStop))
+					key_enabled_ = gs.value(GlobalSettings::Key_KeyStartStop).toBool();
+				else
+					key_enabled_ = false;
+
 				// Disable analog channels A0/A1 in CH32H417 logic analyzer mode
 				for (const auto &sig : session_.signalbases())
 				{
@@ -2711,6 +2731,11 @@ namespace pv
 					}
 				}
 				channels_->set_default_bank_threshold(threshold_ch32h417_default_, threshold_bank_2_default_);
+
+				/* The page was built before any of this was read, so its
+				 * two option controls still show the defaults. */
+				channels_->show_key_enabled(key_enabled_);
+				channels_->show_led_brightness(led_brightness_);
 			}
 			else if (is_wch)
 			{
@@ -3662,6 +3687,7 @@ namespace pv
 			/* The device has nowhere to keep this, so it is pushed again on
 			 * every bind, from the value restored above. */
 			push_led_brightness();
+			push_key_setting();
 		}
 
 		void MainBar::refresh_device_widgets()
@@ -3675,6 +3701,7 @@ namespace pv
 			/* The same board coming back after being pulled: nothing changed
 			 * about the page, but the firmware has forgotten the level. */
 			push_led_brightness();
+			push_key_setting();
 		}
 
 		MainBar *MainBar::hot_plug_owner()
@@ -3814,20 +3841,43 @@ namespace pv
 
 		void MainBar::apply_key_setting(bool enabled)
 		{
+			/* Written out at once rather than through the delayed save, for
+			 * the same reason the brightness is: closing the page is one
+			 * decision, and a delayed write the window closes on never
+			 * happens. */
+			key_enabled_ = enabled;
+			push_key_setting();
+			write_setting_default();
+		}
+
+		bool MainBar::key_enabled() const
+		{
+			return key_enabled_;
+		}
+
+		void MainBar::push_key_setting()
+		{
 			const shared_ptr<devices::Device> device = session_.device();
 
-			if (device && device->device()) {
-				try {
-					device->device()->config_set(
-						sigrok::ConfigKey::KEY_START_STOP,
-						Glib::Variant<bool>::create(enabled));
-				} catch (sigrok::Error &error) {
-					qDebug() << "Failed to set key start/stop:" << error.what();
-					return;
-				}
+			if (!device || !device->device()) {
+				set_key_listening(false);
+				return;
 			}
 
-			set_key_listening(enabled);
+			try {
+				device->device()->config_set(
+					sigrok::ConfigKey::KEY_START_STOP,
+					Glib::Variant<bool>::create(key_enabled_));
+			} catch (const sigrok::Error &) {
+				/* Firmware without the key refuses the setting, which is the
+				 * ordinary answer on a 0.1 board - the page has already asked,
+				 * so it is not worth a log line. Nor is there anything to
+				 * poll on such a board. */
+				set_key_listening(false);
+				return;
+			}
+
+			set_key_listening(key_enabled_);
 		}
 
 		void MainBar::set_led_brightness(int level)
@@ -4208,8 +4258,9 @@ namespace pv
 
 			delete dialog;
 
-			/* What the key box was left on takes effect now that the page is
-			 * closed - a press while it was open was not a request. */
+			/* The panel was handed back to the bar when the dialog finished,
+			 * so it is still here and still holds what the key box was left
+			 * on. The value reaches the device and the settings from there. */
 			if (channels_)
 				apply_key_setting(channels_->key_enabled());
 		}
@@ -4220,8 +4271,9 @@ namespace pv
 			auto version_info = a->get_version_info();
 			QString softwareVersion = version_info[0].second;
 			QString firmwareVersion;
+			QString iapVersion;
 			QString fpgaVersion;
-			QString text;
+			QString usbSpeed;
 			QString vendorName = get_vendorName();
 
 			/*
@@ -4237,6 +4289,29 @@ namespace pv
 					page_hw->hardware_device()->driver()->name()) :
 				QString();
 
+			/* The link the board is on decides which sample rates it can offer,
+			 * so it belongs next to the firmware version rather than two panels
+			 * away. Only the WCH drivers answer the key. */
+			if (page_hw && !driver.isEmpty())
+			{
+				const shared_ptr<sigrok::Device> sr_dev = page_device->device();
+				if (sr_dev && sr_dev->config_check(ConfigKey::USB_VERSION, Capability::GET))
+				{
+					try
+					{
+						auto gvar = sr_dev->config_get(ConfigKey::USB_VERSION);
+						const uint64_t version =
+							Glib::VariantBase::cast_dynamic<Glib::Variant<guint64>>(gvar).get();
+						usbSpeed = (version == 2) ? QStringLiteral("USB 2.0") :
+							QStringLiteral("USB 3.0");
+					}
+					catch (Error &error)
+					{
+						qDebug() << "Failed to read the USB version:" << error.what();
+					}
+				}
+			}
+
 			// For the demo device or no device, only the software version is shown
 			if (driver == QStringLiteral("fx2lafw"))
 			{
@@ -4247,14 +4322,12 @@ namespace pv
 					widgets::DeviceToolButton::device_identity(
 						page_device).toStdString());
 
-				text = tr("<b>Software Version:</b> %1<br/>").arg(softwareVersion) +
-					   tr("<b>Firmware Version:</b> %1<br/>").arg(
-						   fw.empty() ? QStringLiteral("null") :
-							   QString::fromStdString(fw));
+				firmwareVersion = fw.empty() ? QStringLiteral("null") :
+					QString::fromStdString(fw);
 			}
 			else if (vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)] && vendorName != DeviceModelNames[static_cast<int>(WchDeviceType::CH569)])
 			{
-				text = tr("<b>Software Version:</b> %1<br/>").arg(softwareVersion);
+				/* Nothing beyond the software version. */
 			}
 			else
 			{
@@ -4263,18 +4336,18 @@ namespace pv
 				if (hardware_version_ == 0)
 				{
 					firmwareVersion = "null";
-					fpgaVersion = "null";
+					if (vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
+						iapVersion = "null";
+					else
+						fpgaVersion = "null";
 				}
 				else if (vendorName == DeviceModelNames[static_cast<int>(WchDeviceType::CH32H417)])
 				{
-					// CH32H417: fw_version is (firmware version << 8) | hardware version
-					// Displayed as <hardware version>.<firmware version> (e.g. 1.1)
+					// CH32H417: the answer is (firmware version << 8) | IAP version
 					uint8_t fw = (hardware_version_ >> 8) & 0xff; // firmware version
-					uint8_t hw = hardware_version_ & 0xff;		  // hardware version
-					firmwareVersion = QString::number(hw) + "." + QString::number(fw);
-
-					text = tr("<b>Software Version:</b> %1<br/>").arg(softwareVersion) + \
-						   tr("<b>Firmware Version:</b> %1<br/>").arg(firmwareVersion);
+					uint8_t hw = hardware_version_ & 0xff;		  // IAP version
+					firmwareVersion = QString::number(fw);
+					iapVersion = QString::number(hw);
 				}
 				else
 				{
@@ -4285,14 +4358,35 @@ namespace pv
 					fpgaVersion = QString::number((hardware_version_ >> 0) & 0xff);
 					fpgaVersion += ".";
 					fpgaVersion += QString::number((hardware_version_ >> 8) & 0xff);
-					text = tr("<b>Software Version:</b> %1<br/>").arg(softwareVersion) + \
-						   tr("<b>Firmware Version:</b> %1<br/>").arg(firmwareVersion) + \
-						   tr("<b>FPGA Version:</b> %1").arg(fpgaVersion);	   
 				}
 			}
+
+			/* Two columns rather than a run of bold labels: the values start at
+			 * the same place whatever the board reports, and a board that has
+			 * three of them no longer reads as one paragraph. */
+			QString text = "<table cellspacing=\"0\" cellpadding=\"2\">";
+			const auto add_row = [&text](const QString &label, const QString &value) {
+				text += QString("<tr><td style=\"color:#8a8a8e; padding-right:16px;\">%1</td>"
+					"<td><b>%2</b></td></tr>").arg(label, value);
+			};
+			add_row(tr("Software Version"), softwareVersion);
+			if (!vendorName.isEmpty())
+				add_row(tr("Model"), vendorName);
+			if (!driver.isEmpty())
+				add_row(tr("Driver"), driver);
+			if (!usbSpeed.isEmpty())
+				add_row(tr("USB"), usbSpeed);
+			if (!firmwareVersion.isEmpty())
+				add_row(tr("Firmware Version"), firmwareVersion);
+			if (!iapVersion.isEmpty())
+				add_row(tr("IAP Version"), iapVersion);
+			if (!fpgaVersion.isEmpty())
+				add_row(tr("FPGA Version"), fpgaVersion);
+			text += "</table>";
+
 			pv::util::show_message(this, tr("Version Info"), text,
-				pv::util::message_box_icon(QMessageBox::Information),
-				400, true);
+				QPixmap(":/icons/pulseview.png").scaled(64, 64,
+					Qt::KeepAspectRatio, Qt::SmoothTransformation), 460, true);
 		}
 
 		void MainBar::on_action_feedback_triggered()
@@ -4466,64 +4560,85 @@ namespace pv
 
 		void MainBar::on_action_use_guide_triggered()
 		{
-			// Directory that holds the executable
-			QString appDir = QCoreApplication::applicationDirPath();
+			const QString app_dir = QCoreApplication::applicationDirPath();
 
-			QString pdfPath = appDir + "/doc/U3LogicAnalyzer逻辑分析仪使用手册.pdf";
+			GlobalSettings settings;
+			const bool chinese = settings.value(GlobalSettings::Key_General_Language).toString() == "zh_CN";
+			const QString name = chinese ? QStringLiteral("U3LogicAnalyzer-UsageGuide.zh_CN.pdf")
+										 : QStringLiteral("U3LogicAnalyzer-UsageGuide.pdf");
 
-			pdfPath = QDir::toNativeSeparators(pdfPath);
+			/* Where each package puts it: doc/ next to the binary on Windows and
+			 * on Linux, share/doc inside the AppImage, Resources in the macOS
+			 * bundle. */
+			const QStringList candidates = {
+				app_dir + "/doc/" + name,
+				app_dir + "/../share/doc/u3logicanalyzer/" + name,
+				app_dir + "/../Resources/doc/" + name,
+			};
 
-			QFileInfo fileInfo(pdfPath);
-			if (!fileInfo.exists())
-			{
+			QString pdf_path;
+			for (const QString &candidate : candidates) {
+				if (QFileInfo::exists(candidate)) {
+					pdf_path = QDir::toNativeSeparators(candidate);
+					break;
+				}
+			}
+
+			if (pdf_path.isEmpty()) {
 				pv::util::show_message(this, tr("Information"),
-					tr("PDF file not found:\n%1\n\nMake sure the doc directory and the user manual are present.").arg(pdfPath),
+					tr("The user guide was not found:\n%1\n\nReinstall the application to restore it.")
+						.arg(QDir::toNativeSeparators(candidates.first())),
 					pv::util::message_box_icon(QMessageBox::Information), 500);
 				return;
 			}
 
-			QUrl url = QUrl::fromLocalFile(pdfPath);
-
-			bool opened = QDesktopServices::openUrl(url);
-			if (!opened)
-			{
+			if (!QDesktopServices::openUrl(QUrl::fromLocalFile(pdf_path))) {
 				pv::util::show_message(this, tr("Open Failed"),
-					tr("The PDF file could not be opened. Make sure a PDF reader is installed."),
+					tr("The file could not be opened. Make sure a PDF reader is installed."),
 					pv::util::message_box_icon(QMessageBox::Warning));
 			}
 		}
 
-		void MainBar::on_action_about_triggered()
+		void MainBar::on_action_agent_prompts_triggered()
+		{
+			dialogs::AgentPrompts dialog(this);
+			dialog.exec();
+		}
+
+		QString MainBar::about_header_html()
 		{
 			Application* a = qobject_cast<Application*>(QApplication::instance());
 			auto version_info = a->get_version_info();
-			QString appName = version_info[0].first;
-			// The window title keeps its "base on sigrok pulseview" suffix; the
-			// tagline says the same thing, in the reader's language.
-			QString appVersion = version_info[0].second.section(" base on", 0, 0);
-			QString site = QString("www.%1").arg(QApplication::organizationDomain());
+			const QString appName = version_info[0].first;
+			/* The window title carries the release number alone; this is
+			 * where the upstream it is built on is spelled out. */
+			const QString appVersion = version_info[0].second.section(" base on", 0, 0);
+			QString site = QString("www.%1").arg(QCoreApplication::organizationDomain());
 			QString site_link = QString("<a href=\"https://%1\">%1</a>").arg(site);
 			QString repo_link =
 				QString("<a href=\"https://github.com/WeActStudio/"
 					"WeActStudio.U3LogicAnalyzer\">%1</a>")
-					.arg(tr("Source code"));
+					.arg(MainBar::tr("Source code"));
 			QString credit_link =
 				QString("<a href=\"https://oshwhub.com/q2h2\">%1</a>")
-					.arg(tr("Modified from: Q2H2"));
+					.arg(MainBar::tr("Modified from: Q2H2"));
 
-			QString text = QString(
-						   "<b style=\"font-size:15pt\">%1</b><br/>"
-						   "<span style=\"color:#8a8a8e\">%2</span><br/><br/>"
-						   "%3<br/><br/>"
-						   "<span style=\"color:#8a8a8e\">Copyright &copy; 2026 "
-						   "WeAct Studio &nbsp;&bull;&nbsp; GPL-3.0-or-later</span>"
-						   "<br/><br/>"
-						   "%4 &nbsp;&bull;&nbsp; %5 &nbsp;&bull;&nbsp; %6")
-						   .arg(appName, appVersion,
-						        tr("Open-source logic analyzer built on sigrok and PulseView"),
-						        site_link, repo_link, credit_link);
+			return QString(
+					   "<b style=\"font-size:15pt\">%1</b><br/>"
+					   "<span style=\"color:#8a8a8e\">%2</span><br/><br/>"
+					   "%3<br/><br/>"
+					   "<span style=\"color:#8a8a8e\">Copyright &copy; 2026 "
+					   "WeAct Studio &nbsp;&bull;&nbsp; GPL-3.0-or-later</span>"
+					   "<br/><br/>"
+					   "%4 &nbsp;&bull;&nbsp; %5 &nbsp;&bull;&nbsp; %6")
+					   .arg(appName, appVersion,
+							MainBar::tr("Open-source logic analyzer built on sigrok and PulseView"),
+							site_link, repo_link, credit_link);
+		}
 
-			pv::util::show_message(this, tr("About"), text,
+		void MainBar::on_action_about_triggered()
+		{
+			pv::util::show_message(this, tr("About"), about_header_html(),
 				QPixmap(":/icons/pulseview.png"),
 				460, true, true);
 		}

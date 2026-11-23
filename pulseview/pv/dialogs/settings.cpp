@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2017 Soeren Apel <soeren@apelpie.net>
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -54,6 +55,7 @@
 #include "pv/devicemanager.hpp"
 #include "pv/globalsettings.hpp"
 #include "pv/logging.hpp"
+#include "pv/toolbars/mainbar.hpp"
 #include "pv/widgets/colorbutton.hpp"
 
 #include <libsigrokcxx/libsigrokcxx.hpp>
@@ -532,17 +534,16 @@ QWidget *Settings::get_about_page(QWidget *parent) const
 {
 	Application* a = qobject_cast<Application*>(QApplication::instance());
 
-	QLabel *icon = new QLabel();
-	icon->setPixmap(QPixmap(QString::fromUtf8(":/icons/pulseview.svg")));
+	/* The block the About dialog shows, byte for byte: one description of
+	 * the build, in one place, so the two can never disagree. */
+	QLabel *header = new QLabel(pv::toolbars::MainBar::about_header_html());
+	header->setWordWrap(true);
+	header->setOpenExternalLinks(true);
+	header->setTextInteractionFlags(Qt::TextBrowserInteraction);
 
-	// Setup the license field with the project homepage link
-	QLabel *gpl_home_info = new QLabel();
-	// The "www." belongs to what is shown, not to the organisation domain:
-	// that one also decides where QSettings lives and must stay "WeActStudio.com".
-	gpl_home_info->setText(tr("%1<br /><a href=\"https://%2\">%2</a>").arg(
-		tr("GNU GPL, version 3 or later"),
-		QString("www.%1").arg(QApplication::organizationDomain())));
-	gpl_home_info->setOpenExternalLinks(true);
+	QLabel *icon = new QLabel();
+	icon->setPixmap(QPixmap(QString::fromUtf8(":/icons/pulseview.png"))
+		.scaled(48, 48, Qt::KeepAspectRatio, Qt::SmoothTransformation));
 
 	QString s;
 
@@ -627,7 +628,7 @@ QWidget *Settings::get_about_page(QWidget *parent) const
 	QHBoxLayout *h_layout = new QHBoxLayout();
 	h_layout->setAlignment(Qt::AlignLeft);
 	h_layout->addWidget(icon);
-	h_layout->addWidget(gpl_home_info);
+	h_layout->addWidget(header, 1);
 
 	QVBoxLayout *layout = new QVBoxLayout();
 	layout->addLayout(h_layout);

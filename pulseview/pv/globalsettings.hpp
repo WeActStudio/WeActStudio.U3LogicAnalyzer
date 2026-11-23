@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2017 Soeren Apel <soeren@apelpie.net>
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -108,6 +109,7 @@ public:
 	
 	static const QString Key_ThresholdLevel;
 	static const QString Key_LedBrightness;
+	static const QString Key_KeyStartStop;
 
 	enum ConvThrDispMode {
 		ConvThrDispMode_None = 0,

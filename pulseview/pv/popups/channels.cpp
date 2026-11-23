@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2012 Joel Holdsworth <joel@airwebreathe.org.uk>
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +24,7 @@
 
 #include <QApplication>
 #include <QCheckBox>
+#include <QSignalBlocker>
 #include <QFontMetrics>
 #include <QFormLayout>
 #include <QGridLayout>
@@ -392,6 +394,32 @@ void Channels::key_start_stop_toggled(bool enabled)
 	key_enabled_ = enabled;
 }
 
+void Channels::show_key_enabled(bool enabled)
+{
+	key_enabled_ = enabled;
+
+	if (!key_checkbox_)
+		return;
+
+	/* Blocked, because this is the stored value coming back rather than a
+	 * press: the slot would take it for one. */
+	QSignalBlocker blocker(key_checkbox_);
+	key_checkbox_->setChecked(enabled);
+}
+
+void Channels::show_led_brightness(int level)
+{
+	if (!led_brightness_selector_)
+		return;
+
+	const int index = led_brightness_selector_->findData(level);
+	if (index < 0)
+		return;
+
+	QSignalBlocker blocker(led_brightness_selector_);
+	led_brightness_selector_->setCurrentIndex(index);
+}
+
 void Channels::led_brightness_changed(int index)
 {
 	const int level = led_brightness_selector_->itemData(index).toInt();
@@ -640,17 +668,21 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 		 */
 		if (is_weact_logic_v2_) {
 			bool supported = false;
-			bool enabled = false;
 
+			/* Asking is how the driver says whether the firmware has the key
+			 * at all. What it returns is the state this board was last told,
+			 * not the one the user chose, so the box shows the bar's copy -
+			 * the same split the brightness uses. */
 			try {
-				enabled = Glib::VariantBase::cast_dynamic<Glib::Variant<bool>>(
-					device->config_get(sigrok::ConfigKey::KEY_START_STOP)).get();
+				device->config_get(sigrok::ConfigKey::KEY_START_STOP);
 				supported = true;
 			} catch (sigrok::Error &error) {
 				qDebug() << "This firmware has no key start/stop:" << error.what();
 			}
 
 			if (supported) {
+				const bool enabled = session_.main_bar() ?
+					session_.main_bar()->key_enabled() : false;
 				key_checkbox_ = new QCheckBox(
 					tr("Use board key for capture"));
 				key_checkbox_->setChecked(enabled);
@@ -662,41 +694,60 @@ void Channels::init_threshold_selectors(QFormLayout* layout)
 					this, &Channels::key_start_stop_toggled);
 			}
 
-			/* Indicator level in five steps. Remembered per board and pushed
+			/*
+			 * Indicator level in five steps. Remembered per board and pushed
 			 * again every time one is bound, so the choice follows the board
-			 * rather than the page. */
-			led_brightness_selector_ = new QComboBox();
-			led_brightness_selector_->setMinimumWidth(100);
-			led_brightness_selector_->addItem(tr("Dim"), 10);
-			led_brightness_selector_->addItem(tr("Default"), 20);
-			led_brightness_selector_->addItem(tr("Bright"), 40);
-			led_brightness_selector_->addItem(tr("Brighter"), 70);
-			led_brightness_selector_->addItem(tr("Maximum"), 100);
+			 * rather than the page. Boards of the 0.1 generation have no
+			 * controllable indicator and their firmware refuses the setting,
+			 * which is how the row knows to stay out.
+			 */
+			bool led_supported = false;
+			try {
+				device->config_get(sigrok::ConfigKey::LED_BRIGHTNESS);
+				led_supported = true;
+			} catch (sigrok::Error &error) {
+				qDebug() << "This firmware has no indicator brightness:" << error.what();
+			}
 
-			/* Shown from the bar's copy, the way the input level is.  The
-			 * device only ever holds what was last pushed to it, and that
-			 * happens when a board is bound - reading it back would show the
-			 * previous board's level in the gap before that. */
-			const int level = session_.main_bar() ?
-				session_.main_bar()->led_brightness() : 20;
+			if (led_supported) {
+				led_brightness_selector_ = new QComboBox();
+				led_brightness_selector_->setMinimumWidth(100);
+				led_brightness_selector_->addItem(tr("Dim"), 10);
+				led_brightness_selector_->addItem(tr("Default"), 20);
+				led_brightness_selector_->addItem(tr("Bright"), 40);
+				led_brightness_selector_->addItem(tr("Brighter"), 70);
+				led_brightness_selector_->addItem(tr("Maximum"), 100);
 
-			const int index = led_brightness_selector_->findData(level);
-			led_brightness_selector_->setCurrentIndex(index >= 0 ? index : 1);
+				/* Shown from the bar's copy, the way the input level is.  The
+				 * device only ever holds what was last pushed to it, and that
+				 * happens when a board is bound - reading it back would show the
+				 * previous board's level in the gap before that. */
+				const int level = session_.main_bar() ?
+					session_.main_bar()->led_brightness() : 20;
 
-			connect(led_brightness_selector_,
-				QOverload<int>::of(&QComboBox::currentIndexChanged),
-				this, &Channels::led_brightness_changed);
+				const int index = led_brightness_selector_->findData(level);
+				led_brightness_selector_->setCurrentIndex(index >= 0 ? index : 1);
 
-			/* The switch and how bright it makes the indicator: one row. */
-			QHBoxLayout* key_row = new QHBoxLayout();
-			key_row->setContentsMargins(0, 0, 0, 0);
-			if (key_checkbox_)
-				key_row->addWidget(key_checkbox_);
-			led_brightness_label_ = new QLabel(tr("Indicator brightness"));
-			key_row->addWidget(led_brightness_label_);
-			key_row->addWidget(led_brightness_selector_);
-			key_row->addStretch();
-			layout->addRow(key_row);
+				connect(led_brightness_selector_,
+					QOverload<int>::of(&QComboBox::currentIndexChanged),
+					this, &Channels::led_brightness_changed);
+			}
+
+			/* The switch and how bright it makes the indicator: one row, and
+			 * only for a board that has either of them. */
+			if (key_checkbox_ || led_supported) {
+				QHBoxLayout* key_row = new QHBoxLayout();
+				key_row->setContentsMargins(0, 0, 0, 0);
+				if (key_checkbox_)
+					key_row->addWidget(key_checkbox_);
+				if (led_supported) {
+					led_brightness_label_ = new QLabel(tr("Indicator brightness"));
+					key_row->addWidget(led_brightness_label_);
+					key_row->addWidget(led_brightness_selector_);
+				}
+				key_row->addStretch();
+				layout->addRow(key_row);
+			}
 		}
 	}
 }

@@ -44,6 +44,9 @@ class Application : public QApplication, public pv::GlobalSettingsInterface
 public:
 	Application(int &argc, char* argv[]);
 
+	/* The release number on its own, for the window title. */
+	static QString display_version();
+
 	const QStringList get_languages() const;
 	const QString get_language_editors(const QString& language) const;
 	void switch_language(const QString& language);

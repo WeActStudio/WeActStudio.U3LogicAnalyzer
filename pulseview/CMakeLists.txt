@@ -380,6 +380,7 @@ set(pulseview_SOURCES
 	pv/devices/hardwaredevice.cpp
 	pv/devices/inputfile.cpp
 	pv/devices/sessionfile.cpp
+	pv/dialogs/agent_prompts.cpp
 	pv/dialogs/connect.cpp
 	pv/dialogs/decoder_channel_dialog.cpp
 	pv/dialogs/iapdialog.cpp
@@ -453,6 +454,7 @@ set(pulseview_HEADERS
 	pv/data/logicsegment.hpp
 	pv/data/mathsignal.hpp
 	pv/data/signalbase.hpp
+	pv/dialogs/agent_prompts.hpp
 	pv/dialogs/connect.hpp
 	pv/dialogs/decoder_channel_dialog.hpp
 	pv/dialogs/iapdialog.hpp

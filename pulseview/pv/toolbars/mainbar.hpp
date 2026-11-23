@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2012 Joel Holdsworth <joel@airwebreathe.org.uk>
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -225,6 +226,13 @@ private:
 	bool push_sample_rate(const shared_ptr<sigrok::Device> &sr_dev);
 
 public:
+	/**
+	 * The product block shared by the About dialog and the About page of the
+	 * settings: name, version, what this is, where it comes from, and the
+	 * licence. One copy, so the two can never drift apart.
+	 */
+	static QString about_header_html();
+
 	void set_device_selector_visible(bool visible);
 
 	/**
@@ -260,8 +268,18 @@ public:
 	 * nowhere to keep it across a power cycle.
 	 */
 	void push_led_brightness();
-	/** Apply the key switch the options page was left on. */
+	/**
+	 * Apply the key switch the options page was left on.
+	 *
+	 * Applied now and remembered per board, the way the brightness is: the
+	 * device keeps it only until it is unplugged, so it is written out here
+	 * and pushed again whenever a board is bound.
+	 */
 	void apply_key_setting(bool enabled);
+	/** The state this page keeps, whether or not a board is bound. */
+	bool key_enabled() const;
+	/** Push the remembered state to the board, if its firmware has the key. */
+	void push_key_setting();
 
 	/**
 	 * Tell this bar whether its page is the one in front.
@@ -371,6 +389,7 @@ private Q_SLOTS:
     void on_action_feedback_triggered();
     void on_action_update_triggered();
 	void on_action_use_guide_triggered();
+	void on_action_agent_prompts_triggered();
     void on_action_about_triggered();
 
 	void on_actionNewView_triggered(QAction* action = nullptr);
@@ -477,6 +496,8 @@ private:
 	QAction *action_single_ = nullptr;
 	QAction *action_repeat_ = nullptr;
 	QAction *action_settings_ = nullptr;
+	QAction *action_use_guide_ = nullptr;
+	QAction *action_agent_prompts_ = nullptr;
 	QAction *action_version_info_ = nullptr;
 	QAction *action_update_ = nullptr;
 	QAction *action_about_ = nullptr;
@@ -565,6 +586,8 @@ private:
 	bool page_active_ = true;
 	int key_poll_failures_ = 0;
 	int led_brightness_ = 20;
+	/* What the key switch was last left on, whether or not a board is bound. */
+	bool key_enabled_ = false;
 	static const int KeyPollIntervalMs = 150;
 	void poll_board_key();
 	void update_key_poll_timer();
