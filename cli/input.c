@@ -1,0 +1,244 @@
+/*
+ * This file is part of u3logicanalyzer-cli, a fork of the sigrok-cli project.
+ *
+ * Copyright (C) 2013 Bert Vermeulen <bert@biot.com>
+ * Copyright (C) 2026 WeAct Studio
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include <config.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+#include <glib.h>
+#include "u3logicanalyzer-cli.h"
+
+#define CHUNK_SIZE (4 * 1024 * 1024)
+
+static void load_input_file_module(struct df_arg_desc *df_arg)
+{
+	struct sr_session *session;
+	const struct sr_input *in;
+	const struct sr_input_module *imod;
+	const struct sr_option **options;
+	struct sr_dev_inst *sdi;
+	GHashTable *mod_args, *mod_opts;
+	GString *buf;
+	gboolean got_sdi;
+	int fd;
+	ssize_t len;
+	char *mod_id;
+	gboolean is_stdin;
+
+	if (!sr_input_list())
+		g_critical("No supported input formats available.");
+
+	mod_id = NULL;
+	mod_args = NULL;
+	if (opt_input_format) {
+		mod_args = parse_generic_arg(opt_input_format, TRUE, NULL);
+		mod_id = g_hash_table_lookup(mod_args, "sigrok_key");
+	}
+
+	is_stdin = strcmp(opt_input_file, "-") == 0;
+	fd = 0;
+	buf = g_string_sized_new(CHUNK_SIZE);
+	if (mod_id) {
+		/* User specified an input module to use. */
+		if (!(imod = sr_input_find(mod_id)))
+			g_critical("Error: unknown input module '%s'.", mod_id);
+		g_hash_table_remove(mod_args, "sigrok_key");
+		if ((options = sr_input_options_get(imod))) {
+			mod_opts = generic_arg_to_opt(options, mod_args);
+			(void)warn_unknown_keys(options, mod_args, NULL);
+			sr_output_options_free(options);
+		} else {
+			mod_opts = NULL;
+		}
+		if (!(in = sr_input_new(imod, mod_opts)))
+			g_critical("Error: failed to initialize input module.");
+		if (mod_opts)
+			g_hash_table_destroy(mod_opts);
+		if (mod_args)
+			g_hash_table_destroy(mod_args);
+		if (!is_stdin && (fd = open(opt_input_file, O_RDONLY)) < 0)
+			g_critical("Failed to load %s: %s.", opt_input_file,
+					g_strerror(errno));
+	} else {
+		if (!is_stdin) {
+			/*
+			 * An actual filename: let the input modules try to
+			 * identify the file.
+			 */
+			if (sr_input_scan_file(opt_input_file, &in) == SR_OK) {
+				/* That worked, reopen the file for reading. */
+				fd = open(opt_input_file, O_RDONLY);
+			}
+		} else {
+			/*
+			 * Taking input from a pipe: let the input modules try
+			 * to identify the stream content.
+			 */
+			if (is_stdin) {
+				/* stdin */
+				fd = 0;
+			} else {
+				fd = open(opt_input_file, O_RDONLY);
+				if (fd == -1)
+					g_critical("Failed to load %s: %s.", opt_input_file,
+							g_strerror(errno));
+			}
+			if ((len = read(fd, buf->str, CHUNK_SIZE)) < 1)
+				g_critical("Failed to read %s: %s.", opt_input_file,
+						g_strerror(errno));
+			buf->len = len;
+			sr_input_scan_buffer(buf, &in);
+		}
+		if (!in)
+			g_critical("Error: no input module found for this file.");
+	}
+	sr_session_new(sr_ctx, &session);
+	df_arg->session = session;
+	sr_session_datafeed_callback_add(session, datafeed_in, df_arg);
+
+	got_sdi = FALSE;
+	while (TRUE) {
+		g_string_truncate(buf, 0);
+		len = read(fd, buf->str, CHUNK_SIZE);
+		if (len < 0)
+			g_critical("Read failed: %s", g_strerror(errno));
+		if (len == 0)
+			/* End of file or stream. */
+			break;
+		buf->len = len;
+		if (sr_input_send(in, buf) != SR_OK)
+			break;
+
+		sdi = sr_input_dev_inst_get(in);
+		if (!got_sdi && sdi) {
+			/* First time we got a valid sdi. */
+			if (select_channels(sdi) != SR_OK)
+				return;
+			if (sr_session_dev_add(session, sdi) != SR_OK) {
+				g_critical("Failed to use device.");
+				sr_session_destroy(session);
+				return;
+			}
+			got_sdi = TRUE;
+		}
+	}
+	sr_input_end(in);
+
+	/*
+	 * A module that recognised nothing still ends without an error, and
+	 * the run looks as if it had read an empty file. Saying so is what
+	 * tells a wrong -I apart from a file that really holds no samples.
+	 */
+	if (!got_sdi) {
+		sr_input_free(in);
+		g_string_free(buf, TRUE);
+		g_critical("No data read from '%s' using %s.", opt_input_file,
+				opt_input_format ? opt_input_format
+					: "the detected format");
+		return;
+	}
+
+	sr_input_free(in);
+	g_string_free(buf, TRUE);
+
+	df_arg->session = NULL;
+	sr_session_destroy(session);
+
+}
+
+void load_input_file(gboolean do_props)
+{
+	struct df_arg_desc df_arg;
+	struct sr_session *session;
+	struct sr_dev_inst *sdi;
+	GSList *devices;
+	GMainLoop *main_loop;
+	int ret;
+
+	memset(&df_arg, 0, sizeof(df_arg));
+	df_arg.do_props = do_props;
+
+	/*
+	 * A transform module runs on the datafeed of a capture. The paths
+	 * below hand a file straight to an output module, so the transform
+	 * would never be reached; saying that beats returning the file
+	 * unchanged as if it had been applied.
+	 */
+	if (opt_transform_module) {
+		g_critical("Transform modules apply to a capture, "
+				"not to an input file.");
+		return;
+	}
+
+	if (!strcmp(opt_input_file, "-")) {
+		/* Input from stdin is never a session file. */
+		load_input_file_module(&df_arg);
+	} else if (opt_input_format) {
+		/*
+		 * A named format decides how the file is read. Trying the
+		 * session loader first would ignore it whenever the file
+		 * happens to be a session file, and a module that does not
+		 * exist would go unnoticed instead of being reported.
+		 */
+		load_input_file_module(&df_arg);
+	} else {
+		if ((ret = sr_session_load(sr_ctx, opt_input_file,
+				&session)) == SR_OK) {
+			/* sigrok session file */
+			ret = sr_session_dev_list(session, &devices);
+			if (ret != SR_OK || !devices || !devices->data) {
+				g_critical("Failed to access session device.");
+				g_slist_free(devices);
+				sr_session_destroy(session);
+				return;
+			}
+			sdi = devices->data;
+			g_slist_free(devices);
+			if (select_channels(sdi) != SR_OK) {
+				sr_session_destroy(session);
+				return;
+			}
+			main_loop = g_main_loop_new(NULL, FALSE);
+
+			df_arg.session = session;
+			sr_session_datafeed_callback_add(session,
+				datafeed_in, &df_arg);
+			sr_session_stopped_callback_set(session,
+				(sr_session_stopped_callback)g_main_loop_quit,
+				main_loop);
+			if (sr_session_start(session) == SR_OK)
+				g_main_loop_run(main_loop);
+
+			g_main_loop_unref(main_loop);
+			df_arg.session = NULL;
+			sr_session_destroy(session);
+		} else if (ret != SR_ERR) {
+			/* It's a session file, but it didn't work out somehow. */
+			g_critical("Failed to load session file.");
+		} else {
+			/* Fall back on input modules. */
+			load_input_file_module(&df_arg);
+		}
+	}
+}
