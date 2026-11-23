@@ -107,6 +107,21 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
         if [ -n "${PV_QT_PREFIX:-}" ]; then
             QT_PREFIX="$PV_QT_PREFIX"
         fi
+        # Homebrew keeps LinguistTools (lrelease) in its own formula, and
+        # Qt6Config looks for a component beside its own prefix before it
+        # consults the rest, so the directory has to be named on the command
+        # line rather than only added to CMAKE_PREFIX_PATH.
+        linguist_dir="$(brew --prefix qttools 2>/dev/null || true)"
+        if [ -n "$linguist_dir" ] && [ -d "$linguist_dir/lib/cmake/Qt6LinguistTools" ]; then
+            QT_CMAKE_EXTRA="$QT_CMAKE_EXTRA -DQt6LinguistTools_DIR=$linguist_dir/lib/cmake/Qt6LinguistTools"
+            export PATH="$linguist_dir/bin:$PATH"
+        fi
+        # Same story for QtSvg, which Homebrew ships as qtsvg.
+        svg_dir="$(brew --prefix qtsvg 2>/dev/null || true)"
+        if [ -n "$svg_dir" ] && [ -d "$svg_dir/lib/cmake/Qt6Svg" ]; then
+            QT_CMAKE_EXTRA="$QT_CMAKE_EXTRA -DQt6Svg_DIR=$svg_dir/lib/cmake/Qt6Svg"
+            export PATH="$svg_dir/bin:$PATH"
+        fi
         PYTHON_PREFIX="$(brew --prefix python@3.12 2>/dev/null || brew --prefix python3 2>/dev/null || true)"
         if [ -n "$QT_PREFIX" ]; then
             export PATH="$QT_PREFIX/bin:$PATH"
@@ -121,7 +136,10 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
             export CMAKE_PREFIX_PATH="${QT_PREFIX}${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
         fi
         # gettext is keg-only, so -L for libintl has to be added by hand.
-        for formula in boost python@3.12 glib glibmm@2.66 libsigc++@2 libusb hidapi libzip gettext; do
+        # qttools carries LinguistTools (lrelease) and qtsvg carries QtSvg;
+        # Homebrew keeps both out of qtbase, and find_package(Qt6) asks for
+        # them by component name.
+        for formula in boost python@3.12 glib glibmm@2.66 libsigc++@2 libusb hidapi libzip gettext qttools qtsvg; do
             p="$(brew --prefix "$formula" 2>/dev/null || true)"
             [ -z "$p" ] && continue
             export CMAKE_PREFIX_PATH="${p}${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
@@ -262,7 +280,7 @@ fi
 # Step 1: libsigrok (CH32H417 + Demo)
 # ============================================================================
 echo ""
-echo "===== Step 1/4: libsigrok (CH32H417 + Demo) ====="
+echo "===== Step 1/6: libsigrok (CH32H417 + Demo) ====="
 
 mkdir -p libsigrok_build && cd libsigrok_build
 cmake "${SCRIPT_DIR}/libsigrok" \
@@ -277,7 +295,7 @@ echo "[OK] libsigrok"
 # Step 2: libsigrokcxx (C++ bindings)
 # ============================================================================
 echo ""
-echo "===== Step 2/4: libsigrokcxx ====="
+echo "===== Step 2/6: libsigrokcxx ====="
 
 cd "$BUILD_DIR" && mkdir -p libsigrokcxx_build && cd libsigrokcxx_build
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH}"
@@ -293,7 +311,7 @@ echo "[OK] libsigrokcxx"
 # Step 3: libsigrokdecode
 # ============================================================================
 echo ""
-echo "===== Step 3/4: libsigrokdecode ====="
+echo "===== Step 3/6: libsigrokdecode ====="
 
 cd "$BUILD_DIR" && mkdir -p libsigrokdecode_build && cd libsigrokdecode_build
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH}"
@@ -306,10 +324,43 @@ cmake --install .
 echo "[OK] libsigrokdecode"
 
 # ============================================================================
-# Step 4: U3LogicAnalyzer
+# Step 4: u3logicanalyzer-cli
 # ============================================================================
 echo ""
-echo "===== Step 4/4: U3LogicAnalyzer ====="
+echo "===== Step 4/6: u3logicanalyzer-cli ====="
+
+cd "$BUILD_DIR" && mkdir -p cli_build && cd cli_build
+export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH}"
+cmake "${SCRIPT_DIR}/cli" \
+    -DCMAKE_BUILD_TYPE=$BUILD_TYPE $MINGW_EXTRA
+cmake --build . -j"$JOBS"
+
+CLI_BIN="$BUILD_DIR/cli_build/u3logicanalyzer-cli"
+[ $IS_WINDOWS -eq 1 ] && CLI_BIN="$CLI_BIN.exe"
+[ -f "$CLI_BIN" ] || { echo "[error] u3logicanalyzer-cli was not built" >&2; exit 1; }
+echo "[OK] u3logicanalyzer-cli"
+
+# ============================================================================
+# Step 5: u3logicanalyzer-mcp-server
+# ============================================================================
+echo ""
+echo "===== Step 5/6: u3logicanalyzer-mcp-server ====="
+
+cd "$BUILD_DIR" && mkdir -p mcp_server_build && cd mcp_server_build
+cmake "${SCRIPT_DIR}/mcp_server" \
+    -DCMAKE_BUILD_TYPE=$BUILD_TYPE $MINGW_EXTRA
+cmake --build . -j"$JOBS"
+
+MCP_SERVER_BIN="$BUILD_DIR/mcp_server_build/u3logicanalyzer_mcp_server"
+[ $IS_WINDOWS -eq 1 ] && MCP_SERVER_BIN="$MCP_SERVER_BIN.exe"
+[ -f "$MCP_SERVER_BIN" ] || { echo "[error] the MCP server was not built" >&2; exit 1; }
+echo "[OK] u3logicanalyzer-mcp-server"
+
+# ============================================================================
+# Step 6: U3LogicAnalyzer
+# ============================================================================
+echo ""
+echo "===== Step 6/6: U3LogicAnalyzer ====="
 
 # Generate .qm translation files from .ts sources
 if ls "${SCRIPT_DIR}/pulseview/l10n/"*.ts >/dev/null 2>&1; then
@@ -459,6 +510,22 @@ if [ $PACKAGE -eq 1 ]; then
         cp "$BUILD_DIR/logicanalyzer_build/U3LogicAnalyzer.exe" "$DIST_DIR/"
         echo "  U3LogicAnalyzer.exe"
 
+        # The command line tool finds the DLLs, the portable Python and the
+        # decoders next to itself, so it belongs in this directory and nowhere
+        # else.
+        cp -f "$CLI_BIN" "$DIST_DIR/"
+
+        # The MCP server sits next to it and finds the tool on its own. Named
+        # with hyphens in every package, whatever the CMake target is called.
+        cp -f "$MCP_SERVER_BIN" "$DIST_DIR/u3logicanalyzer-mcp-server.exe"
+
+        # Help -> User Guide opens the PDF of the UI language. Keeping them in
+        # doc/ leaves the directory next to the executable to the DLLs.
+        mkdir -p "$DIST_DIR/doc"
+        for pdf in U3LogicAnalyzer-UsageGuide.pdf U3LogicAnalyzer-UsageGuide.zh_CN.pdf; do
+            cp -f "$SCRIPT_DIR/doc/$pdf" "$DIST_DIR/doc/" 2>/dev/null && echo "  doc/$pdf"
+        done
+
 	# 2. Copy our DLLs
         for dll in libsigrok.dll libsigrokcxx.dll libsigrokdecode.dll; do
             cp "$PREFIX/bin/$dll" "$DIST_DIR/" 2>/dev/null || \
@@ -592,6 +659,23 @@ if [ $PACKAGE -eq 1 ]; then
         MAIN_BIN="$MACOS_DIR/U3LogicAnalyzer"
         mkdir -p "$MACOS_DIR" "$RES_DIR" "$FRAMEWORKS_DIR"
 
+        # Inside Contents/MacOS on purpose: the bundled Python.framework is
+        # referenced as @executable_path/../Frameworks/..., which only holds
+        # for a binary in that directory. Copied before the dependency pass
+        # below, so its references are rewritten and it gets signed with the
+        # rest of the bundle.
+        cp -f "$CLI_BIN" "$MACOS_DIR/u3logicanalyzer-cli"
+        chmod 755 "$MACOS_DIR/u3logicanalyzer-cli"
+        cp -f "$MCP_SERVER_BIN" "$MACOS_DIR/u3logicanalyzer-mcp-server"
+        chmod 755 "$MACOS_DIR/u3logicanalyzer-mcp-server"
+        echo "  u3logicanalyzer-cli, u3logicanalyzer-mcp-server"
+
+        # The application looks for the guide under Contents/Resources/doc.
+        mkdir -p "$RES_DIR/doc"
+        for pdf in U3LogicAnalyzer-UsageGuide.pdf U3LogicAnalyzer-UsageGuide.zh_CN.pdf; do
+            cp -f "$SCRIPT_DIR/doc/$pdf" "$RES_DIR/doc/" 2>/dev/null && echo "  doc/$pdf"
+        done
+
         # install_name_tool invalidates code signatures; always re-sign Mach-O files after.
         MACOS_BUNDLE_VISITED="$(mktemp)"
         macos_is_macho() {
@@ -662,11 +746,17 @@ if [ $PACKAGE -eq 1 ]; then
             if [[ "$dep" == */Python.framework/* ]]; then
                 local pyfw suffix
                 suffix="${dep#*Python.framework/}"
-                pyfw="$(brew --prefix python@3.12 2>/dev/null)/Frameworks/Python.framework/$suffix"
-                if [ -f "$pyfw" ]; then
-                    echo "$pyfw"
-                    return 0
-                fi
+                # Homebrew's python@3.12, the framework pkg-config pointed at,
+                # and the python.org installer all keep it in different trees.
+                for pyfw in \
+                    "$(brew --prefix python@3.12 2>/dev/null)/Frameworks/Python.framework/$suffix" \
+                    "${PYTHON_PREFIX}/Frameworks/Python.framework/$suffix" \
+                    "/Library/Frameworks/Python.framework/$suffix"; do
+                    if [ -f "$pyfw" ]; then
+                        echo "$pyfw"
+                        return 0
+                    fi
+                done
             fi
             return 1
         }
@@ -731,7 +821,7 @@ if [ $PACKAGE -eq 1 ]; then
                 fresh=1
             fi
             case "$binary" in
-                "$MAIN_BIN") new_path="@executable_path/../Frameworks/$base" ;;
+                "$MACOS_DIR"/*) new_path="@executable_path/../Frameworks/$base" ;;
                 # A framework's binary sits three levels below Frameworks, so
                 # @loader_path/<name> would point inside the framework.
                 */Contents/Frameworks/*.framework/*) new_path="@loader_path/../../../$base" ;;
@@ -793,7 +883,10 @@ if [ $PACKAGE -eq 1 ]; then
                 # in the bundle has had its own references fixed, so copying it
                 # again each round only made this loop slow.
                 before="$(wc -l < "$MACOS_BUNDLE_VISITED" 2>/dev/null | tr -d ' ')"
-                macos_fixup_binary "$MAIN_BIN"
+                for bin in "$MACOS_DIR"/*; do
+                    [ -f "$bin" ] || continue
+                    macos_fixup_binary "$bin"
+                done
                 for lib in "$FRAMEWORKS_DIR"/*.dylib; do
                     [ -f "$lib" ] || continue
                     macos_fixup_binary "$lib"
@@ -808,7 +901,7 @@ if [ $PACKAGE -eq 1 ]; then
                 done
                 after="$(wc -l < "$MACOS_BUNDLE_VISITED" 2>/dev/null | tr -d ' ')"
                 [ "$after" = "$before" ] && break
-                macos_has_external_deps "$MAIN_BIN" "$FRAMEWORKS_DIR"/*.dylib || break
+                macos_has_external_deps "$MACOS_DIR"/* "$FRAMEWORKS_DIR"/*.dylib || break
             done
         }
         macos_set_minimum_system_version() {
@@ -876,7 +969,9 @@ if [ $PACKAGE -eq 1 ]; then
                 mv -f "$f.thin" "$f"
                 count=$((count + 1))
             done < <(find "$APP/Contents" -type f -print0)
-            [ "$count" -gt 0 ] && echo "  Thinned $count universal binaries to $arch"
+            if [ "$count" -gt 0 ]; then
+                echo "  Thinned $count universal binaries to $arch"
+            fi
         }
         # Nothing here imports pip, the CPython self-test suite or the Tk
         # bindings, yet together they are several tens of megabytes.
@@ -1169,6 +1264,19 @@ EOF
         echo "  U3LogicAnalyzer"
         cp "$BUILD_DIR/logicanalyzer_build/U3LogicAnalyzer" "$DIST_DIR/"
         chmod +x "$DIST_DIR/U3LogicAnalyzer"
+
+        # Built with an $ORIGIN rpath, so it finds the libraries in this
+        # directory, and finds the decoders next to them.
+        cp -f "$CLI_BIN" "$DIST_DIR/u3logicanalyzer-cli"
+        chmod +x "$DIST_DIR/u3logicanalyzer-cli"
+        cp -f "$MCP_SERVER_BIN" "$DIST_DIR/u3logicanalyzer-mcp-server"
+        chmod +x "$DIST_DIR/u3logicanalyzer-mcp-server"
+        echo "  u3logicanalyzer-cli, u3logicanalyzer-mcp-server"
+
+        mkdir -p "$DIST_DIR/doc"
+        for pdf in U3LogicAnalyzer-UsageGuide.pdf U3LogicAnalyzer-UsageGuide.zh_CN.pdf; do
+            cp -f "$SCRIPT_DIR/doc/$pdf" "$DIST_DIR/doc/" 2>/dev/null && echo "  doc/$pdf"
+        done
 
         echo "  sigrok libraries..."
         for lib in "$PREFIX/lib"/libsigrok.so* "$PREFIX/lib"/libsigrokcxx.so* \
