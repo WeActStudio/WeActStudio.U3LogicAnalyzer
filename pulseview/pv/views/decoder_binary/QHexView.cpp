@@ -5,6 +5,7 @@
  * Copyright (C) 2015 Victor Anjin <virinext@gmail.com>
  * Copyright (C) 2019 Soeren Apel <soeren@apelpie.net>
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * The MIT License (MIT)
  *

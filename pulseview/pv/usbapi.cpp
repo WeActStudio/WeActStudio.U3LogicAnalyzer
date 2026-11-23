@@ -1,6 +1,8 @@
 /*
  * What the front end talks to, and what the bus watcher hands back.
  *
+ * Copyright (C) 2026 WeAct Studio
+ *
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 

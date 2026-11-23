@@ -2,6 +2,7 @@
  * This file is part of the PulseView project.
  *
  * Copyright (C) 2018 Soeren Apel <soeren@apelpie.net>
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

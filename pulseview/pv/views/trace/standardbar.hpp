@@ -5,6 +5,7 @@
  * Copyright (C) 2016 Soeren Apel <soeren@apelpie.net>
  * Copyright (C) 2012 Joel Holdsworth <joel@airwebreathe.org.uk>
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

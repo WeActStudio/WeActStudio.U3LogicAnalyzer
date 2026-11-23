@@ -1,6 +1,8 @@
 /*
  * The libusb the front end talks to, and the bus events it reports.
  *
+ * Copyright (C) 2026 WeAct Studio
+ *
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 

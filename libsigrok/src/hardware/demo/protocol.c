@@ -8,6 +8,7 @@
  * Copyright (C) 2015 Bartosz Golaszewski <bgolaszewski@baylibre.com>
  * Copyright (C) 2019 Frank Stettner <frank-stettner@gmx.net>
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

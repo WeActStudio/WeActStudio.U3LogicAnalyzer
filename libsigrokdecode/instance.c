@@ -5,6 +5,7 @@
  * Copyright (C) 2010 Uwe Hermann <uwe@hermann-uwe.de>
  * Copyright (C) 2012 Bert Vermeulen <bert@biot.com>
  * Copyright (C) 2026 Q2H2
+ * Copyright (C) 2026 WeAct Studio
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
