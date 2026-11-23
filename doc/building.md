@@ -2,9 +2,9 @@
 
 [中文](building.zh_CN.md) · [Back to README](../README.md)
 
-The three libraries (libsigrok, libsigrokcxx, libsigrokdecode) and the U3LogicAnalyzer
-application are all built by CMake through one script. Using the application is covered in
-[Usage](usage.md).
+The three libraries (libsigrok, libsigrokcxx, libsigrokdecode), the u3logicanalyzer-cli tool,
+the MCP server and the U3LogicAnalyzer application are all built by CMake through one script, in six
+steps. Using the application is covered in [Usage](usage.md).
 
 ## Requirements
 
@@ -105,9 +105,11 @@ Results:
 | Path | What it is |
 |---|---|
 | `build_cmake/logicanalyzer_build/U3LogicAnalyzer` (`.exe` on Windows) | the application |
+| `build_cmake/cli_build/u3logicanalyzer-cli` (`.exe` on Windows) | the command line tool shipped in the packages |
+| `build_cmake/mcp_server_build/u3logicanalyzer_mcp_server` (`.exe` on Windows) | the MCP server shipped in the packages |
 | `install/` | libsigrok + libsigrokcxx + libsigrokdecode and the 132 decoders |
 
-> `U3_BUILD_DIR` moves the build tree to another disk, e.g. `U3_BUILD_DIR=/i/la_build ./build.sh`;
+> `U3_BUILD_DIR` moves the build tree to another disk, e.g. `U3_BUILD_DIR=/path/to/build ./build.sh`;
 > a debug build uses `${U3_BUILD_DIR}_debug`.
 >
 > Delete the build directory when switching between Qt majors: the cached Qt paths do not follow.
@@ -148,6 +150,13 @@ cannot open a window. If a `libsigrok*.dylib` cannot be found, add `install/lib`
 The portable directory holds the executable, every DLL it needs, `libsigrok*.dll`, `decoders/`,
 a portable Python and the driver directory, and can be copied anywhere. The NSIS installer adds a
 start menu entry and a desktop shortcut and can be removed from the control panel.
+
+All three platforms carry the user guide PDFs (`doc/U3LogicAnalyzer-UsageGuide{,.zh_CN}.pdf`):
+`doc/` inside the installation directory on Windows and Linux, `usr/share/doc/u3logicanalyzer/`
+in the AppImage, and `Contents/Resources/doc/` in the macOS bundle. Help → User Guide opens the
+book that matches the interface language. The PDFs are generated from `doc/usage*.md` by
+`packaging/make_usage_pdf.py`, which needs markdown, PyMuPDF and Chrome; they are committed, so a
+normal build does not run it.
 
 ### Linux
 
@@ -201,7 +210,8 @@ and a link to `/Applications`; the application is installed by dragging it into 
 - `dmgbuild` is required: `pip install 'dmgbuild==1.6.1'`. Newer versions call
   `diskutil image --plist`, which macOS 13 does not support, and packaging fails. Without dmgbuild
   the script falls back to `hdiutil`: the image is still produced, but without background or icon
-  layout.
+  layout. The script looks for `dmgbuild` on `PATH` and in `${PV_SYSROOT}/bin`; set `DMGBUILD_BIN`
+  to the full path when it lives elsewhere.
 - The application is ad-hoc signed and not notarised, so the first launch has to be started with
   right-click → Open.
 - Do not run the application from `dist/` before packaging, and do not modify files inside the

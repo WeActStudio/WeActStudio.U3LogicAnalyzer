@@ -2,8 +2,10 @@
 
 [English](building.md) · [返回 README](../README_zh_CN.md)
 
-本工程用 CMake 构建，三个顶层库（libsigrok / libsigrokcxx / libsigrokdecode）与主程序
-U3LogicAnalyzer 都由 `build.sh` 一次编完。日常操作见 [使用说明](usage.zh_CN.md)。
+本工程用 CMake 构建，三个顶层库（libsigrok / libsigrokcxx / libsigrokdecode）、命令行工具
+`u3logicanalyzer-cli`、
+MCP 服务器与主程序 U3LogicAnalyzer 都由 `build.sh` 一次编完（共六步）。日常操作见
+[使用说明](usage.zh_CN.md)。
 
 ## 环境要求
 
@@ -99,9 +101,11 @@ Homebrew 会安装 `cmake`、`ninja`、`pkg-config`、`glib`、`glibmm@2.66`、`
 | 路径 | 内容 |
 |---|---|
 | `build_cmake/logicanalyzer_build/U3LogicAnalyzer`（Windows 上 `.exe`） | 主程序 |
+| `build_cmake/cli_build/u3logicanalyzer-cli`（Windows 上 `.exe`） | 命令行工具，随安装包分发 |
+| `build_cmake/mcp_server_build/u3logicanalyzer_mcp_server`（Windows 上 `.exe`） | MCP 服务器，随安装包分发 |
 | `install/` | libsigrok + libsigrokcxx + libsigrokdecode 与 132 个解码器 |
 
-> 构建目录可用 `U3_BUILD_DIR` 改到别的盘，例如 `U3_BUILD_DIR=/i/la_build ./build.sh`。
+> 构建目录可用 `U3_BUILD_DIR` 改到别的盘，例如 `U3_BUILD_DIR=/path/to/build ./build.sh`。
 > debug 配置会用 `${U3_BUILD_DIR}_debug`。
 >
 > 切换 Qt 大版本时先整个删掉构建目录：CMake 缓存的 Qt 路径不会自己更新。
@@ -139,6 +143,12 @@ macOS 上直接 `./start_pv.sh`：脚本在同一分支里设置 `SIGROKDECODE_D
 
 便携版含主程序、全部依赖 DLL、`libsigrok*.dll`、`decoders/`、便携 Python 与驱动目录，拷走即用。
 安装包（NSIS）带开始菜单项和桌面快捷方式，可从控制面板卸载。
+
+三个平台都带中英文使用说明 PDF（`doc/U3LogicAnalyzer-UsageGuide{,.zh_CN}.pdf`），
+Windows 与 Linux 放在安装目录的 `doc/`，AppImage 放在 `usr/share/doc/u3logicanalyzer/`，
+macOS 放在 `Contents/Resources/doc/`。「帮助 → 使用说明」按界面语言打开对应的一本。
+PDF 由 `packaging/make_usage_pdf.py` 从 `doc/usage*.md` 生成，需要 markdown、PyMuPDF 与
+Chrome；PDF 已提交在仓库里，正常构建不需要跑这一步。
 
 ### Linux
 
@@ -186,7 +196,8 @@ hicolor 图标树与 AppStream 元数据 —— 没有元数据时软件中心�
   `packaging/macos/make-dmg-background.py` 生成，两者均在仓库内。
 - 需安装 `dmgbuild`：`pip install 'dmgbuild==1.6.1'`。更新的版本会调用 `diskutil image --plist`，
   macOS 13 不支持该选项，打包会直接失败。未安装 dmgbuild 时脚本退回 `hdiutil`，仍可生成 dmg，
-  但没有背景图与图标布局。
+  但没有背景图与图标布局。脚本按 `PATH` 与 `${PV_SYSROOT}/bin` 查找 `dmgbuild`；装在别处的，
+  用 `DMGBUILD_BIN` 指定完整路径。
 - 应用使用 ad-hoc 签名，未做公证，首次启动需右键选择「打开」。
 - 打包前不要在 `dist/` 中运行应用，也不要手工改动包内文件：两者都会破坏代码签名的封装完整性，
   打包时报 `a sealed resource is missing`。脚本在打包前会执行一次
