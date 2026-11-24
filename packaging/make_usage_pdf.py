@@ -57,9 +57,13 @@ h1 { font-size: 20pt; color: #10233f; margin: 0 0 2mm; }
 h2 { font-size: 13pt; color: #14315c; margin: 16pt 0 7pt; padding-left: 8pt;
      border-left: 4px solid #1a73e8; page-break-after: avoid; counter-increment: sec; }
 h2::before { content: counter(sec) ". "; color: #1a73e8; }
-h3 { font-size: 11pt; color: #14315c; margin: 12pt 0 5pt; page-break-after: avoid; }
+h3 { font-size: 11.5pt; color: #14315c; margin: 13pt 0 5pt; padding-left: 6pt;
+     border-left: 2px solid #b6c9e3; page-break-after: avoid; }
 p { margin: 5pt 0; }
 strong { color: #10233f; }
+blockquote { margin: 8pt 0; padding: 6pt 10pt; border-left: 3px solid #1a73e8;
+             background: #f4f8fe; page-break-inside: avoid; }
+blockquote p { margin: 0; }
 ul, ol { margin: 5pt 0 5pt 18pt; padding: 0; }
 li { margin: 2.5pt 0; }
 table { border-collapse: collapse; width: 100%; margin: 7pt 0; font-size: 9pt; }

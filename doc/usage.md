@@ -14,13 +14,13 @@ This guide covers the everyday use of U3LogicAnalyzer: connecting a device, capt
 | Waveform view | One row per channel, channel labels on the left, time axis on top |
 | Protocol decoder panel | Search box, decoder tree and the description of the selected decoder |
 | Tab bar (bottom) | One tab per session: one device or one file |
-| Status bar | Device name and connection id, e.g. `ch375/5-2` |
+| Status bar | Device name and connection id, e.g. `ch375/5-3` |
 
 The interface follows the system language. To select one manually: Help → Settings → "User interface language"; the choice applies immediately.
 
 ## Connecting a device
 
-The application scans for devices as soon as one is plugged in, and the device selector shows the model and port, e.g. `WeAct Studio Logic Analyzer V2 ch375/5-2`.
+The application scans for devices as soon as one is plugged in, and the device selector shows the model and port, e.g. `WeAct Studio Logic Analyzer V2 ch375/5-3`.
 
 - **One device**: it is the only entry in the list; start capturing directly.
 - **Several devices**: the list holds one row per port. Each row offers "open in a new session", so every device can capture into a session of its own at the same time.
@@ -165,7 +165,39 @@ with it, in the installation directory (default
 Both use the drivers, decoders and firmware in the installation directory, so no environment
 variable is normally needed.
 
-### Preparation
+### Prompts built into the application (recommended)
+
+**No configuration needed.** **Help → Agent Prompts** holds five prompts, one per task. Copy one
+and paste it into the AI client: the text itself names the installation directory of the platform
+it runs on, along with the usual options and the points that go wrong.
+
+![Agent prompts](images/en/agent-prompts.png)
+
+1. Choose **Help → Agent Prompts** in the application.
+2. Pick the prompt for the task and press Copy.
+3. Paste it into the AI client and send it.
+4. Approve the command when the client asks. Most clients ask once before running an external
+   program.
+
+| Prompt | Used for | The client needs |
+|---|---|---|
+| Find the command line tool | Getting connected the first time: version and device list | Run commands |
+| Scan the devices | Seeing which boards are attached, with driver and connection string | Run commands |
+| Capture a waveform and show it | Taking a capture and opening it for a check | Run commands, read files |
+| Decode the waveform and tabulate it | Decoding a protocol and presenting it as a table | Run commands, read files |
+| Connect it over MCP (optional) | Exposing the analyzer to an MCP client | Editing the client configuration |
+
+The first four need only the ability to run a local command and do not involve MCP. The fifth
+turns the analyzer into MCP tools that the client calls by name, and is optional.
+
+The sample rate, sample count and decoder options in the prompts are examples; change them before
+pasting if the task needs other values. They are ordinary options of the command line tool, so the
+prompt still runs.
+
+> **The sections that follow are manual setup.** Read them only when you assemble the commands
+> yourself, look up every option, or connect over MCP.
+
+### Installation and working directory
 
 The installation directory differs per platform:
 
@@ -209,24 +241,6 @@ Describe the task and let the agent assemble the command:
 - "List the logic analyzers that are connected."
 - "Capture 2000 samples at 4 MHz and save them to `test.sr`."
 - "Decode `test.sr` as UART, RX on D0, 115200 baud."
-
-### Prompts built into the application
-
-**Help → Agent Prompts** holds five ready-made descriptions. Each card is one task with a Copy
-button; paste it into the AI client unchanged. The text follows the interface language and names
-the installation directory of the platform it runs on, so a client with nothing on `PATH` can
-still start the tool.
-
-| Prompt | What it covers |
-|---|---|
-| Find the command line tool | Version query and scan, and the difference between a driver identifier and a full device string |
-| Scan the devices | A table of model, driver, connection string and channel count |
-| Capture a waveform and show it | 2000 samples at 4 MHz into `test.sr`, opened in the application |
-| Decode the waveform and tabulate it | UART decoding over a window long enough to contain data |
-| Connect it over MCP (optional) | The MCP entry, its executable path, the working directory and escaping |
-
-The first four need only the command line tool. The last one is the only one that mentions the
-server, and it is the one to copy when the client is to reach the analyzer over MCP.
 
 ### Options of the command line tool
 
@@ -342,9 +356,9 @@ The full tool list is in `doc/mcp-server.md`.
 
 - The sample rate is not one the device supports. List them with `u3logicanalyzer-cli --show` or `show_driver_details`.
 
-**The interface is in English**
+**The interface is in Chinese**
 
-- The language was set manually. Go to Help → Settings → "User interface language" and select the required language. On macOS the application name in the menu bar and in the Dock follows the system language and is independent of that setting.
+- The language was set to Chinese manually. Go to Help → Settings → "User interface language" and select English. On macOS the application name in the menu bar and in the Dock follows the system language and is independent of that setting.
 
 **macOS refuses to open the application because the developer cannot be verified**
 

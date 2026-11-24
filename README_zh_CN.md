@@ -2,9 +2,7 @@
 
 [English](README.md)
 
-**U3LogicAnalyzer** 是 WeAct Studio CH32H417 逻辑分析仪的上位机软件，基于 sigrok PulseView，
-自带 132 个协议解码器（I²C / SPI / UART 等）。硬件驱动裁剪到只剩本项目相关的两个，
-另外保留 PulseView 的 `demo` 驱动与给 FX2 方案分析仪用的 `fx2lafw` 驱动，纯 CMake 一键构建。
+**U3LogicAnalyzer** 是 WeAct Studio CH32H417 逻辑分析仪的上位机软件，基于 sigrok PulseView，自带 132 个协议解码器（I²C / SPI / UART 等）。硬件驱动裁剪到只剩本项目相关的两个，另外保留 PulseView 的 `demo` 驱动与给 FX2 方案分析仪用的 `fx2lafw` 驱动，纯 CMake 一键构建。
 
 ![主界面](doc/images/zh_CN/main-window.png)
 
@@ -61,9 +59,7 @@ Windows 上已安装 CH375 驱动时设备绑在 `CH375WDM.sys`，走 `wch-ch32h
 
 ## 命令行工具 u3logicanalyzer-cli
 
-安装包内附带 `u3logicanalyzer-cli`，用于脚本与 AI Agent 调用：它与图形界面共享同一份
-libsigrok、协议解码器和 FX2 固件，因此支持的设备、解码器和界面完全一致。程序使用全称而不叫
-`sigrok-cli`，以免与发行版或用户自己安装的同名工具混淆。
+安装包内附带 `u3logicanalyzer-cli`，用于脚本与 AI Agent 调用：它与图形界面共享同一份 libsigrok、协议解码器和 FX2 固件，因此支持的设备、解码器和界面完全一致。程序使用全称而不叫 `sigrok-cli`，以免与发行版或用户自己安装的同名工具混淆。
 
 | 平台 | 位置 |
 |---|---|
@@ -72,8 +68,7 @@ libsigrok、协议解码器和 FX2 固件，因此支持的设备、解码器和
 | Linux（AppImage） | `usr/bin/u3logicanalyzer-cli`（挂载目录内） |
 | macOS | `/Applications/U3LogicAnalyzer.app/Contents/MacOS/u3logicanalyzer-cli` |
 
-程序按自身所在目录查找解码器、固件与运行库，不需要设置 `SIGROKDECODE_DIR`、`SIGROK_FIRMWARE_DIR`、
-`LD_LIBRARY_PATH` 等环境变量，直接以绝对路径调用即可。例如：
+程序按自身所在目录查找解码器、固件与运行库，不需要设置 `SIGROKDECODE_DIR`、`SIGROK_FIRMWARE_DIR`、`LD_LIBRARY_PATH` 等环境变量，直接以绝对路径调用即可。例如：
 
 ```bash
 u3logicanalyzer-cli --scan
@@ -82,23 +77,17 @@ u3logicanalyzer-cli -d wch-ch32h417:conn=/1.3 \
            -C D0,D1 -P uart:rx=D0:baudrate=115200 -A uart=rx-data
 ```
 
-`--config` 的多个选项之间用冒号分隔。区间类型的选项（`voltage_threshold` 属于此类）要求写成
-`下限-上限`，只写一个数值会被判为非法；该值是引脚上的电压，本机范围为 0.60 V 至 1.50 V。
+`--config` 的多个选项之间用冒号分隔。区间类型的选项（`voltage_threshold` 属于此类）要求写成 `下限-上限`，只写一个数值会被判为非法；该值是引脚上的电压，本机范围为 0.60 V 至 1.50 V。
 
-macOS 上该程序随应用一起做临时签名，未做公证。首次使用前先启动一次图形界面（右键选择「打开」），再让
-脚本调用，可避免系统的来源校验拦截。
+macOS 上该程序随应用一起做临时签名，未做公证。首次使用前先启动一次图形界面（右键选择「打开」），再让脚本调用，可避免系统的来源校验拦截。
 
-sigrok-cli 的源码位于 `cli/`，由 `build.sh` 与本程序一同编译，链接的是同一份 libsigrok，因此不
-需要单独准备编译工具链或预编译二进制。
+sigrok-cli 的源码位于 `cli/`，由 `build.sh` 与本程序一同编译，链接的是同一份 libsigrok，因此不需要单独准备编译工具链或预编译二进制。
 
 ### 给 AI 客户端用
 
-安装包里还带一个 MCP 服务器 `u3logicanalyzer-mcp-server`，安装位置与上面的命令行工具相同。把它填进
-支持 MCP 的客户端，就可以用自然语言让 AI 扫描设备、采集、解码。协议与工具集参照
-KenosInc/sigrok-mcp-server 实现，配置方法与工具清单见 [MCP Server](doc/mcp-server.zh_CN.md)。
+安装包里还带一个 MCP 服务器 `u3logicanalyzer-mcp-server`，安装位置与上面的命令行工具相同。把它填进支持 MCP 的客户端，就可以用自然语言让 AI 扫描设备、采集、解码。协议与工具集参照 KenosInc/sigrok-mcp-server 实现，配置方法与工具清单见 [MCP Server](doc/mcp-server.zh_CN.md)。
 
-命令行工具与 MCP 服务器的安装、配置与验证步骤写在[使用说明的「Agent 配置」一节](doc/usage.zh_CN.md)，
-安装包内同一章也有 PDF 版，可从「帮助 → 使用说明」或安装向导的完成页打开。
+命令行工具与 MCP 服务器的安装、配置与验证步骤写在[使用说明的「Agent 配置」一节](doc/usage.zh_CN.md)，安装包内同一章也有 PDF 版，可从「帮助 → 使用说明」或安装向导的完成页打开。
 
 ## 目录结构
 
@@ -128,16 +117,9 @@ KenosInc/sigrok-mcp-server 实现，配置方法与工具清单见 [MCP Server](
 
 ## 来源
 
-本软件是在 **Q2H2** 的项目上修改而来。承自该项目的文件保留 `Copyright (C) 2026 Q2H2` 声明；
-本项目改动过的，在其下方加注 `Copyright (C) 2026 WeAct Studio`。新增的部分（libusb 驱动
-`wch-ch32h417-libusb/`、命令行工具 `cli/`、MCP 服务 `mcp_server/` 以及 `pulseview/pv/dialogs/`
-下新增的对话框）版权归 WeAct Studio；`fx2lafw` 驱动（`libsigrok/src/hardware/fx2lafw/`）取自
-上游 sigrok，保留其作者 Bert Vermeulen 与 Joel Holdsworth 的署名，本项目的改动注在其下方。
+本软件是在 **Q2H2** 的项目上修改而来。承自该项目的文件保留 `Copyright (C) 2026 Q2H2` 声明；本项目改动过的，在其下方加注 `Copyright (C) 2026 WeAct Studio`。新增的部分（libusb 驱动 `wch-ch32h417-libusb/`、命令行工具 `cli/`、MCP 服务 `mcp_server/` 以及 `pulseview/pv/dialogs/` 下新增的对话框）版权归 WeAct Studio；`fx2lafw` 驱动（`libsigrok/src/hardware/fx2lafw/`）取自上游 sigrok，保留其作者 Bert Vermeulen 与 Joel Holdsworth 的署名，本项目的改动注在其下方。
 
-`cli/` 取自上游 sigrok-cli 项目，其间经历 CH32H417-sigrok-cli。改动位于 `main.c`（按自身所在
-目录设置解码器、固件与 Python 的运行期路径，采集前校验选项组合）、`session.c`（一处格式化参数）、
-`input.c`（没有任何模块识别的文件、对文件不允许变换模块）与 `parsers.c`（选项表中的空字段）；
-许可与署名见该目录下的 COPYING 与 AUTHORS。
+`cli/` 取自上游 sigrok-cli 项目，其间经历 CH32H417-sigrok-cli。改动位于 `main.c`（按自身所在目录设置解码器、固件与 Python 的运行期路径，采集前校验选项组合）、`session.c`（一处格式化参数）、`input.c`（没有任何模块识别的文件、对文件不允许变换模块）与 `parsers.c`（选项表中的空字段）；许可与署名见该目录下的 COPYING 与 AUTHORS。
 
 ## 许可
 

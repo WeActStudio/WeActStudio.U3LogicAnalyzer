@@ -14,13 +14,13 @@
 | 左侧波形区 | 每行一个通道，左端为通道标签（可右键操作），上方为时间轴 |
 | 右侧协议解码器 | 搜索框、解码器分类树与所选解码器的说明 |
 | 底部标签栏 | 每个标签是一个独立会话（一台设备或一个文件） |
-| 状态栏 | 设备名与连接编号，如 `ch375/5-2` |
+| 状态栏 | 设备名与连接编号，如 `ch375/5-3` |
 
 界面语言跟随系统设置。手动切换方式：帮助 → 设置 → 「语言」，选中后立即生效。
 
 ## 连接设备
 
-插上分析仪后，程序会自动扫描设备，设备选择器显示型号与端口，如 `WeAct Studio Logic Analyzer V2 ch375/5-2`。
+插上分析仪后，程序会自动扫描设备，设备选择器显示型号与端口，如 `WeAct Studio Logic Analyzer V2 ch375/5-3`。
 
 - **单台设备**：下拉列表中仅有该项，可直接开始采集。
 - **多台设备**：下拉列表按端口列出每一台设备；每行右侧提供「在新会话中打开」，可为每台设备各开一个会话并同时采集。
@@ -109,8 +109,7 @@ macOS 不需要安装驱动，接入后即可识别。安装包为 dmg：打开�
 
 ## 主程序启动参数
 
-以下是图形界面程序 `U3LogicAnalyzer` 的启动参数。命令行工具 `u3logicanalyzer-cli` 有自己的
-一套参数，见下文「Agent 配置」一节；两者同名的选项含义不同，不要混用。
+以下是图形界面程序 `U3LogicAnalyzer` 的启动参数。命令行工具 `u3logicanalyzer-cli` 有自己的一套参数，见下文「Agent 配置」一节；两者同名的选项含义不同，不要混用。
 
 | 参数 | 说明 |
 |---|---|
@@ -152,8 +151,7 @@ macOS 不需要安装驱动，接入后即可识别。安装包为 dmg：打开�
 
 ## Agent 配置
 
-安装包内含两个命令行组件，二者随主程序一同安装，均位于安装目录下（默认
-`C:\Program Files\WeAct Studio\U3LogicAnalyzer`）：
+安装包内含两个命令行组件，二者随主程序一同安装，均位于安装目录下（默认 `C:\Program Files\WeAct Studio\U3LogicAnalyzer`）：
 
 | 组件 | 程序 | 作用 |
 |---|---|---|
@@ -162,7 +160,32 @@ macOS 不需要安装驱动，接入后即可识别。安装包为 dmg：打开�
 
 两者共用安装目录下的驱动、解码器与固件，通常不需要设置环境变量。
 
-### 准备
+### 软件内置的 Agent 提示词（推荐）
+
+**无需任何配置。** 「帮助 → Agent 提示词」内置五条提示词，每条对应一项任务。点右侧「复制」取走全文，粘贴到 AI 客户端即可执行：提示词本身写明了当前平台的安装路径、常用参数与容易出错的地方。
+
+![Agent 提示词](images/zh_CN/agent-prompts.png)
+
+1. 在软件中选择「帮助 → Agent 提示词」。
+2. 选择与任务对应的一条，点「复制」。
+3. 粘贴到 AI 客户端并发送。
+4. 客户端请求执行命令时予以确认。多数客户端首次调用外部程序会征询授权，之后不再逐条询问。
+
+| 提示词 | 用途 | 客户端需要 |
+|---|---|---|
+| 找到命令行工具 | 首次接通，确认版本与设备列表 | 执行命令 |
+| 扫描设备 | 查看已连接的板卡、驱动标识与连接串 | 执行命令 |
+| 采集波形并查看结果 | 采集一段数据并用本软件打开核对 | 执行命令、读取文件 |
+| 解码波形并整理结果 | 按协议解码并整理成表格 | 执行命令、读取文件 |
+| 接入 MCP 服务（可选） | 把分析仪接入支持 MCP 的客户端 | 可编辑客户端配置 |
+
+前四条只需客户端能够执行本地命令，不涉及 MCP。第五条把分析仪封装成 MCP 工具，供客户端按工具名调用，属可选步骤。
+
+提示词中的采样率、采样点数与解码参数均为示例，粘贴前可改为实际需要的值；它们都是命令行工具的标准选项，改动后仍可正常执行。
+
+> **以下几节为手动配置。** 仅在需要自行拼接命令、查阅全部参数或接入 MCP 服务时阅读。
+
+### 安装位置与工作目录
 
 安装目录按平台不同：
 
@@ -172,21 +195,15 @@ macOS 不需要安装驱动，接入后即可识别。安装包为 dmg：打开�
 | Linux（deb / tar.gz） | `/opt/U3LogicAnalyzer/` |
 | macOS | `/Applications/U3LogicAnalyzer.app/Contents/MacOS/` |
 
-为采集数据准备一个工作目录，未指定输出文件时结果写入该目录。工作目录应放在用户目录下，
-Windows 例如 `C:\Users\<用户名>\AppData\Local\U3LogicAnalyzer\workdir`，Linux 与 macOS 可用
-`~/U3LogicAnalyzer-workdir`；目录需事先创建。不要使用安装目录下的文件夹：`Program Files`
-与 `/opt` 对普通用户只读。
+为采集数据准备一个工作目录，未指定输出文件时结果写入该目录。工作目录应放在用户目录下，Windows 例如 `C:\Users\<用户名>\AppData\Local\U3LogicAnalyzer\workdir`，Linux 与 macOS 可用 `~/U3LogicAnalyzer-workdir`；目录需事先创建。不要使用安装目录下的文件夹：`Program Files` 与 `/opt` 对普通用户只读。
 
-macOS 上还需先启动一次图形界面（在「应用程序」中右键点按图标并选择「打开」）。应用为
-临时签名、未做公证，直接由脚本调用可能被系统的来源校验拦截。
+macOS 上还需先启动一次图形界面（在「应用程序」中右键点按图标并选择「打开」）。应用为临时签名、未做公证，直接由脚本调用可能被系统的来源校验拦截。
 
-**MCP 服务并非必需。** 扫描、采集与解码用命令行工具一条命令即可完成，配置 MCP 只是让
-AI 客户端按工具名调用，省去自行拼接命令的步骤。
+**MCP 服务并非必需。** 扫描、采集与解码用命令行工具一条命令即可完成，配置 MCP 只是让 AI 客户端按工具名调用，省去自行拼接命令的步骤。
 
 ### 直接调用命令行工具
 
-Agent 只要能执行命令即可使用，无需额外配置。安装目录不在 `PATH` 中时，用完整路径调用；
-路径含空格，PowerShell 中需使用调用运算符 `&`：
+Agent 只要能执行命令即可使用，无需额外配置。安装目录不在 `PATH` 中时，用完整路径调用；路径含空格，PowerShell 中需使用调用运算符 `&`：
 
 ```powershell
 & "C:\Program Files\WeAct Studio\U3LogicAnalyzer\u3logicanalyzer-cli.exe" --scan
@@ -203,22 +220,6 @@ u3logicanalyzer-cli -i capture.sr -P uart:rx=D0:baudrate=115200 -A uart=rx-data
 - 「列出当前连接的逻辑分析仪。」
 - 「用 4 MHz 采集 2000 个点，保存为 `test.sr`。」
 - 「把 `test.sr` 按 UART 解码，RX 接 D0，波特率 115200。」
-
-### 软件内置的 Agent 提示词
-
-「帮助 → Agent 提示词」中内置五条提示词，每条对应一项任务，右侧「复制」按钮可一次取走全文，
-粘贴到 AI 客户端即可使用。提示词随界面语言切换，并写明当前平台的安装目录，因此即使客户端的
-搜索路径中没有该目录，也能直接启动工具。
-
-| 提示词 | 涵盖内容 |
-|---|---|
-| 找到命令行工具 | 版本查询与设备扫描，以及驱动标识与完整设备串的区别 |
-| 扫描设备 | 型号、驱动、连接串与通道数的表格 |
-| 采集波形并查看结果 | 以 4 MHz 采集 2000 点存为 `test.sr`，并用本软件打开 |
-| 解码波形并整理结果 | 在足够长的窗口中按 UART 解码并整理成表格 |
-| 接入 MCP 服务（可选） | MCP 配置项、可执行文件路径、工作目录与转义写法 |
-
-前四条只需命令行工具；只有第五条提到 MCP 服务，需要客户端通过 MCP 调用分析仪时复制这一条。
 
 ### 命令行工具的参数
 
@@ -237,8 +238,7 @@ u3logicanalyzer-cli -i capture.sr -P uart:rx=D0:baudrate=115200 -A uart=rx-data
 
 ### 配置 MCP 服务
 
-在客户端的 MCP 配置文件中加入一项，`command` 指向 `u3logicanalyzer-mcp-server`。服务器
-启动后在同目录查找命令行工具，因此不必把安装目录加入 `PATH`：
+在客户端的 MCP 配置文件中加入一项，`command` 指向 `u3logicanalyzer-mcp-server`。服务器启动后在同目录查找命令行工具，因此不必把安装目录加入 `PATH`：
 
 ```json
 {
@@ -264,8 +264,7 @@ u3logicanalyzer-cli -i capture.sr -P uart:rx=D0:baudrate=115200 -A uart=rx-data
 | Linux（deb / tar.gz） | `/opt/U3LogicAnalyzer/` |
 | Linux（AppImage） | 挂载目录内的 `usr/bin/`，需先 `--appimage-extract` 解包 |
 
-`U3LOGICANALYZER_WORKING_DIR` 指向的目录要事先创建，并且当前用户可写。示例用的是用户目录：
-安装目录在 `Program Files` 与 `/opt` 下对普通用户只读，不要放在那里。
+`U3LOGICANALYZER_WORKING_DIR` 指向的目录要事先创建，并且当前用户可写。示例用的是用户目录：安装目录在 `Program Files` 与 `/opt` 下对普通用户只读，不要放在那里。
 
 配置文件位置：
 
@@ -275,11 +274,9 @@ u3logicanalyzer-cli -i capture.sr -P uart:rx=D0:baudrate=115200 -A uart=rx-data
 | Claude Desktop | `%APPDATA%\Claude\claude_desktop_config.json` |
 | Cursor | `%USERPROFILE%\.cursor\mcp.json` |
 
-文件不存在时新建；已存在时将条目合并进 `mcpServers`，不要覆盖其他服务器的配置。JSON 中的
-Windows 路径反斜杠需写成 `\\`。macOS 与 Linux 只改 `command`，指向该平台的可执行文件。
+文件不存在时新建；已存在时将条目合并进 `mcpServers`，不要覆盖其他服务器的配置。JSON 中的 Windows 路径反斜杠需写成 `\\`。macOS 与 Linux 只改 `command`，指向该平台的可执行文件。
 
-保存后服务器不会自动生效：重启客户端，在「连接器」页面右上角进入「自定义连接器」，找到
-`u3logicanalyzer` 并点「信任」。
+保存后服务器不会自动生效：重启客户端，在「连接器」页面右上角进入「自定义连接器」，找到 `u3logicanalyzer` 并点「信任」。
 
 配置字段：
 
@@ -298,9 +295,7 @@ Windows 路径反斜杠需写成 `\\`。macOS 与 Linux 只改 `command`，指�
 2. 「用 4 MHz 采集 2000 个点，保存为 `test.sr`」。4 MHz 下 2000 点只有 0.5 ms，用于确认链路。
 3. 「以 50 MHz 采集 1 s，保存到 `D:\cap\uart.sr`」，或「把 `uart.sr` 按 UART 解码，RX 接 D0，波特率 115200」。
 
-MCP 服务提供的工具覆盖设备扫描、驱动与解码器查询、采集、解码、文件格式查询与固件检查；
-此外 `capture_and_decode` 将采集与解码合成一次调用，`set_device_options` 只下发选项而不
-采集，用于确认参数被设备接受。工具清单见 `doc/mcp-server.zh_CN.md`。
+MCP 服务提供的工具覆盖设备扫描、驱动与解码器查询、采集、解码、文件格式查询与固件检查；此外 `capture_and_decode` 将采集与解码合成一次调用，`set_device_options` 只下发选项而不采集，用于确认参数被设备接受。工具清单见 `doc/mcp-server.zh_CN.md`。
 
 ## 常见问题
 
