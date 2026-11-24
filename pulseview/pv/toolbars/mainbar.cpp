@@ -471,7 +471,7 @@ namespace pv
 																							action_connect_(new QAction(this)),
 																							run_stop_button_(new QToolButton()),
 																							channels_button_ex_(new QToolButton()),
-																							model_change_button_(new pv::widgets::HoverToolButton()),
+																							mode_change_button_(new pv::widgets::HoverToolButton()),
 																							new_view_button_(new pv::widgets::HoverToolButton()),
 																							open_button_(new QToolButton()),
 																							save_button_(new QToolButton()),
@@ -648,9 +648,9 @@ namespace pv
 			new_view_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 
 			// model_ button
-			menu_model_view_ = new QMenu();
-			action_single_ = menu_model_view_->addAction(QString());
-			action_repeat_ = menu_model_view_->addAction(QString());
+			menu_mode_view_ = new QMenu();
+			action_single_ = menu_mode_view_->addAction(QString());
+			action_repeat_ = menu_mode_view_->addAction(QString());
 			action_single_->setIcon(QIcon(":/icons/Single.png"));
 			action_repeat_->setIcon(QIcon(":/icons/Repeat.png"));
 
@@ -699,12 +699,12 @@ namespace pv
 			run_stop_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 			connect(run_stop_button_, SIGNAL(clicked()), this, SIGNAL(run_stop_button_clicked()));
 			// model change button
-			model_change_button_->setMenu(menu_model_view_);
-			model_change_button_->setIcon(QIcon(":/icons/Single.png")); // default single model
-			// model_change_button_->setDefaultAction(action_single_);
-			model_change_button_->setPopupMode(QToolButton::MenuButtonPopup);
-			model_change_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-			// connect(model_change_button_, &QToolButton::clicked, model_change_button_, &QToolButton::showMenu);
+			mode_change_button_->setMenu(menu_mode_view_);
+			mode_change_button_->setIcon(QIcon(":/icons/Single.png")); // default single mode
+			// mode_change_button_->setDefaultAction(action_single_);
+			mode_change_button_->setPopupMode(QToolButton::MenuButtonPopup);
+			mode_change_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+			// connect(mode_change_button_, &QToolButton::clicked, mode_change_button_, &QToolButton::showMenu);
 			// open button
 			open_button_->setMenu(import_menu);
 			open_button_->setDefaultAction(action_open_);
@@ -888,7 +888,7 @@ namespace pv
 		action_about_->setText(tr("About"));
 
 		help_button_->setText(tr("Help"));
-		model_change_button_->setText(tr("Model"));
+		mode_change_button_->setText(tr("Mode"));
 		open_button_->setText(tr("Open"));
 		save_button_->setText(tr("Save"));
 #ifdef ENABLE_DECODE
@@ -1409,8 +1409,8 @@ namespace pv
 				sample_count_.setEnabled(ui_enabled);
 				sample_rate_.setEnabled(ui_enabled);
 			}
-			if (model_change_button_)
-				model_change_button_->setEnabled(ui_enabled);
+			if (mode_change_button_)
+				mode_change_button_->setEnabled(ui_enabled);
 			/* Its menu asks the same question when it opens; this is what makes
 			 * the entry gray for a capture that starts while it is shown. */
 			if (action_copy_to_new_session_)
@@ -1478,8 +1478,8 @@ namespace pv
 			 * addWidget() hands back, and that action shows its widget
 			 * again whenever it is shown itself.
 			 */
-			if (model_change_button_)
-				model_change_button_->setVisible(mode);
+			if (mode_change_button_)
+				mode_change_button_->setVisible(mode);
 			if (model_change_action_)
 				model_change_action_->setVisible(mode);
 			if (run_stop_button_)
@@ -3775,17 +3775,17 @@ namespace pv
 		void MainBar::on_actionSingle_triggered()
 		{
 			capture_mode_ = Session::Single;
-			model_change_button_->setIcon(QIcon(":/icons/Single.png"));
-			// model_change_button_->setText(tr("Single"));
-			model_change_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+			mode_change_button_->setIcon(QIcon(":/icons/Single.png"));
+			// mode_change_button_->setText(tr("Single"));
+			mode_change_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 		}
 
 		void MainBar::on_actionRepeat_triggered()
 		{
 			capture_mode_ = Session::Repeat;
-			model_change_button_->setIcon(QIcon(":/icons/Repeat.png"));
-			// model_change_button_->setText(tr("Repeat"));
-			model_change_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+			mode_change_button_->setIcon(QIcon(":/icons/Repeat.png"));
+			// mode_change_button_->setText(tr("Repeat"));
+			mode_change_button_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 		}
 
 		void MainBar::set_key_listening(bool enabled)
@@ -4140,7 +4140,7 @@ namespace pv
 				addWidget(channels_button_ex_);
 			addWidget(&sample_count_);
 			addWidget(&sample_rate_);
-			model_change_action_ = addWidget(model_change_button_);
+			model_change_action_ = addWidget(mode_change_button_);
 			run_stop_action_ = addWidget(run_stop_button_);
 			addSeparator();
 

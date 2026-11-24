@@ -1248,7 +1248,7 @@ Por favor, compruebe la conexión del dispositivo y el archivo de firmware.</tra
         <location filename="../pv/popups/channels.cpp" line="590"/>
         <location filename="../pv/popups/channels.cpp" line="1335"/>
         <source>Pre-trigger</source>
-        <translation>Pre-trigger</translation>
+        <translation>Predisparo</translation>
     </message>
     <message>
         <location filename="../pv/popups/channels.cpp" line="450"/>
@@ -1778,6 +1778,27 @@ Por favor, compruebe la conexión del dispositivo y el archivo de firmware.</tra
         <translation>Modelo</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="891"/>
+        <source>Mode</source>
+        <translation>Modo</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="4597"/>
+        <source>The file could not be opened. Make sure a PDF reader is installed.</source>
+        <translation>No se pudo abrir el archivo. Asegúrese de que haya un lector de PDF instalado.</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="4589"/>
+        <source>The user guide was not found:
+%1
+
+Reinstall the application to restore it.</source>
+        <translation>No se encontró la guía del usuario:
+%1
+
+Vuelva a instalar la aplicación para restaurarla.</translation>
+    </message>
+    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="399"/>
         <source>Export to a New Session</source>
         <translation>Exportar a una sesión nueva</translation>
@@ -2045,18 +2066,8 @@ Por favor, conecte el dispositivo CH32H417 y intente de nuevo.</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3129"/>
-        <source>Firmware update in progress, do not disconnect the USB connection</source>
-        <translation>Actualización de firmware en progreso, no desconecte la conexión USB</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3129"/>
         <source>Cancel</source>
         <translation>Cancelar</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3130"/>
-        <source>Firmware Update</source>
-        <translation>Actualización de firmware</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="535"/>
@@ -2068,22 +2079,6 @@ Por favor, conecte el dispositivo CH32H417 y intente de nuevo.</translation>
         <location filename="../pv/toolbars/mainbar.cpp" line="3200"/>
         <source>Information</source>
         <translation>Información</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3201"/>
-        <source>PDF file not found:
-%1
-
-Make sure the doc directory and the user manual are present.</source>
-        <translation>No se encontró el archivo PDF:
-%1
-
-Asegúrese de que el directorio doc y el manual de usuario estén presentes.</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3212"/>
-        <source>The PDF file could not be opened. Make sure a PDF reader is installed.</source>
-        <translation>No se pudo abrir el archivo PDF. Asegúrese de que haya un lector de PDF instalado.</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3255"/>

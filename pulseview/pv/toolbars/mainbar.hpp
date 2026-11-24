@@ -491,7 +491,7 @@ private:
 	QMenu *menu_file_export_ = nullptr;
 	QMenu *menu_file_import_ = nullptr;
 	QMenu *menu_new_view_ = nullptr;
-	QMenu *menu_model_view_ = nullptr;
+	QMenu *menu_mode_view_ = nullptr;
 	QMenu *menu_help_view_ = nullptr;
 	QAction *action_single_ = nullptr;
 	QAction *action_repeat_ = nullptr;
@@ -503,7 +503,7 @@ private:
 	QAction *action_about_ = nullptr;
 
 	QToolButton *run_stop_button_;
-	pv::widgets::HoverToolButton *model_change_button_;
+	pv::widgets::HoverToolButton *mode_change_button_;
 	pv::widgets::HoverToolButton *new_view_button_;
 	QToolButton *open_button_, *save_button_;
 	pv::widgets::HoverToolButton *help_button_;

@@ -1829,6 +1829,11 @@ Please check the device connection and firmware file.</source>
         <translation>型号</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="891"/>
+        <source>Mode</source>
+        <translation>模式</translation>
+    </message>
+    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="543"/>
         <source>Decoder</source>
         <translation>解码器</translation>
@@ -1952,18 +1957,8 @@ Please connect the CH32H417 device and try again.</source>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3129"/>
-        <source>Firmware update in progress, do not disconnect the USB connection</source>
-        <translation>正在升级固件，请勿断开USB连接！</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3129"/>
         <source>Cancel</source>
         <translation>取消</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3130"/>
-        <source>Firmware Update</source>
-        <translation>固件升级</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3200"/>
@@ -2122,17 +2117,6 @@ Reinstall the application to restore it.</source>
         <location filename="../pv/toolbars/mainbar.cpp" line="0"/>
         <source>IAP Version</source>
         <translation>IAP 版本</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3201"/>
-        <source>PDF file not found:
-%1
-
-Make sure the doc directory and the user manual are present.</source>
-        <translation>找不到 PDF 文件：
-%1
-
-请确认 doc 目录和用户手册文件是否存在。</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="399"/>

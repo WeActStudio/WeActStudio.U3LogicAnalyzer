@@ -1252,7 +1252,7 @@ Bitte überprüfen Sie die Verbindung und die Firmware Datei.</translation>
         <location filename="../pv/popups/channels.cpp" line="590"/>
         <location filename="../pv/popups/channels.cpp" line="1335"/>
         <source>Pre-trigger</source>
-        <translation>Pre-trigger</translation>
+        <translation>Vorauslösung</translation>
     </message>
     <message>
         <location filename="../pv/popups/channels.cpp" line="450"/>
@@ -1787,6 +1787,27 @@ Bitte überprüfen Sie die Verbindung und die Firmware Datei.</translation>
         <translation>Modell</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="891"/>
+        <source>Mode</source>
+        <translation>Modus</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="4597"/>
+        <source>The file could not be opened. Make sure a PDF reader is installed.</source>
+        <translation>Die Datei konnte nicht geöffnet werden. Stellen Sie sicher, dass ein PDF-Betrachter installiert ist.</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="4589"/>
+        <source>The user guide was not found:
+%1
+
+Reinstall the application to restore it.</source>
+        <translation>Die Bedienungsanleitung wurde nicht gefunden:
+%1
+
+Installieren Sie die Anwendung erneut, um sie wiederherzustellen.</translation>
+    </message>
+    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="399"/>
         <source>Export to a New Session</source>
         <translation>In eine neue Sitzung exportieren</translation>
@@ -2049,18 +2070,8 @@ Bitte verbinden Sie sich mit dem CH32H417-Gerät und versuchen Sie es erneut.</t
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3129"/>
-        <source>Firmware update in progress, do not disconnect the USB connection</source>
-        <translation>Firmware aktualisierung in Fortgang, bitte nicht die USB-Verbindung abbrechen</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3129"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3130"/>
-        <source>Firmware Update</source>
-        <translation>Firmware aktualisierung</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="535"/>
@@ -2072,22 +2083,6 @@ Bitte verbinden Sie sich mit dem CH32H417-Gerät und versuchen Sie es erneut.</t
         <location filename="../pv/toolbars/mainbar.cpp" line="3200"/>
         <source>Information</source>
         <translation>Informationen</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3201"/>
-        <source>PDF file not found:
-%1
-
-Make sure the doc directory and the user manual are present.</source>
-        <translation>PDF-Datei nicht gefunden:
-%1
-
-Stellen Sie sicher, dass das doc-Verzeichnis und das Benutzerhandbuch vorhanden sind.</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3212"/>
-        <source>The PDF file could not be opened. Make sure a PDF reader is installed.</source>
-        <translation>Die PDF-Datei konnte nicht geöffnet werden. Stellen Sie sicher, dass ein PDF-Betrachter installiert ist.</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3255"/>

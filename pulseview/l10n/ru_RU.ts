@@ -1249,7 +1249,7 @@ Please check the device connection and firmware file.</source>
         <location filename="../pv/popups/channels.cpp" line="590"/>
         <location filename="../pv/popups/channels.cpp" line="1335"/>
         <source>Pre-trigger</source>
-        <translation>Pre-trigger</translation>
+        <translation>Предзапуск</translation>
     </message>
     <message>
         <location filename="../pv/popups/channels.cpp" line="450"/>
@@ -1394,7 +1394,7 @@ Please check the device connection and firmware file.</source>
         <location filename="../pv/popups/channels.cpp" line="1343"/>
         <location filename="../pv/popups/channels.cpp" line="1361"/>
         <source>Threshold Level</source>
-        <translation>Уровень threshold</translation>
+        <translation>Уровень порога</translation>
     </message>
     <message>
         <location filename="../pv/popups/channels.cpp" line="594"/>
@@ -1778,6 +1778,27 @@ Please check the device connection and firmware file.</source>
         <translation>Модель</translation>
     </message>
     <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="891"/>
+        <source>Mode</source>
+        <translation>Режим</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="4597"/>
+        <source>The file could not be opened. Make sure a PDF reader is installed.</source>
+        <translation>Не удалось открыть файл. Убедитесь, что установлена программа для просмотра PDF.</translation>
+    </message>
+    <message>
+        <location filename="../pv/toolbars/mainbar.cpp" line="4589"/>
+        <source>The user guide was not found:
+%1
+
+Reinstall the application to restore it.</source>
+        <translation>Руководство пользователя не найдено:
+%1
+
+Переустановите приложение, чтобы восстановить его.</translation>
+    </message>
+    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="539"/>
         <source>Open</source>
         <translation>Открыть</translation>
@@ -2057,18 +2078,8 @@ Please connect the CH32H417 device and try again.</source>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3129"/>
-        <source>Firmware update in progress, do not disconnect the USB connection</source>
-        <translation>Идёт обновление прошивки, не отключайте USB</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3129"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3130"/>
-        <source>Firmware Update</source>
-        <translation>Обновление прошивки</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3174"/>
@@ -2088,25 +2099,9 @@ Please check the device connection and firmware file.</source>
         <translation>Информация</translation>
     </message>
     <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3201"/>
-        <source>PDF file not found:
-%1
-
-Make sure the doc directory and the user manual are present.</source>
-        <translation>Файл PDF не найден:
-%1
-
-Убедитесь, что каталог doc и руководство пользователя на месте.</translation>
-    </message>
-    <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3211"/>
         <source>Open Failed</source>
         <translation>Не удалось открыть</translation>
-    </message>
-    <message>
-        <location filename="../pv/toolbars/mainbar.cpp" line="3212"/>
-        <source>The PDF file could not be opened. Make sure a PDF reader is installed.</source>
-        <translation>Не удалось открыть файл PDF. Убедитесь, что установлена программа для чтения PDF.</translation>
     </message>
     <message>
         <location filename="../pv/toolbars/mainbar.cpp" line="3255"/>
