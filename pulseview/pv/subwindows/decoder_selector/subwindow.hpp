@@ -55,6 +55,7 @@ public:
 	int columnCount() const;
 	int row() const;
 	QVariant data(int column) const;
+	void setData(int column, const QVariant& value);
 
 private:
 	vector< shared_ptr<DecoderCollectionItem> > subItems_;
@@ -82,6 +83,11 @@ public:
 
 	int rowCount(const QModelIndex& parent_idx = QModelIndex()) const override;
 	int columnCount(const QModelIndex& parent_idx = QModelIndex()) const override;
+
+	/* The header and the group title are translated once, when the model is
+	 * built. Switching the language leaves them in the old one unless they
+	 * are written again here. */
+	void retranslate();
 
 private:
 	shared_ptr<DecoderCollectionItem> root_;
@@ -149,6 +155,9 @@ public Q_SLOTS:
 
 	void on_filter_changed(const QString& text);
 	void on_filter_return_pressed();
+
+protected:
+	void changeEvent(QEvent *event) override;
 
 private:
 	QSplitter* splitter_;

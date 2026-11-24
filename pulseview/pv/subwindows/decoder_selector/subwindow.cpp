@@ -24,6 +24,7 @@
 
 #include <QApplication>
 #include <QDebug>
+#include <QEvent>
 #include <QFontMetrics>
 #include <QInputDialog>
 #include <QLabel>
@@ -489,6 +490,21 @@ void SubWindow::on_filter_return_pressed()
 	// If only one decoder matches the filter, apply it when the user presses enter
 	if (num_visible_decoders == 1)
 		tree_view_->activated(last_valid_index);
+}
+
+void SubWindow::changeEvent(QEvent *event)
+{
+	if (event->type() == QEvent::LanguageChange) {
+		model_->retranslate();
+
+		/* The notice is the only text here that this window owns: the
+		 * description of a selected decoder comes from the decoder itself
+		 * and is not translated. */
+		if (info_label_header_->text().isEmpty())
+			info_label_body_->setText(QString(tr(initial_notice)));
+	}
+
+	SubWindowBase::changeEvent(event);
 }
 
 } // namespace decoder_selector

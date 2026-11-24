@@ -93,6 +93,15 @@ QVariant DecoderCollectionItem::data(int column) const
 	}
 }
 
+void DecoderCollectionItem::setData(int column, const QVariant& value)
+{
+	try {
+		data_.at(column) = value;
+	} catch (out_of_range&) {
+		// A column the item does not carry is not an error; nothing to set.
+	}
+}
+
 } // namespace decoder_selector
 } // namespace subwindows
 } // namespace pv

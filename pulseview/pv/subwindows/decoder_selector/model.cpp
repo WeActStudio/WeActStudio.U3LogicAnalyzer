@@ -151,6 +151,21 @@ QVariant DecoderCollectionModel::headerData(int section, Qt::Orientation orienta
 	return QVariant();
 }
 
+void DecoderCollectionModel::retranslate()
+{
+	root_->setData(0, tr("Decoder"));
+	root_->setData(1, tr("Name"));
+	root_->setData(2, tr("ID"));
+	Q_EMIT headerDataChanged(Qt::Horizontal, 0, 2);
+
+	// The "all decoders" group is the first sub-item of the root.
+	if (root_->subItemCount() > 0) {
+		root_->subItem(0)->setData(0, tr("All Decoders"));
+		const QModelIndex group_index = index(0, 0);
+		Q_EMIT dataChanged(group_index, group_index);
+	}
+}
+
 QModelIndex DecoderCollectionModel::index(int row, int column,
 	const QModelIndex& parent_idx) const
 {
