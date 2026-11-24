@@ -947,6 +947,7 @@ namespace pv
 			{
 				delete channels_;
 				channels_ = nullptr;
+				channels_identity_.clear();
 			}
 
 			if (device_options_)
@@ -2516,6 +2517,20 @@ namespace pv
 			if (shown_as_demo && channels_ && channels_->parent_dialog_)
 				channels_->parent_dialog_->reject();
 
+			/*
+			 * With a second board on the bus the pulled one is replaced by
+			 * that board rather than by the demo stand-in, so the test above
+			 * does not fire. The page is still the one built for the board
+			 * that left; closing the dialog hands it back, and the rebuild
+			 * the close schedules makes it describe the board that took over.
+			 */
+			if (channels_ && channels_->parent_dialog_ &&
+					channels_identity_ !=
+					widgets::DeviceToolButton::device_identity(device)) {
+				channels_->parent_dialog_->reject();
+				return;
+			}
+
 			if (board_gone)
 			{
 				// configure_button_action_->setVisible(false);
@@ -2535,6 +2550,7 @@ namespace pv
 					} else {
 						delete channels_;
 						channels_ = nullptr;
+						channels_identity_.clear();
 					}
 				}
 				set_vendorName(QString());
@@ -2590,12 +2606,14 @@ namespace pv
 
 				delete channels_;
 				channels_ = nullptr;
+				channels_identity_.clear();
 			}
 			/* A session between two devices has none for a moment, and the
 			 * page reads it while it is built. */
 			if (!session_.device())
 				return;
 			channels_ = new Channels(session_, QString::fromStdString(sr_dev->vendor()), this);
+			channels_identity_ = widgets::DeviceToolButton::device_identity(device);
 
 			// Read the USB version and apply it
 			if (sr_dev->config_check(ConfigKey::USB_VERSION, Capability::GET))

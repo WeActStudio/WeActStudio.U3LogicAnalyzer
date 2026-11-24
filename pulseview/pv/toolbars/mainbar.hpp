@@ -671,6 +671,10 @@ public:
 	static bool take_deferred_if_idle();
 
 	pv::popups::Channels*  channels_;
+	/* The board channels_ was built for. A second board taking the place of
+	 * a pulled one leaves the session on a real device, so the session alone
+	 * cannot tell that the board the page describes has left. */
+	QString channels_identity_;
 	/* Holds the device bindings; the config_changed signal is reported
 	 * through it, so it lives as long as the device it describes. */
 	pv::popups::DeviceOptions *device_options_ = nullptr;
